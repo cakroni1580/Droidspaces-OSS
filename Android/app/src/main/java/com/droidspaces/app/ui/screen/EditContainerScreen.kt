@@ -37,7 +37,6 @@ import com.droidspaces.app.R
 
 import com.droidspaces.app.ui.component.FilePickerDialog
 import com.droidspaces.app.util.BindMount
-import com.droidspaces.app.util.Constants
 import androidx.compose.ui.text.style.TextOverflow
 import com.droidspaces.app.ui.component.SettingsRowCard
 import com.droidspaces.app.ui.component.EnvironmentVariablesDialog
@@ -516,13 +515,7 @@ fun EditContainerScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                if (bindMounts.size >= Constants.MAX_BIND_MOUNTS) {
-                    Text(
-                        text = context.getString(R.string.max_bind_mounts_reached, Constants.MAX_BIND_MOUNTS),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
+
             }
 
             bindMounts.forEach { mount ->
@@ -562,8 +555,7 @@ fun EditContainerScreen(
 
             OutlinedButton(
                 onClick = { showFilePicker = true },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = bindMounts.size < Constants.MAX_BIND_MOUNTS
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))

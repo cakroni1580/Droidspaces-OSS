@@ -77,7 +77,7 @@
 #define DS_PIDS_SUBDIR "Pids"
 #define DS_IMG_MOUNT_ROOT_UNIVERSAL "/mnt/Droidspaces"
 #define DS_MAX_MOUNT_TRIES 1024
-#define DS_MAX_BINDS 16
+#define DS_BIND_INITIAL_CAP 4
 #define DS_VOLATILE_SUBDIR "Volatile"
 #define DS_ANDROID_TMPFS_CONTEXT "u:object_r:tmpfs:s0"
 #define DS_ANDROID_VOLD_CONTEXT "u:object_r:vold_data_file:s0"
@@ -205,9 +205,10 @@ struct ds_config {
   int is_img_mount;               /* 1 if rootfs was loop-mounted from .img */
   char img_mount_point[PATH_MAX]; /* where the .img was mounted */
 
-  /* Custom bind mounts */
-  struct ds_bind_mount binds[DS_MAX_BINDS];
+  /* Custom bind mounts (dynamically allocated) */
+  struct ds_bind_mount *binds;
   int bind_count;
+  int bind_capacity;
 
   /* Configuration persistence */
   char config_file[PATH_MAX];
@@ -270,6 +271,7 @@ int ds_config_save(const char *config_path, struct ds_config *cfg);
 int ds_config_validate(struct ds_config *cfg);
 int ds_config_add_bind(struct ds_config *cfg, const char *src,
                        const char *dest);
+void free_config_binds(struct ds_config *cfg);
 char *ds_config_auto_path(const char *rootfs_path);
 
 /* ---------------------------------------------------------------------------

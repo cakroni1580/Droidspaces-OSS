@@ -96,7 +96,11 @@ static int validate_kernel_version(void) {
  * ---------------------------------------------------------------------------*/
 
 int main(int argc, char **argv) {
-  struct ds_config cfg = {0};
+  int ret = 0;
+  struct ds_config cfg;
+  /* CRITICAL: Zero all fields to avoid garbage pointer in dynamic arrays */
+  memset(&cfg, 0, sizeof(cfg));
+
   safe_strncpy(cfg.prog_name, argv[0], sizeof(cfg.prog_name));
 
   static struct option long_options[] = {
@@ -231,15 +235,11 @@ int main(int argc, char **argv) {
       char *saveptr;
       char *token = strtok_r(optarg, ",", &saveptr);
       while (token) {
-        if (cfg.bind_count >= DS_MAX_BINDS) {
-          ds_error("Too many bind mounts (max %d)", DS_MAX_BINDS);
-          return 1;
-        }
-
         char *sep = strchr(token, ':');
         if (!sep) {
           ds_error("Invalid bind mount format: %s (expected SRC:DEST)", token);
-          return 1;
+          ret = 1;
+          goto cleanup;
         }
         *sep = '\0';
         const char *src = token;
@@ -247,15 +247,19 @@ int main(int argc, char **argv) {
 
         if (dest[0] != '/') {
           ds_error("Bind destination must be an absolute path: %s", dest);
-          return 1;
+          ret = 1;
+          goto cleanup;
         }
         if (strstr(dest, "..")) {
           ds_error("Path traversal detected in bind destination: %s", dest);
-          return 1;
+          ret = 1;
+          goto cleanup;
         }
 
-        if (ds_config_add_bind(&cfg, src, dest) < 0)
-          return 1;
+        if (ds_config_add_bind(&cfg, src, dest) < 0) {
+          ret = 1;
+          goto cleanup;
+        }
 
         token = strtok_r(NULL, ",", &saveptr);
       }
@@ -263,7 +267,8 @@ int main(int argc, char **argv) {
     }
     case 'v':
       print_usage();
-      return 0;
+      ret = 0;
+      goto cleanup;
     case '?':
       if (optopt)
         ds_error(C_BOLD "Unrecognized option:" C_RESET " -%c", optopt);
@@ -273,9 +278,11 @@ int main(int argc, char **argv) {
       ds_log("Use " C_BOLD "%s help" C_RESET " or " C_BOLD "--help" C_RESET
              " for usage information.",
              argv[0]);
-      return 1;
+      ret = 1;
+      goto cleanup;
     default:
-      return 1;
+      ret = 1;
+      goto cleanup;
     }
   }
 
@@ -298,15 +305,19 @@ int main(int argc, char **argv) {
   const char *cmd = argv[optind];
 
   /* Commands that don't need root or config */
-  if (strcmp(cmd, "check") == 0)
-    return check_requirements_detailed();
+  if (strcmp(cmd, "check") == 0) {
+    ret = check_requirements_detailed();
+    goto cleanup;
+  }
   if (strcmp(cmd, "version") == 0) {
     printf("v%s\n", DS_VERSION);
-    return 0;
+    ret = 0;
+    goto cleanup;
   }
   if (strcmp(cmd, "help") == 0) {
     print_usage();
-    return 0;
+    ret = 0;
+    goto cleanup;
   }
 
   /* Validate if command exists at all before root check */
@@ -332,7 +343,8 @@ int main(int argc, char **argv) {
 
   if (strcmp(cmd, "docs") == 0) {
     print_documentation(argv[0]);
-    return 0;
+    ret = 0;
+    goto cleanup;
   }
 
   /* Commands that need root or workspace */
@@ -340,20 +352,30 @@ int main(int argc, char **argv) {
     ds_die("Root privileges required for '%s'", cmd);
   ensure_workspace();
 
-  if (strcmp(cmd, "show") == 0)
-    return show_containers();
-  if (strcmp(cmd, "scan") == 0)
-    return scan_containers();
+  if (strcmp(cmd, "show") == 0) {
+    ret = show_containers();
+    goto cleanup;
+  }
+  if (strcmp(cmd, "scan") == 0) {
+    ret = scan_containers();
+    goto cleanup;
+  }
 
   /* Start command */
   if (strcmp(cmd, "start") == 0) {
-    if (ds_config_validate(&cfg) < 0)
-      return 1;
+    if (ds_config_validate(&cfg) < 0) {
+      ret = 1;
+      goto cleanup;
+    }
 
-    if (validate_kernel_version() < 0)
-      return 1;
-    if (check_requirements() < 0)
-      return 1;
+    if (validate_kernel_version() < 0) {
+      ret = 1;
+      goto cleanup;
+    }
+    if (check_requirements() < 0) {
+      ret = 1;
+      goto cleanup;
+    }
 
     print_ds_banner();
     check_kernel_recommendation();
@@ -370,13 +392,16 @@ int main(int argc, char **argv) {
       ds_config_save(cfg.config_file, &cfg);
     }
 
-    return start_rootfs(&cfg);
+    ret = start_rootfs(&cfg);
+    goto cleanup;
   }
 
   /* Other lifestyle commands */
   if (strcmp(cmd, "stop") == 0) {
-    if (check_requirements() < 0)
-      return 1;
+    if (check_requirements() < 0) {
+      ret = 1;
+      goto cleanup;
+    }
     /* Support multi-stop via comma separated names in --name */
     if (strchr(cfg.container_name, ',')) {
       char *name = strtok(cfg.container_name, ",");
@@ -387,19 +412,27 @@ int main(int argc, char **argv) {
         stop_rootfs(&subcfg, 0);
         name = strtok(NULL, ",");
       }
-      return 0;
+      ret = 0;
+      goto cleanup;
     }
-    return stop_rootfs(&cfg, 0);
+    ret = stop_rootfs(&cfg, 0);
+    goto cleanup;
   }
 
   if (strcmp(cmd, "restart") == 0) {
-    if (ds_config_validate(&cfg) < 0)
-      return 1;
+    if (ds_config_validate(&cfg) < 0) {
+      ret = 1;
+      goto cleanup;
+    }
 
-    if (validate_kernel_version() < 0)
-      return 1;
-    if (check_requirements() < 0)
-      return 1;
+    if (validate_kernel_version() < 0) {
+      ret = 1;
+      goto cleanup;
+    }
+    if (check_requirements() < 0) {
+      ret = 1;
+      goto cleanup;
+    }
 
     print_ds_banner();
     check_kernel_recommendation();
@@ -416,18 +449,21 @@ int main(int argc, char **argv) {
       ds_config_save(cfg.config_file, &cfg);
     }
 
-    return restart_rootfs(&cfg);
+    ret = restart_rootfs(&cfg);
+    goto cleanup;
   }
 
   if (strcmp(cmd, "status") == 0) {
     if (is_container_running(&cfg, NULL)) {
       printf("Container '%s' is " C_GREEN "Running" C_RESET "\n",
              cfg.container_name);
-      return 0;
+      ret = 0;
+      goto cleanup;
     } else {
       printf("Container '%s' is " C_RED "Stopped" C_RESET "\n",
              cfg.container_name);
-      return 1;
+      ret = 1;
+      goto cleanup;
     }
   }
 
@@ -438,36 +474,53 @@ int main(int argc, char **argv) {
     pid_t pid = 0;
     if (is_container_running(&cfg, &pid) && pid > 0) {
       printf("%d\n", (int)pid);
-      return 0;
+      ret = 0;
+      goto cleanup;
     }
     printf("NONE\n");
-    return 1;
+    ret = 1;
+    goto cleanup;
   }
-  if (strcmp(cmd, "info") == 0)
-    return show_info(&cfg, 0);
+  if (strcmp(cmd, "info") == 0) {
+    ret = show_info(&cfg, 0);
+    goto cleanup;
+  }
 
   if (strcmp(cmd, "enter") == 0) {
-    if (validate_kernel_version() < 0)
-      return 1;
-    if (check_requirements() < 0)
-      return 1;
+    if (validate_kernel_version() < 0) {
+      ret = 1;
+      goto cleanup;
+    }
+    if (check_requirements() < 0) {
+      ret = 1;
+      goto cleanup;
+    }
     /* Optional: we could validate container exists here,
      * but enter_rootfs already does it. */
     const char *user = (optind + 1 < argc) ? argv[optind + 1] : NULL;
-    return enter_rootfs(&cfg, user);
+    ret = enter_rootfs(&cfg, user);
+    goto cleanup;
   }
 
   if (strcmp(cmd, "run") == 0) {
-    if (validate_kernel_version() < 0)
-      return 1;
-    if (check_requirements() < 0)
-      return 1;
+    if (validate_kernel_version() < 0) {
+      ret = 1;
+      goto cleanup;
+    }
+    if (check_requirements() < 0) {
+      ret = 1;
+      goto cleanup;
+    }
     if (optind + 1 >= argc) {
       ds_error("Command required for 'run' (e.g., run ls -l)");
-      return 1;
+      ret = 1;
+      goto cleanup;
     }
-    return run_in_rootfs(&cfg, argc - (optind + 1), argv + (optind + 1));
+    ret = run_in_rootfs(&cfg, argc - (optind + 1), argv + (optind + 1));
+    goto cleanup;
   }
 
-  return 0;
+cleanup:
+  free_config_binds(&cfg);
+  return ret;
 }

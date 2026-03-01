@@ -468,8 +468,13 @@ int setup_custom_binds(struct ds_config *cfg, const char *rootfs) {
     return 0;
 
   for (int i = 0; i < cfg->bind_count; i++) {
-    char tgt[PATH_MAX];
-    snprintf(tgt, sizeof(tgt), "%s%s", rootfs, cfg->binds[i].dest);
+    char tgt[PATH_MAX * 2];
+    int n = snprintf(tgt, sizeof(tgt), "%s%s", rootfs, cfg->binds[i].dest);
+    if (n < 0 || (size_t)n >= sizeof(tgt)) {
+      ds_warn("Bind mount target path too long, skipping: %s",
+              cfg->binds[i].dest);
+      continue;
+    }
 
     /* Check if source exists on host */
     if (access(cfg->binds[i].src, F_OK) != 0) {

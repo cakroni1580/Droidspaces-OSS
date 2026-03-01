@@ -45,29 +45,29 @@ static int parse_bool(const char *val, const char *key_name) {
 }
 
 static void parse_bind_mounts(const char *value, struct ds_config *cfg) {
-  char *copy = strdup(value);
-  if (!copy)
+  if (!value)
     return;
+
+  char copy[4096];
+  safe_strncpy(copy, value, sizeof(copy));
 
   char *saveptr;
   char *token = strtok_r(copy, ",", &saveptr);
 
-  while (token && cfg->bind_count < DS_MAX_BINDS) {
+  while (token) {
     char *sep = strchr(token, ':');
     if (sep) {
       *sep = '\0';
       const char *src = trim_whitespace(token);
       const char *dest = trim_whitespace(sep + 1);
 
-      /* Both SRC and DEST must be absolute for security */
-      if (src[0] == '/' && dest[0] == '/') {
-        ds_config_add_bind(cfg, src, dest);
+      /* Use proper allocation function instead of direct array access */
+      if (ds_config_add_bind(cfg, src, dest) < 0) {
+        ds_warn("Failed to add bind mount %s:%s from config", src, dest);
       }
     }
     token = strtok_r(NULL, ",", &saveptr);
   }
-
-  free(copy);
 }
 
 int ds_config_add_bind(struct ds_config *cfg, const char *src,
@@ -83,9 +83,41 @@ int ds_config_add_bind(struct ds_config *cfg, const char *src,
     }
   }
 
-  if (cfg->bind_count >= DS_MAX_BINDS) {
-    ds_error("Too many bind mounts (max %d)", DS_MAX_BINDS);
-    return -1;
+  /* Grow the array if needed */
+  if (cfg->bind_count >= cfg->bind_capacity) {
+    int old_cap = cfg->bind_capacity;
+    int new_cap;
+
+    if (old_cap == 0) {
+      new_cap = DS_BIND_INITIAL_CAP;
+    } else {
+      /* Check for integer overflow */
+      if (old_cap > INT_MAX / 2) {
+        ds_error("Bind mount capacity overflow");
+        return -1;
+      }
+      new_cap = old_cap * 2;
+    }
+
+    /* Check allocation size won't overflow */
+    size_t alloc_size = (size_t)new_cap * sizeof(*cfg->binds);
+    if (alloc_size / sizeof(*cfg->binds) != (size_t)new_cap) {
+      ds_error("Bind mount allocation size overflow");
+      return -1;
+    }
+
+    struct ds_bind_mount *new_binds = realloc(cfg->binds, alloc_size);
+    if (!new_binds) {
+      ds_error("Out of memory allocating bind mounts");
+      return -1;
+    }
+
+    /* Zero the newly allocated portion */
+    memset(new_binds + old_cap, 0,
+           (size_t)(new_cap - old_cap) * sizeof(*new_binds));
+
+    cfg->binds = new_binds;
+    cfg->bind_capacity = new_cap;
   }
 
   safe_strncpy(cfg->binds[cfg->bind_count].src, src,
@@ -94,6 +126,13 @@ int ds_config_add_bind(struct ds_config *cfg, const char *src,
                sizeof(cfg->binds[cfg->bind_count].dest));
   cfg->bind_count++;
   return 1;
+}
+
+void free_config_binds(struct ds_config *cfg) {
+  free(cfg->binds);
+  cfg->binds = NULL;
+  cfg->bind_count = 0;
+  cfg->bind_capacity = 0;
 }
 
 /* ---------------------------------------------------------------------------

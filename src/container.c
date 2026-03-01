@@ -19,6 +19,9 @@ static void restart_marker_path(const char *name, char *buf, size_t size) {
 
 static void cleanup_container_resources(struct ds_config *cfg, pid_t pid,
                                         int skip_unmount, int force_cleanup) {
+  /* Free dynamic bind mounts */
+  free_config_binds(cfg);
+
   /* Flush filesystem buffers (skip if force cleanup — sync can hang on
    * zombie-held fs) */
   if (!force_cleanup)

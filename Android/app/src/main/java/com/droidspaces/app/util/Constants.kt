@@ -41,8 +41,6 @@ object Constants {
     // Minimum storage requirements
     const val MIN_STORAGE_GB = 4
 
-    // Maximum bind mounts (matches backend DS_MAX_BINDS)
-    const val MAX_BIND_MOUNTS = 16
 
     // Maximum DNS servers
     const val MAX_DNS_SERVERS = 8
@@ -65,4 +63,3 @@ object Constants {
         }
     }
 }
-

@@ -356,7 +356,7 @@
     <string name="requirements_check_completed_with_errors">Requirements check completed with errors</string>
     <string name="kernel_requirements_clipboard_label">Kernel Requirements</string>
     <string name="kernel_requirements_copied">Kernel requirements copied to clipboard</string>
-    <string name="max_bind_mounts_reached">Maximum %1$d bind mounts reached</string>
+
     <string name="logs_copied">Logs copied to clipboard</string>
 </resources>
 
