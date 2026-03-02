@@ -70,6 +70,7 @@
 #define DS_PID_SCAN_RETRIES 20
 #define DS_PID_SCAN_DELAY_US 200000 /* 200ms */
 #define DS_RETRY_DELAY_US 200000    /* 200ms */
+#define DS_REBOOT_EXIT 249          /* exit code: in-container reboot */
 
 /* Workspace paths */
 #define DS_WORKSPACE_ANDROID "/data/local/Droidspaces"
@@ -199,6 +200,7 @@ struct ds_config {
   int enable_ipv6;        /* --enable-ipv6 */
   int android_storage;    /* --enable-android-storage */
   int selinux_permissive; /* --selinux-permissive */
+  int reboot_cycle;       /* 1 if we are in a reboot loop */
   char prog_name[64];     /* argv[0] for logging */
 
   /* Runtime state */
@@ -359,8 +361,8 @@ int ds_terminal_proxy(int master_fd);
  * console.c
  * ---------------------------------------------------------------------------*/
 
-int console_monitor_loop(int console_master_fd, pid_t intermediate_pid,
-                         pid_t container_pid);
+int console_monitor_loop(int console_master_fd, pid_t monitor_pid,
+                         const char *pidfile);
 
 /* ---------------------------------------------------------------------------
  * pid.c

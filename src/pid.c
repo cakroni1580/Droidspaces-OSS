@@ -434,7 +434,14 @@ int scan_containers(void) {
       if (!is_pid_file(ent->d_name))
         continue;
       char pf[PATH_MAX];
-      snprintf(pf, sizeof(pf), "%s/%s", get_pids_dir(), ent->d_name);
+      /* Use precision to satisfy GCC -Werror=format-truncation while keeping
+       * explicit return value checks for safety. */
+      int n = snprintf(pf, sizeof(pf), "%.2048s/%.256s", get_pids_dir(),
+                       ent->d_name);
+      if (n >= (int)sizeof(pf)) {
+        ds_warn("PID file path truncated: %s", ent->d_name);
+        continue;
+      }
 
       pid_t p;
       if (read_and_validate_pid(pf, &p) == 0) {

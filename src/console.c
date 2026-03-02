@@ -11,8 +11,21 @@
  * Console Monitor Loop
  * ---------------------------------------------------------------------------*/
 
-int console_monitor_loop(int master_fd, pid_t intermediate_pid,
-                         pid_t container_pid) {
+/* Read the current container init PID from the pidfile.
+ * After an in-container reboot, the intermediate process updates the pidfile
+ * with the new init PID, so this always returns the LIVE container PID. */
+static pid_t read_current_container_pid(const char *pidfile) {
+  if (!pidfile || !pidfile[0])
+    return -1;
+
+  pid_t pid = -1;
+  if (read_and_validate_pid(pidfile, &pid) == 0)
+    return pid;
+  return -1;
+}
+
+int console_monitor_loop(int master_fd, pid_t monitor_pid,
+                         const char *pidfile) {
   int epfd, sfd;
   sigset_t mask;
   struct signalfd_siginfo fdsi;
@@ -90,14 +103,23 @@ int console_monitor_loop(int master_fd, pid_t intermediate_pid,
           /* Check for CTRL+ALT+Q (\x1b\x11) escape sequence */
           if (n >= 2 && buf[0] == '\x1b' && buf[1] == '\x11') {
             static int exit_detected = 0;
+            /* Read current init PID from pidfile (handles reboot cycles) */
+            pid_t live_pid = read_current_container_pid(pidfile);
             if (exit_detected == 0) {
-              kill(container_pid, SIGPWR);
-              kill(container_pid, SIGTERM);
-              kill(container_pid, DS_SIG_STOP);
+              if (live_pid > 0) {
+                kill(live_pid, SIGPWR);
+                kill(live_pid, SIGTERM);
+                kill(live_pid, DS_SIG_STOP);
+              }
               exit_detected = 1;
               continue;
             } else {
-              ds_warn("Force exit requested. Killing monitor...");
+              /* Force kill — send SIGKILL to container init.
+               * This cascades: init dies → intermediate exits →
+               * monitor cleans up → parent returns. */
+              ds_warn("Force exit requested. Killing container...");
+              if (live_pid > 0)
+                kill(live_pid, SIGKILL);
               running = 0;
               break;
             }
@@ -109,7 +131,6 @@ int console_monitor_loop(int master_fd, pid_t intermediate_pid,
           }
         } else if (n == 0) {
           /* EOF on stdin */
-          // we might want to continue seeing output
         }
       } else if (fd == master_fd) {
         /* Container output -> User stdout */
@@ -131,8 +152,9 @@ int console_monitor_loop(int master_fd, pid_t intermediate_pid,
 
         if (fdsi.ssi_signo == SIGCHLD) {
           int status;
-          pid_t child = waitpid(-1, &status, WNOHANG);
-          if (child == intermediate_pid || child == container_pid) {
+          pid_t child = waitpid(monitor_pid, &status, WNOHANG);
+          if (child == monitor_pid) {
+            /* Monitor exited — container is fully done */
             running = 0;
           }
         } else if (fdsi.ssi_signo == SIGWINCH) {
@@ -140,8 +162,10 @@ int console_monitor_loop(int master_fd, pid_t intermediate_pid,
           if (ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) == 0)
             ioctl(master_fd, TIOCSWINSZ, &ws);
         } else if (fdsi.ssi_signo == SIGINT || fdsi.ssi_signo == SIGTERM) {
-          /* Forward to container init */
-          kill(container_pid, (int)fdsi.ssi_signo);
+          /* Forward to container init (read live PID) */
+          pid_t live_pid = read_current_container_pid(pidfile);
+          if (live_pid > 0)
+            kill(live_pid, (int)fdsi.ssi_signo);
         }
       }
     }

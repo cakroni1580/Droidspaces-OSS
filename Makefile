@@ -29,12 +29,12 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/check.c
 
 # Compiler flags — hardened warning set, all warnings are errors
-CFLAGS  = -Wall -Wextra -Wpedantic -Werror -O2 -flto -std=gnu99 -I$(SRC_DIR) -no-pie -pthread
+CFLAGS  = -Wall -Wextra -Wpedantic -Werror -O2 -flto=auto -std=gnu99 -I$(SRC_DIR) -no-pie -pthread
 CFLAGS += -Wformat=2 -Wformat-security -Wformat-overflow=2 -Wformat-truncation=2
 CFLAGS += -Wnull-dereference -Wcast-qual -Wlogical-op -Wshadow -Wdouble-promotion -Wundef
 CFLAGS += -Wduplicated-cond -Wduplicated-branches -Wimplicit-fallthrough=3
 CFLAGS += -fstack-protector-strong
-LDFLAGS = -static -no-pie -flto -pthread
+LDFLAGS = -static -no-pie -flto=auto -pthread
 LIBS    = -lutil
 
 # Auto-detect architecture from compiler

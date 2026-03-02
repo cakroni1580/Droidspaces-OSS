@@ -14,7 +14,7 @@
 /* Build a restart marker path from a container name.
  * Returns the path in 'buf'. Safe against format-truncation. */
 static void restart_marker_path(const char *name, char *buf, size_t size) {
-  snprintf(buf, size, "%s/%s.restart", get_pids_dir(), name);
+  snprintf(buf, size, "%.2048s/%.256s.restart", get_pids_dir(), name);
 }
 
 static void cleanup_container_resources(struct ds_config *cfg, pid_t pid,
@@ -366,10 +366,11 @@ int start_rootfs(struct ds_config *cfg) {
     prctl(PR_SET_NAME, "[ds-monitor]", 0, 0, 0);
 
     /* Unshare namespaces - Monitor enters new UTS, IPC, and optionally Cgroup
-     * namespaces immediately. PID namespace unshare means only CHILDREN of the
-     * monitor will be in the new PID NS. Node: we no longer unshare MNT here so
-     * monitor can cleanup host mounts. */
-    int ns_flags = CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWPID;
+     * namespaces immediately. PID namespace is NOT unshared here because
+     * unshare(CLONE_NEWPID) can only be called once per process. Instead,
+     * each boot/reboot cycle forks an intermediate that creates a fresh
+     * PID namespace. */
+    int ns_flags = CLONE_NEWUTS | CLONE_NEWIPC;
 
     /* Adaptive Cgroup Namespace (introduced in Linux 4.6) */
     if (access("/proc/self/ns/cgroup", F_OK) == 0) {
@@ -399,32 +400,106 @@ int start_rootfs(struct ds_config *cfg) {
     if (unshare(ns_flags) < 0)
       ds_die("unshare failed: %s", strerror(errno));
 
-    /* Fork Container Init (PID 1 inside) */
-    pid_t init_pid = fork();
-    if (init_pid < 0)
+    int stdio_redirected = 0;
+
+    /* ── Reboot-aware boot loop ──
+     * Each iteration forks an intermediate child that creates a fresh PID
+     * namespace (unshare(CLONE_NEWPID)) and then forks the container init.
+     *
+     * Reboot detection uses EXIT CODES ONLY (no signal interception):
+     *   1. Init calls reboot(2) → kernel kills init with SIGHUP
+     *   2. Intermediate sees WTERMSIG(init)==SIGHUP via waitpid()
+     *   3. Intermediate exits with DS_REBOOT_EXIT (249)
+     *   4. Monitor sees WEXITSTATUS(mid)==249 → loop back
+     *
+     * This eliminates ghost containers because the Monitor never handles
+     * SIGHUP — it only checks a deterministic exit code. */
+  reboot_loop:;
+    /* First boot only: ensure no stale container with the same name is running
+     */
+    if (!cfg->reboot_cycle) {
+      pid_t existing_pid = 0;
+      if (is_container_running(cfg, &existing_pid)) {
+        if (existing_pid != getpid()) {
+          ds_warn("Killing stale container with same name (PID %d)",
+                  existing_pid);
+          kill(existing_pid, SIGKILL);
+          usleep(100000);
+        }
+      }
+    }
+
+    pid_t mid_pid = fork();
+    if (mid_pid < 0)
       _exit(EXIT_FAILURE);
 
-    if (init_pid == 0) {
-      /* CONTAINER INIT */
-      close(sync_pipe[1]);
-      /* internal_boot will handle its own stdfds. */
-      _exit(internal_boot(cfg));
+    if (mid_pid == 0) {
+      /* ── INTERMEDIATE PROCESS ──
+       * Create a fresh PID namespace for this boot cycle. */
+      if (unshare(CLONE_NEWPID) < 0) {
+        ds_error("unshare(CLONE_NEWPID) failed: %s", strerror(errno));
+        _exit(EXIT_FAILURE);
+      }
+
+      pid_t init_pid = fork();
+      if (init_pid < 0)
+        _exit(EXIT_FAILURE);
+
+      if (init_pid == 0) {
+        /* CONTAINER INIT (PID 1 inside namespace) */
+        close(sync_pipe[1]);
+        _exit(internal_boot(cfg));
+      }
+
+      /* Send init PID to parent via sync pipe (first boot only) */
+      if (sync_pipe[1] >= 0) {
+        write(sync_pipe[1], &init_pid, sizeof(pid_t));
+        close(sync_pipe[1]);
+        sync_pipe[1] = -1;
+      } else {
+        /* Reboot cycle — update PID file directly so
+         * 'droidspaces show/status' report the correct PID. */
+        char pid_str[32];
+        snprintf(pid_str, sizeof(pid_str), "%d", init_pid);
+        write_file_atomic(cfg->pidfile, pid_str);
+
+        char global_pf[PATH_MAX];
+        resolve_pidfile_from_name(cfg->container_name, global_pf,
+                                  sizeof(global_pf));
+        if (strcmp(cfg->pidfile, global_pf) != 0)
+          write_file_atomic(global_pf, pid_str);
+      }
+
+      /* Wait for init to exit */
+      int init_status;
+      while (waitpid(init_pid, &init_status, 0) < 0 && errno == EINTR)
+        ;
+
+      /* Convert kernel signal to exit code:
+       * SIGHUP from reboot(RESTART) → DS_REBOOT_EXIT (249)
+       * Everything else → pass through as-is */
+      if (WIFSIGNALED(init_status) && WTERMSIG(init_status) == SIGHUP) {
+        _exit(DS_REBOOT_EXIT);
+      }
+
+      _exit(WIFEXITED(init_status) ? WEXITSTATUS(init_status) : EXIT_FAILURE);
     }
 
-    /* Write child PID to sync pipe so parent knows it */
-    if (write(sync_pipe[1], &init_pid, sizeof(pid_t)) != sizeof(pid_t)) {
-      ds_warn("Failed to write to sync pipe: %s", strerror(errno));
+    /* ── MONITOR continues here ── */
+
+    /* Close sync pipe write end (intermediate handles it) */
+    if (sync_pipe[1] >= 0) {
+      close(sync_pipe[1]);
+      sync_pipe[1] = -1;
     }
-    close(sync_pipe[1]);
-    sync_pipe[1] = -1;
 
     /* Ensure monitor is not sitting inside any mount point */
     if (chdir("/") < 0) {
       ds_warn("Failed to chdir to /: %s", strerror(errno));
     }
 
-    /* Stdio handling for monitor in background mode */
-    if (!cfg->foreground) {
+    /* Stdio handling for monitor in background mode (first boot only) */
+    if (!cfg->foreground && !stdio_redirected) {
       int devnull = open("/dev/null", O_RDWR);
       if (devnull >= 0) {
         dup2(devnull, 0);
@@ -432,30 +507,85 @@ int start_rootfs(struct ds_config *cfg) {
         dup2(devnull, 2);
         close(devnull);
       }
+      stdio_redirected = 1;
     }
 
-    /* Wait for child to exit */
+    /* Wait for intermediate (which waits for init) */
     int status;
-    while (waitpid(init_pid, &status, 0) < 0 && errno == EINTR)
+    while (waitpid(mid_pid, &status, 0) < 0 && errno == EINTR)
       ;
 
-    /* Check for restart marker — if present, skip cleanup so the
-     * restart command can reuse the existing mount. */
+    /* ── Reboot detection (exit code only — zero signal ambiguity) ── */
+    if (WIFEXITED(status) && WEXITSTATUS(status) == DS_REBOOT_EXIT) {
+      if (cfg->foreground) {
+        printf("\n" C_WHITE "Droidspaces v%s : Container " C_GREEN
+               "%s" C_RESET C_WHITE " is now Rebooting...." C_RESET "\n\n",
+               DS_VERSION, cfg->container_name);
+        fflush(stdout);
+      } else {
+        ds_log("Container '%s' requested reboot — restarting...",
+               cfg->container_name);
+      }
+
+      /* Synchronize container_pid in Monitor */
+      pid_t new_pid = -1;
+      if (read_and_validate_pid(cfg->pidfile, &new_pid) == 0) {
+        cfg->container_pid = new_pid;
+      }
+
+      /* Generate a fresh UUID for the new boot cycle */
+      generate_uuid(cfg->uuid, sizeof(cfg->uuid));
+      if (!cfg->volatile_mode && cfg->rootfs_path[0]) {
+        char uuid_sync[PATH_MAX];
+        snprintf(uuid_sync, sizeof(uuid_sync), "%.4060s/.droidspaces-uuid",
+                 cfg->rootfs_path);
+        write_file(uuid_sync, cfg->uuid);
+      }
+
+      /* Reload configuration from disk if available (merge strategy) */
+      if (cfg->config_file[0]) {
+        /* Free old dynamic allocations before reload to avoid leaks */
+        free_config_binds(cfg);
+        free_config_env_vars(cfg);
+
+        struct ds_config reboot_cfg = *cfg;
+        if (ds_config_load(cfg->config_file, &reboot_cfg) == 0) {
+          if (strcmp(cfg->dns_servers, reboot_cfg.dns_servers) != 0) {
+            reboot_cfg.dns_server_content[0] = '\0';
+            ds_get_dns_servers(reboot_cfg.dns_servers,
+                               reboot_cfg.dns_server_content,
+                               sizeof(reboot_cfg.dns_server_content));
+          }
+          *cfg = reboot_cfg;
+        }
+      }
+
+      cfg->reboot_cycle = 1;
+      goto reboot_loop;
+    }
+
+    /* Not a reboot — check for restart marker */
     char restart_marker[PATH_MAX];
-    restart_marker_path(cfg->container_name, restart_marker,
-                        sizeof(restart_marker));
+    /* Use precision to satisfy GCC -Werror=format-truncation while keeping
+     * explicit return value checks for safety. */
+    int n =
+        snprintf(restart_marker, sizeof(restart_marker),
+                 "%.2048s/%.256s.restart", get_pids_dir(), cfg->container_name);
+    if (n >= (int)sizeof(restart_marker)) {
+      ds_warn("Restart marker path truncated: %s", cfg->container_name);
+    }
+
     if (access(restart_marker, F_OK) == 0) {
       ds_log("Restart marker found, skipping monitor cleanup");
     } else {
-      /* Normal exit or crash — full cleanup */
-      cleanup_container_resources(cfg, init_pid, 0, 0);
+      cleanup_container_resources(cfg, 0, 0, 0);
     }
 
     /* Free dynamically allocated configuration members before exit */
     free_config_binds(cfg);
     free_config_env_vars(cfg);
 
-    _exit(WEXITSTATUS(status));
+    _exit(WIFEXITED(status) ? WEXITSTATUS(status) : 0);
   }
 
   /* PARENT PROCESS */
@@ -503,8 +633,8 @@ int start_rootfs(struct ds_config *cfg) {
   /* 6. Foreground or background finish */
   if (cfg->foreground) {
 
-    int ret = console_monitor_loop(cfg->console.master, monitor_pid,
-                                   cfg->container_pid);
+    int ret =
+        console_monitor_loop(cfg->console.master, monitor_pid, cfg->pidfile);
     free_config_env_vars(cfg);
     return ret;
   } else {
