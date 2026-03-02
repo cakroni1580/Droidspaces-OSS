@@ -207,6 +207,67 @@ int is_dangerous_node(const char *name) {
       strcmp(name, "usip") == 0)
     return 1;
 
+  /* Tier 29: Direct Bus Access (Exynos/Samsung)
+   * gpiochip*: Raw GPIO control of motherboard pins.
+   * i2c-*: Raw I2C bus access to CMOS sensors, power chips, and touchscreens.
+   * iio:device*: Industrial I/O for raw ADC/Sensor data. */
+  if (strncmp(name, "gpiochip", 8) == 0 || strncmp(name, "i2c-", 4) == 0 ||
+      strncmp(name, "iio:device", 10) == 0)
+    return 1;
+
+  /* Tier 30: Performance & Clock Scaling
+   * Cluster/GPU/Memory frequency overrides allow host sabotage. */
+  if (strncmp(name, "cluster", 7) == 0 || strncmp(name, "gpu_freq", 8) == 0 ||
+      strncmp(name, "cpu_online_", 11) == 0 ||
+      strcmp(name, "memory_bandwidth") == 0)
+    return 1;
+
+  /* Tier 31: Exynos Modem & Multi-PDP
+   * NR (5G) and Multi-PDP packet bridges for Samsung modems. */
+  if (strncmp(name, "nr_", 3) == 0 || strncmp(name, "multipdp", 8) == 0 ||
+      strncmp(name, "modem_boot", 10) == 0 || strcmp(name, "radio0") == 0)
+    return 1;
+
+  /* Tier 32: Sensor Hub & DSPs
+   * BBD: Big Brother Daemon (Exynos sensor hub).
+   * SSP: Samsung Sensor Processor. */
+  if (strncmp(name, "bbd_", 4) == 0 || strncmp(name, "ssp_", 4) == 0 ||
+      strcmp(name, "ssp_sensorhub") == 0)
+    return 1;
+
+  /* Tier 33: Samsung Specific Hardware (Payment/Security)
+   * MST: Samsung Pay Magnetic Secure Transmission.
+   * QBT: Samsung Ultrasonic Fingerprint (Qualcomm/Samsung hybrid).
+   * DEK: Data Encryption Keys. */
+  if (strcmp(name, "mst_ctrl") == 0 || strncmp(name, "qbt", 3) == 0 ||
+      strncmp(name, "dek_", 4) == 0)
+    return 1;
+
+  /* Tier 34: Throughput & Latency Monitoring
+   * Removes dozens of performance tracking nodes from /dev listing. */
+  if (strstr(name, "throughput") != NULL || strstr(name, "latency") != NULL)
+    return 1;
+
+  /* Tier 35: Exynos Multimedia & Misc Logic
+   * FIMG2D/G2D: Graphics accelerators that don't use DRM/RenderNodes.
+   * Vertex10: Proprietary hardware logic. */
+  if (strcmp(name, "fimg2d") == 0 || strcmp(name, "fmp") == 0 ||
+      strcmp(name, "g2d") == 0 || strcmp(name, "vertex10") == 0 ||
+      strcmp(name, "self_display") == 0)
+    return 1;
+
+  /* Tier 36: Misc Samsung Utility Nodes */
+  if (strcmp(name, "ccic_misc") == 0 || strcmp(name, "hqm_event") == 0)
+    return 1;
+
+  /* Tier 37: The S10 "Ghost" Tier (Exynos/Samsung specific) */
+  if (strstr(name, "multipdp") != NULL || strncmp(name, "ttyBCM", 6) == 0)
+    return 1; /* Catch dymmy/dummy and Broadcom consoles */
+  if (strcmp(name, "s5p-smem") == 0 || strncmp(name, "als_", 4) == 0)
+    return 1; /* Shared memory and raw sensors */
+  if (strstr(name, "throughput") != NULL)
+    return 1; /* Global throughput monitoring cleanup */
+
   return 0;
 }
 
