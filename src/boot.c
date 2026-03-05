@@ -14,6 +14,66 @@ int internal_boot(struct ds_config *cfg) {
     return -1;
   }
 
+  /* ── NAT child-side handshake ────────────────────────────────────────────
+   *
+   * This block runs BEFORE any mount operations, while /proc still points to
+   * the HOST /proc.  That means /proc/<our_pid>/ns/net is accessible to the
+   * monitor and it can move the veth peer into our netns.
+   *
+   * Protocol:
+   *   1. Close pipe ends we don't use.
+   *   2. Write "R" (READY) on net_ready_pipe[1] → monitor unblocks.
+   *   3. Block on net_done_pipe[0] until monitor finishes veth setup.
+   *   4. Call setup_veth_child_side_named() with the received handshake.
+   *
+   * For DS_NET_NONE: we still do the pipe exchange (monitor sends an empty
+   * handshake) so loopback is still configured.  No veth is created.
+   * ─────────────────────────────────────────────────────────────────────── */
+  if (cfg->net_mode != DS_NET_HOST) {
+    ds_log("[NET] Child: net_mode=%d — starting handshake with monitor",
+           cfg->net_mode);
+
+    /* We write to net_ready, read from net_done */
+    if (cfg->net_ready_pipe[0] >= 0) close(cfg->net_ready_pipe[0]);
+    if (cfg->net_done_pipe[1]  >= 0) close(cfg->net_done_pipe[1]);
+
+    /* Signal monitor: we are alive and in our new netns */
+    char rdy = 'R';
+    if (cfg->net_ready_pipe[1] >= 0) {
+      if (write(cfg->net_ready_pipe[1], &rdy, 1) < 0)
+        ds_warn("[NET] Child: write READY failed: %s", strerror(errno));
+      close(cfg->net_ready_pipe[1]);
+      cfg->net_ready_pipe[1] = -1;
+    }
+
+    /* Wait for monitor to complete host-side setup */
+    struct ds_net_handshake hs;
+    memset(&hs, 0, sizeof(hs));
+    if (cfg->net_done_pipe[0] >= 0) {
+      ssize_t nr = read(cfg->net_done_pipe[0], &hs, sizeof(hs));
+      close(cfg->net_done_pipe[0]);
+      cfg->net_done_pipe[0] = -1;
+      if (nr != (ssize_t)sizeof(hs)) {
+        ds_warn("[NET] Child: incomplete handshake (read %zd, expected %zu)",
+                nr, sizeof(hs));
+      } else {
+        ds_log("[NET] Child: handshake received: peer=%s ip=%s",
+               hs.peer_name, hs.ip_str);
+      }
+    }
+
+    /* Configure our side of the veth (or just loopback for DS_NET_NONE) */
+    if (cfg->net_mode == DS_NET_NAT) {
+      setup_veth_child_side_named(cfg, hs.peer_name, hs.ip_str);
+    } else {
+      /* DS_NET_NONE: just bring up loopback */
+      ds_nl_ctx_t *nlctx = ds_nl_open();
+      if (nlctx) { ds_nl_link_up(nlctx, "lo"); ds_nl_close(nlctx); }
+    }
+
+    ds_log("[NET] Child: handshake complete");
+  }
+
   /* 0. Boot Guard: Ensure name is present and unique.
    * This is a critical security check to prevent anonymous or conflicting
    * containers from booting, even if the CLI checks were bypassed. */

@@ -224,6 +224,11 @@ static void cleanup_container_resources(struct ds_config *cfg, pid_t pid,
      * is_external_lock_active. Monitor only does resource cleanup
      * if no external lock is active. */
   }
+
+  /* Network cleanup: remove host veth and iptables rules */
+  if (cfg->net_mode == DS_NET_NAT) {
+    ds_net_cleanup(cfg, pid > 0 ? pid : cfg->container_pid);
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -374,6 +379,7 @@ int start_rootfs(struct ds_config *cfg) {
   /* Parse environment file while host paths are reachable (before pivot_root)
    */
   if (cfg->env_file[0] != '\0') {
+    free_config_env_vars(cfg);
     parse_env_file_to_config(cfg->env_file, cfg);
   }
 
@@ -418,8 +424,10 @@ int start_rootfs(struct ds_config *cfg) {
   }
 
   cfg->tty_count = DS_MAX_TTYS;
-  if (ds_terminal_create(&cfg->console) < 0)
-    ds_die("Failed to allocate console PTY");
+  if (ds_terminal_create(&cfg->console) < 0) {
+    ds_error("Failed to allocate console PTY");
+    goto cleanup;
+  }
 
   /* Propagate the host terminal's window size to the console PTY master
    * so the slave (which becomes /dev/console) has correct dimensions
@@ -451,8 +459,10 @@ int start_rootfs(struct ds_config *cfg) {
 
   /* 6. Pipe for synchronization */
   int sync_pipe[2];
-  if (pipe(sync_pipe) < 0)
-    ds_die("pipe failed: %s", strerror(errno));
+  if (pipe(sync_pipe) < 0) {
+    ds_error("pipe failed: %s", strerror(errno));
+    goto cleanup;
+  }
 
   /* 7. Configure host-side networking (NAT, ip_forward, DNS) BEFORE fork.
    * This eliminates the race condition where the child boots and reads
@@ -465,7 +475,8 @@ int start_rootfs(struct ds_config *cfg) {
   if (monitor_pid < 0) {
     close(sync_pipe[0]);
     close(sync_pipe[1]);
-    ds_die("fork failed: %s", strerror(errno));
+    ds_error("fork failed: %s", strerror(errno));
+    goto cleanup;
   }
 
   if (monitor_pid == 0) {
@@ -542,6 +553,29 @@ int start_rootfs(struct ds_config *cfg) {
      * This eliminates ghost containers because the Monitor never handles
      * SIGHUP — it only checks a deterministic exit code. */
   reboot_loop:;
+    /* Close existing pipes from previous cycle to prevent FD leaks */
+    if (cfg->net_ready_pipe[0] >= 0) {
+      close(cfg->net_ready_pipe[0]);
+      close(cfg->net_ready_pipe[1]);
+      cfg->net_ready_pipe[0] = cfg->net_ready_pipe[1] = -1;
+    }
+    if (cfg->net_done_pipe[0] >= 0) {
+      close(cfg->net_done_pipe[0]);
+      close(cfg->net_done_pipe[1]);
+      cfg->net_done_pipe[0] = cfg->net_done_pipe[1] = -1;
+    }
+
+    /* ── Networking pipes (created fresh for every boot cycle) ── */
+    int mid_sync_pipe[2] = {-1, -1};
+    if (cfg->net_mode != DS_NET_HOST) {
+      if (pipe(cfg->net_ready_pipe) < 0 || pipe(cfg->net_done_pipe) < 0 ||
+          pipe(mid_sync_pipe) < 0) {
+        ds_error("Failed to create NAT sync pipes: %s", strerror(errno));
+        _exit(EXIT_FAILURE);
+      }
+      ds_log("[NET] Sync pipes created for net_mode=%d", cfg->net_mode);
+    }
+
     /* First boot only: ensure no stale container with the same name is running
      */
     if (!cfg->reboot_cycle) {
@@ -570,9 +604,14 @@ int start_rootfs(struct ds_config *cfg) {
 
     if (mid_pid == 0) {
       /* ── INTERMEDIATE PROCESS ──
-       * Create a fresh PID namespace for this boot cycle. */
-      if (unshare(CLONE_NEWPID) < 0) {
-        ds_error("unshare(CLONE_NEWPID) failed: %s", strerror(errno));
+       * Create a fresh PID namespace (and NET namespace for NAT/none modes)
+       * for this boot cycle. */
+      int clone_flags = CLONE_NEWPID;
+      if (cfg->net_mode != DS_NET_HOST)
+        clone_flags |= CLONE_NEWNET;
+
+      if (unshare(clone_flags) < 0) {
+        ds_error("unshare(PID|NET) failed: %s", strerror(errno));
         _exit(EXIT_FAILURE);
       }
 
@@ -582,8 +621,27 @@ int start_rootfs(struct ds_config *cfg) {
 
       if (init_pid == 0) {
         /* CONTAINER INIT (PID 1 inside namespace) */
+        /* Close pipe ends the init process doesn't use */
+        if (cfg->net_mode != DS_NET_HOST) {
+          if (mid_sync_pipe[0] >= 0)
+            close(mid_sync_pipe[0]);
+          if (mid_sync_pipe[1] >= 0)
+            close(mid_sync_pipe[1]);
+        }
         close(sync_pipe[1]);
         _exit(internal_boot(cfg));
+      }
+
+      /* Send init PID to monitor so it can target /proc/<pid>/ns/net */
+      if (cfg->net_mode != DS_NET_HOST && mid_sync_pipe[1] >= 0) {
+        if (write(mid_sync_pipe[1], &init_pid, sizeof(pid_t)) !=
+            sizeof(pid_t)) {
+          ds_warn(
+              "[NET] Intermediate: failed to write init_pid to mid_sync_pipe");
+        }
+        close(mid_sync_pipe[1]);
+        close(mid_sync_pipe[0]);
+        mid_sync_pipe[0] = mid_sync_pipe[1] = -1;
       }
 
       /* Send init PID to parent via sync pipe (first boot only) */
@@ -629,6 +687,71 @@ int start_rootfs(struct ds_config *cfg) {
       close(sync_pipe[1]);
       sync_pipe[1] = -1;
     }
+
+    /* ── Monitor: NAT networking handshake ─────────────────────────────
+     *
+     * Sequence (all non-blocking after pipes are ready):
+     *   1. Read init_pid from mid_sync_pipe[0]
+     *   2. Read "ready" byte from net_ready_pipe[0]  (init sent it)
+     *   3. Call setup_veth_host_side → creates bridge/veth/rules
+     *   4. Write ds_net_handshake to net_done_pipe[1] (init reads it)
+     *
+     * This handshake ensures the veth peer is moved into the container's
+     * netns while the init process is alive and waiting, avoiding the race
+     * where we try to open /proc/<pid>/ns/net before the process exists. */
+    if (cfg->net_mode != DS_NET_HOST && mid_sync_pipe[0] >= 0) {
+      close(mid_sync_pipe[1]); /* monitor is reader */
+
+      pid_t netns_pid = -1;
+      ssize_t nr = read(mid_sync_pipe[0], &netns_pid, sizeof(pid_t));
+      close(mid_sync_pipe[0]);
+
+      if (nr != sizeof(pid_t) || netns_pid <= 0) {
+        ds_warn("[NET] Monitor: failed to read init_pid from mid_sync_pipe "
+                "(nr=%zd pid=%d)",
+                nr, (int)netns_pid);
+      } else {
+        ds_log("[NET] Monitor: received init_pid=%d, waiting for READY...",
+               (int)netns_pid);
+        cfg->container_pid = netns_pid;
+
+        /* Close the ends we don't need */
+        close(cfg->net_ready_pipe[1]); /* monitor reads, init writes */
+        close(cfg->net_done_pipe[0]);  /* monitor writes, init reads  */
+
+        char rdy;
+        if (read(cfg->net_ready_pipe[0], &rdy, 1) < 0) {
+          ds_warn("[NET] Monitor: failed to read READY signal: %s",
+                  strerror(errno));
+        } else {
+          ds_log("[NET] Monitor: READY received from init (pid=%d)",
+                 (int)netns_pid);
+        }
+        close(cfg->net_ready_pipe[0]);
+
+        if (cfg->net_mode == DS_NET_NAT) {
+          if (setup_veth_host_side(cfg, netns_pid) < 0) {
+            ds_warn("[NET] Monitor: setup_veth_host_side failed — "
+                    "container will have no internet");
+          } else {
+            /* Start the dynamic route monitor thread to handle WiFi/Mobile
+             * switches */
+            ds_net_start_route_monitor();
+          }
+        }
+
+        /* Send handshake to init */
+        struct ds_net_handshake hs;
+        ds_net_derive_handshake(netns_pid, &hs);
+        ds_log("[NET] Monitor: sending DONE: peer=%s ip=%s", hs.peer_name,
+               hs.ip_str);
+        if (write(cfg->net_done_pipe[1], &hs, sizeof(hs)) !=
+            (ssize_t)sizeof(hs))
+          ds_warn("[NET] Monitor: failed to write handshake to init");
+        close(cfg->net_done_pipe[1]);
+      }
+    }
+    /* ─────────────────────────────────────────────────────────────────── */
 
     /* Ensure monitor is not sitting inside any mount point */
     if (chdir("/") < 0) {
@@ -976,7 +1099,7 @@ int stop_rootfs(struct ds_config *cfg, int skip_unmount) {
     firmware_path_remove_rootfs(cfg->img_mount_point);
 
   /* 5. Complete resource cleanup. */
-  cleanup_container_resources(cfg, 0, skip_unmount, unkillable);
+  cleanup_container_resources(cfg, pid, skip_unmount, unkillable);
 
   if (!cfg->foreground)
     ds_log("Container '%s' stopped.", cfg->container_name);
@@ -994,19 +1117,19 @@ int stop_rootfs(struct ds_config *cfg, int skip_unmount) {
  * Namespace Entry (shared for enter and run)
  * ---------------------------------------------------------------------------*/
 
-int enter_namespace(pid_t pid) {
+int enter_namespace(pid_t pid, struct ds_config *cfg) {
   /* Verify process is still alive before trying to enter namespaces */
   if (kill(pid, 0) < 0) {
     ds_error("Container PID %d is no longer alive.", pid);
     return -1;
   }
 
-  const char *ns_names[] = {"mnt", "uts", "ipc", "pid", "cgroup"};
-  int ns_fds[5];
+  const char *ns_names[] = {"mnt", "uts", "ipc", "pid", "cgroup", "net"};
+  int ns_fds[6];
   char path[PATH_MAX];
 
   /* 1. Open all namespace descriptors first (CRITICAL: before any setns) */
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 6; i++) {
     snprintf(path, sizeof(path), "/proc/%d/ns/%s", pid, ns_names[i]);
     ns_fds[i] = open(path, O_RDONLY);
     if (ns_fds[i] < 0) {
@@ -1018,7 +1141,7 @@ int enter_namespace(pid_t pid) {
           close(ns_fds[j]);
         return -1;
       }
-      if (errno != ENOENT) {
+      if (errno != ENOENT && i != 5) {
         ds_warn("Optional namespace %s (%s) is missing: %s", ns_names[i], path,
                 strerror(errno));
       }
@@ -1026,19 +1149,28 @@ int enter_namespace(pid_t pid) {
   }
 
   /* 2. Enter namespaces */
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 6; i++) {
     if (ns_fds[i] < 0)
       continue;
+
+    /* Skip entering the 'net' namespace (index 5) if host networking is enabled
+     */
+    if (i == 5 && cfg && cfg->net_mode == DS_NET_HOST) {
+      close(ns_fds[i]);
+      continue;
+    }
 
     if (setns(ns_fds[i], 0) < 0) {
       if (i == 0) { /* mnt is mandatory */
         ds_error("setns(mnt) failed: %s", strerror(errno));
-        for (int j = i; j < 5; j++)
+        for (int j = i; j < 6; j++)
           if (ns_fds[j] >= 0)
             close(ns_fds[j]);
         return -1;
       }
-      ds_warn("setns(%s) failed (ignored): %s", ns_names[i], strerror(errno));
+      if (i != 5) {
+        ds_warn("setns(%s) failed (ignored): %s", ns_names[i], strerror(errno));
+      }
     }
     close(ns_fds[i]);
   }
@@ -1092,7 +1224,7 @@ int enter_rootfs(struct ds_config *cfg, const char *user) {
      */
     ds_cgroup_attach(pid);
 
-    if (enter_namespace(pid) < 0)
+    if (enter_namespace(pid, cfg) < 0)
       _exit(EXIT_FAILURE);
 
     /* Allocate TTY INSIDE the container namespaces */
@@ -1227,7 +1359,7 @@ int run_in_rootfs(struct ds_config *cfg, int argc, char **argv) {
   }
 
   if (child == 0) {
-    if (enter_namespace(pid) < 0)
+    if (enter_namespace(pid, cfg) < 0)
       _exit(EXIT_FAILURE);
 
     pid_t cmd_pid = fork();

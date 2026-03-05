@@ -23,6 +23,7 @@
 #include <sched.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -104,7 +105,7 @@
 
 /* Hardening constants */
 #define DS_DEFAULT_TTY_GID 5
-#define DS_DEFAULT_SUBNET "10.0.3.0/24"
+#define DS_DEFAULT_SUBNET "10.0.0.0/16"
 #define DS_MAX_TRACKED_ENTRIES 512
 
 /* X11 Socket Paths (Host-side relative to /.old_root or absolute) */
@@ -168,6 +169,35 @@ extern int ds_log_silent;
  * Data structures
  * ---------------------------------------------------------------------------*/
 
+/* ── Networking modes ──────────────────────────────────────────────────────*/
+
+enum ds_net_mode {
+  DS_NET_HOST = 0, /* share host network namespace (default) */
+  DS_NET_NAT,      /* isolated netns + bridge + MASQUERADE      */
+  DS_NET_NONE,     /* isolated netns with loopback only          */
+};
+
+/* Opaque RTNETLINK context — defined in ds_netlink.c */
+typedef struct ds_nl_ctx ds_nl_ctx_t;
+
+/* Handshake payload: Monitor → init via net_done_pipe */
+struct ds_net_handshake {
+  char peer_name[16]; /* e.g. "ds-p12345"        */
+  char ip_str[32];    /* e.g. "10.0.4.47/16"     */
+};
+
+/* ── NAT networking constants ──────────────────────────────────────────────*/
+
+#ifndef DS_NAT_BRIDGE
+#define DS_NAT_BRIDGE "ds-br0"
+#endif
+#ifndef DS_NAT_GW_IP
+#define DS_NAT_GW_IP "10.0.0.1"
+#endif
+#ifndef DS_NAT_PREFIX
+#define DS_NAT_PREFIX 16
+#endif
+
 /* Bind mount entry */
 struct ds_bind_mount {
   char src[PATH_MAX];
@@ -200,6 +230,7 @@ struct ds_config {
   char container_name[256];       /* --name= or auto-generated */
   char hostname[256];             /* --hostname= or container_name */
   char dns_servers[1024];         /* --dns= (comma/space separated) */
+  enum ds_net_mode net_mode;      /* --net=host|nat|none */
   char dns_server_content[1024];  /* In-memory DNS config for boot */
 
   /* UUID for PID discovery */
@@ -213,6 +244,7 @@ struct ds_config {
   int enable_ipv6;        /* --enable-ipv6 */
   int android_storage;    /* --enable-android-storage */
   int selinux_permissive; /* --selinux-permissive */
+  int net_bridgeless;     /* Probe result: no CONFIG_BRIDGE, use PTP NAT */
   int reboot_cycle;       /* 1 if we are in a reboot loop */
   char prog_name[64];     /* argv[0] for logging */
 
@@ -222,6 +254,12 @@ struct ds_config {
   pid_t intermediate_pid;         /* intermediate fork pid */
   int is_img_mount;               /* 1 if rootfs was loop-mounted from .img */
   char img_mount_point[PATH_MAX]; /* where the .img was mounted */
+
+  /* ── NAT networking synchronization pipes ─────────────────────────────
+   * Both pairs are initialised to {-1,-1} in main() after memset.
+   * Pipes are only created in container.c when net_mode != DS_NET_HOST. */
+  int net_ready_pipe[2]; /* child → monitor: "I am in my new netns"  */
+  int net_done_pipe[2];  /* monitor → child: "veth peer is in place" */
 
   /* Custom bind mounts (dynamically allocated) */
   struct ds_bind_mount *binds;
@@ -302,6 +340,8 @@ void free_config_binds(struct ds_config *cfg);
 void free_config_env_vars(struct ds_config *cfg);
 void free_config_unknown_lines(struct ds_config *cfg);
 char *ds_config_auto_path(const char *rootfs_path);
+void apply_reset_config(struct ds_config *cfg, int cli_net_mode_set,
+                        enum ds_net_mode cli_net_mode);
 
 /* ---------------------------------------------------------------------------
  * android.c
@@ -312,8 +352,6 @@ void android_optimizations(int enable);
 void android_set_selinux_permissive(void);
 int android_get_selinux_status(void);
 void android_remount_data_suid(void);
-void android_configure_iptables(void);
-void android_setup_paranoid_network_groups(void);
 int android_setup_storage(const char *rootfs_path);
 int android_seccomp_setup(int is_systemd);
 
@@ -367,8 +405,60 @@ int setup_hardware_access(struct ds_config *cfg, gid_t *gpu_gids,
 
 int fix_networking_host(struct ds_config *cfg);
 int fix_networking_rootfs(struct ds_config *cfg);
+
+/* NAT veth/bridge lifecycle */
+int setup_veth_host_side(struct ds_config *cfg, pid_t child_pid);
+int setup_veth_child_side_named(struct ds_config *cfg, const char *peer_name,
+                                const char *ip_str);
+void ds_net_derive_handshake(pid_t init_pid, struct ds_net_handshake *hs);
+void ds_net_cleanup(struct ds_config *cfg, pid_t container_pid);
+void ds_net_start_route_monitor(void);
+int ds_net_disable_tx_checksum(const char *ifname);
+void parse_cidr(const char *cidr, uint32_t *ip_out, uint32_t *mask_out);
+
 int ds_get_dns_servers(const char *custom_dns, char *out, size_t size);
 int detect_ipv6_in_container(pid_t pid);
+
+/* ---------------------------------------------------------------------------
+ * ds_netlink.c
+ * ---------------------------------------------------------------------------*/
+
+ds_nl_ctx_t *ds_nl_open(void);
+void ds_nl_close(ds_nl_ctx_t *ctx);
+int ds_nl_link_exists(ds_nl_ctx_t *ctx, const char *ifname);
+int ds_nl_get_ifindex(ds_nl_ctx_t *ctx, const char *ifname);
+int ds_nl_create_bridge(ds_nl_ctx_t *ctx, const char *name);
+int ds_nl_create_veth(ds_nl_ctx_t *ctx, const char *host, const char *peer);
+int ds_nl_set_master(ds_nl_ctx_t *ctx, const char *ifname, const char *master);
+int ds_nl_link_up(ds_nl_ctx_t *ctx, const char *ifname);
+int ds_nl_link_down(ds_nl_ctx_t *ctx, const char *ifname);
+int ds_nl_del_link(ds_nl_ctx_t *ctx, const char *ifname);
+int ds_nl_rename(ds_nl_ctx_t *ctx, const char *ifname, const char *newname);
+int ds_nl_add_addr4(ds_nl_ctx_t *ctx, const char *ifname, uint32_t ip_be,
+                    uint8_t prefix);
+int ds_nl_add_route4(ds_nl_ctx_t *ctx, uint32_t dst_be, uint8_t dst_len,
+                     uint32_t gw_be, int oif_idx);
+int ds_nl_move_to_netns(ds_nl_ctx_t *ctx, const char *ifname, int netns_fd);
+int ds_nl_get_default_gw_table(ds_nl_ctx_t *ctx, char *ifname_out,
+                               int *table_out);
+int ds_nl_add_rule4(ds_nl_ctx_t *ctx, uint32_t src_be, uint8_t src_len,
+                    uint32_t dst_be, uint8_t dst_len, int table, int priority);
+int ds_nl_del_rule4(ds_nl_ctx_t *ctx, uint32_t src_be, uint8_t src_len,
+                    uint32_t dst_be, uint8_t dst_len, int table, int priority);
+void ds_nl_flush_stale_veths(ds_nl_ctx_t *ctx, const char *prefix);
+/* Kernel capability probe — call before any NAT setup */
+int ds_nl_probe_nat_capability(char *reason, size_t rsz);
+
+/* ---------------------------------------------------------------------------
+ * ds_iptables.c
+ * ---------------------------------------------------------------------------*/
+
+int ds_ipt_ensure_masquerade(const char *src_cidr);
+int ds_ipt_ensure_forward_accept(const char *iface);
+int ds_ipt_ensure_input_accept(const char *iface);
+int ds_ipt_ensure_mss_clamp(void);
+int ds_ipt_remove_iface_rules(const char *iface);
+int ds_ipt_remove_ds_rules(void);
 
 /* ---------------------------------------------------------------------------
  * terminal.c
@@ -433,7 +523,7 @@ void parse_env_file_to_config(const char *path, struct ds_config *cfg);
 int is_valid_container_pid(pid_t pid);
 int start_rootfs(struct ds_config *cfg);
 int stop_rootfs(struct ds_config *cfg, int skip_unmount);
-int enter_namespace(pid_t pid);
+int enter_namespace(pid_t pid, struct ds_config *cfg);
 int enter_rootfs(struct ds_config *cfg, const char *user);
 int run_in_rootfs(struct ds_config *cfg, int argc, char **argv);
 int show_info(struct ds_config *cfg, int trust_cfg_pid);

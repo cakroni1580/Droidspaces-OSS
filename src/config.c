@@ -121,10 +121,16 @@ int ds_config_add_bind(struct ds_config *cfg, const char *src,
   return 1;
 }
 
+/*
+ * IMPORTANT: free_config_binds must NOT free unknown lines.
+ * The --reset path in main.c saves unknown_head/tail pointers, calls this
+ * function, then memset's the struct, then restores the saved pointers.
+ * If we free unknown lines here, the restored pointers dangle → SIGSEGV.
+ *
+ * Unknown lines are freed separately via free_config_unknown_lines().
+ */
+
 void free_config_binds(struct ds_config *cfg) {
-  /* Also free unknown lines and env vars here for centralized cleanup */
-  free_config_unknown_lines(cfg);
-  free_config_env_vars(cfg);
 
   if (!cfg->binds)
     return;
@@ -218,6 +224,19 @@ int ds_config_load(const char *config_path, struct ds_config *cfg) {
       safe_strncpy(cfg->env_file, val, sizeof(cfg->env_file));
     } else if (strcmp(key, "uuid") == 0) {
       safe_strncpy(cfg->uuid, val, sizeof(cfg->uuid));
+    } else if (strcmp(key, "net_mode") == 0) {
+      if (strcmp(val, "nat") == 0) {
+        cfg->net_mode = DS_NET_NAT;
+      } else if (strcmp(val, "none") == 0) {
+        cfg->net_mode = DS_NET_NONE;
+      } else if (strcmp(val, "host") == 0) {
+        cfg->net_mode = DS_NET_HOST;
+      } else {
+        ds_warn(
+            "Unknown network mode '%s' in config file. Defaulting to 'host'.",
+            val);
+        cfg->net_mode = DS_NET_HOST;
+      }
     } else {
       /* Preservation: Capture unknown key-value pairs for Android metadata */
       add_unknown_line(cfg, line);
@@ -301,6 +320,14 @@ int ds_config_save(const char *config_path, struct ds_config *cfg) {
   fprintf(f_out, "selinux_permissive=%d\n", cfg->selinux_permissive);
   fprintf(f_out, "volatile_mode=%d\n", cfg->volatile_mode);
   fprintf(f_out, "foreground=%d\n", cfg->foreground);
+
+  if (cfg->net_mode == DS_NET_NAT) {
+    fprintf(f_out, "net_mode=nat\n");
+  } else if (cfg->net_mode == DS_NET_NONE) {
+    fprintf(f_out, "net_mode=none\n");
+  } else {
+    fprintf(f_out, "net_mode=host\n");
+  }
 
   if (cfg->env_file[0])
     fprintf(f_out, "env_file=%s\n", cfg->env_file);
@@ -413,4 +440,46 @@ int ds_config_save_by_name(const char *name, struct ds_config *cfg) {
            container_dir);
 
   return ds_config_save(config_path, cfg);
+}
+
+void apply_reset_config(struct ds_config *cfg, int cli_net_mode_set,
+                        enum ds_net_mode cli_net_mode) {
+  char save_name[256], save_rootfs[PATH_MAX], save_img[PATH_MAX];
+  char save_config[PATH_MAX], save_prog[64], save_uuid[64];
+  int save_is_img = cfg->is_img_mount;
+  int save_specified = cfg->config_file_specified;
+  int save_existed = cfg->config_file_existed;
+  struct ds_config_line *save_head = cfg->unknown_head;
+  struct ds_config_line *save_tail = cfg->unknown_tail;
+
+  safe_strncpy(save_name, cfg->container_name, sizeof(save_name));
+  safe_strncpy(save_rootfs, cfg->rootfs_path, sizeof(save_rootfs));
+  safe_strncpy(save_img, cfg->rootfs_img_path, sizeof(save_img));
+  safe_strncpy(save_config, cfg->config_file, sizeof(save_config));
+  safe_strncpy(save_prog, cfg->prog_name, sizeof(save_prog));
+  safe_strncpy(save_uuid, cfg->uuid, sizeof(save_uuid));
+
+  free_config_env_vars(cfg);
+  free_config_binds(cfg);
+  memset(cfg, 0, sizeof(*cfg));
+
+  cfg->net_ready_pipe[0] = cfg->net_ready_pipe[1] = -1;
+  cfg->net_done_pipe[0] = cfg->net_done_pipe[1] = -1;
+
+  safe_strncpy(cfg->container_name, save_name, sizeof(cfg->container_name));
+  safe_strncpy(cfg->rootfs_path, save_rootfs, sizeof(cfg->rootfs_path));
+  safe_strncpy(cfg->rootfs_img_path, save_img, sizeof(cfg->rootfs_img_path));
+  safe_strncpy(cfg->config_file, save_config, sizeof(cfg->config_file));
+  safe_strncpy(cfg->prog_name, save_prog, sizeof(cfg->prog_name));
+  safe_strncpy(cfg->uuid, save_uuid, sizeof(cfg->uuid));
+  cfg->is_img_mount = save_is_img;
+  cfg->config_file_specified = save_specified;
+  cfg->config_file_existed = save_existed;
+  cfg->unknown_head = save_head;
+  cfg->unknown_tail = save_tail;
+
+  if (cli_net_mode_set)
+    cfg->net_mode = cli_net_mode;
+
+  ds_config_save_by_name(cfg->container_name, cfg);
 }

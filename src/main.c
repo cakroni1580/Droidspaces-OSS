@@ -50,6 +50,8 @@ void print_usage(void) {
   printf("  -E, --env=PATH            Load environment variables from file\n");
   printf(
       "  -X, --termux-x11          Enable Termux-X11 support (Android only)\n");
+  printf("      --net=MODE            Networking mode: host (default), nat, "
+         "none\n");
   printf(
       "  -B, --bind-mount=SRC:DEST Bind mount host directory into container\n");
   printf("  -C, --conf=PATH           Load configuration from file\n");
@@ -208,11 +210,66 @@ static int resolve_and_load_config(struct ds_config *cfg) {
  * Command Dispatch
  * ---------------------------------------------------------------------------*/
 
+static void enforce_nat_safety(struct ds_config *cfg, int argc, char **argv) {
+  int is_nat = (cfg->net_mode == DS_NET_NAT);
+  int is_ipv6 = cfg->enable_ipv6;
+
+  /* Nuke config reliance: parse argv directly to guarantee the warning
+   * triggers regardless of what ds_config_load() wiped during restart. */
+  if (argv != NULL) {
+    for (int i = 1; i < argc; i++) {
+      if (strcmp(argv[i], "--net=nat") == 0)
+        is_nat = 1;
+      if (strcmp(argv[i], "--net") == 0 && i + 1 < argc &&
+          strcmp(argv[i + 1], "nat") == 0)
+        is_nat = 1;
+      if (strcmp(argv[i], "-I") == 0 || strcmp(argv[i], "--enable-ipv6") == 0)
+        is_ipv6 = 1;
+    }
+  }
+
+  if (is_nat && is_ipv6) {
+    printf("\n" C_YELLOW C_BOLD
+           "[ WARNING: IPv6 UNSUPPORTED IN NAT MODE ]" C_RESET "\n");
+    ds_log("IPv6 connectivity is currently not supported with --net=nat.");
+    ds_log("IPv6 functionality will be disabled for this session.");
+  }
+
+  if (cfg->net_mode != DS_NET_NAT)
+    return;
+
+  cfg->enable_ipv6 = 0;
+
+  char reason[512];
+  int probe = ds_nl_probe_nat_capability(reason, sizeof(reason));
+  if (probe < 0) {
+    printf("\n" C_RED C_BOLD "[ FATAL: NAT NETWORKING UNSUPPORTED ]" C_RESET
+           "\n\n");
+    ds_error("--net=nat is not supported on this kernel:\n  %s", reason);
+    ds_log("\nTip: Use --net=host (default) for shared host networking,");
+    ds_log("or rebuild your kernel with CONFIG_BRIDGE=y and CONFIG_VETH=y.");
+    exit(1);
+  }
+
+  if (probe == 1) {
+    cfg->net_bridgeless = 1;
+    ds_log("[NET] Kernel capability probe passed for --net=nat (FALLBACK: No "
+           "BRIDGE)");
+  } else {
+    cfg->net_bridgeless = 0;
+    ds_log("[NET] Kernel capability probe passed for --net=nat (Full BRIDGE)");
+  }
+}
+
 int main(int argc, char **argv) {
   int ret = 0;
   struct ds_config cfg;
   /* CRITICAL: Zero all fields to avoid garbage pointer in dynamic arrays */
   memset(&cfg, 0, sizeof(cfg));
+
+  /* Initialise pipe fds to -1 so accidental close(-1) is harmless */
+  cfg.net_ready_pipe[0] = cfg.net_ready_pipe[1] = -1;
+  cfg.net_done_pipe[0] = cfg.net_done_pipe[1] = -1;
 
   safe_strncpy(cfg.prog_name, argv[0], sizeof(cfg.prog_name));
 
@@ -233,6 +290,7 @@ int main(int argc, char **argv) {
       {"conf", required_argument, 0, 'C'},
       {"config", required_argument, 0, 'C'},
       {"env", required_argument, 0, 'E'},
+      {"net", required_argument, 0, 257},
       {"reset", no_argument, 0, 256},
       {"help", no_argument, 0, 'v'},
       {0, 0, 0, 0}};
@@ -249,6 +307,8 @@ int main(int argc, char **argv) {
   const char *discovered_cmd = NULL;
   char temp_r[PATH_MAX] = {0}, temp_i[PATH_MAX] = {0};
   int reset_config = 0;
+  int cli_net_mode_set = 0;
+  enum ds_net_mode cli_net_mode = DS_NET_HOST;
   int opt;
 
   /* 1. Discovery Pass: Capture identity and command without permuting argv.
@@ -275,6 +335,21 @@ int main(int argc, char **argv) {
     } else if (opt == 256) {
       reset_config = 1;
     }
+    /* Discover --net early so kernel probe can run before config load */
+    if (opt == 257) {
+      if (strcmp(optarg, "nat") == 0)
+        cfg.net_mode = DS_NET_NAT;
+      else if (strcmp(optarg, "none") == 0)
+        cfg.net_mode = DS_NET_NONE;
+      else if (strcmp(optarg, "host") == 0)
+        cfg.net_mode = DS_NET_HOST;
+      else {
+        ds_error("Unknown network mode: '%s'. Valid options: host, nat, none",
+                 optarg);
+        ret = 1;
+        goto cleanup;
+      }
+    }
   }
   optind = 0; /* Reset for next steps */
 
@@ -299,43 +374,6 @@ int main(int argc, char **argv) {
     } else if (cfg.container_name[0]) {
       ds_config_load_by_name(cfg.container_name, &cfg);
     }
-  }
-
-  /* Apply reset if requested: wipe config but preserve identity and unknown
-   * keys */
-  if (reset_config) {
-    char save_name[256];
-    char save_rootfs[PATH_MAX];
-    char save_rootfs_img[PATH_MAX];
-    char save_config[PATH_MAX];
-    char save_prog[64];
-    struct ds_config_line *save_head = cfg.unknown_head;
-    struct ds_config_line *save_tail = cfg.unknown_tail;
-    int save_config_file_specified = cfg.config_file_specified;
-    int save_config_file_existed = cfg.config_file_existed;
-
-    safe_strncpy(save_name, cfg.container_name, sizeof(save_name));
-    safe_strncpy(save_rootfs, cfg.rootfs_path, sizeof(save_rootfs));
-    safe_strncpy(save_rootfs_img, cfg.rootfs_img_path, sizeof(save_rootfs_img));
-    safe_strncpy(save_config, cfg.config_file, sizeof(save_config));
-    safe_strncpy(save_prog, cfg.prog_name, sizeof(save_prog));
-
-    free_config_env_vars(&cfg);
-    free_config_binds(&cfg);
-
-    memset(&cfg, 0, sizeof(cfg));
-
-    safe_strncpy(cfg.container_name, save_name, sizeof(cfg.container_name));
-    safe_strncpy(cfg.rootfs_path, save_rootfs, sizeof(cfg.rootfs_path));
-    safe_strncpy(cfg.rootfs_img_path, save_rootfs_img,
-                 sizeof(cfg.rootfs_img_path));
-    safe_strncpy(cfg.config_file, save_config, sizeof(cfg.config_file));
-    safe_strncpy(cfg.prog_name, save_prog, sizeof(cfg.prog_name));
-
-    cfg.unknown_head = save_head;
-    cfg.unknown_tail = save_tail;
-    cfg.config_file_specified = save_config_file_specified;
-    cfg.config_file_existed = save_config_file_existed;
   }
 
   /* 2. Override Pass: Apply CLI flags on top of config.
@@ -420,6 +458,23 @@ int main(int argc, char **argv) {
       print_usage();
       ret = 0;
       goto cleanup;
+    case 257:
+      if (strcmp(optarg, "nat") == 0)
+        cli_net_mode = DS_NET_NAT;
+      else if (strcmp(optarg, "none") == 0)
+        cli_net_mode = DS_NET_NONE;
+      else if (strcmp(optarg, "host") == 0)
+        cli_net_mode = DS_NET_HOST;
+      else {
+        ds_error("Unknown network mode: '%s'. Valid options: host, nat, none",
+                 optarg);
+        ret = 1;
+        goto cleanup;
+      }
+      cfg.net_mode = cli_net_mode;
+      cli_net_mode_set = 1;
+      break;
+
     case '?':
       /* Ignore unknown options during override if we already found a cmd */
       if (discovered_cmd)
@@ -431,9 +486,18 @@ int main(int argc, char **argv) {
     }
   }
 
+  /* If an environment file was specified, load it now */
+  if (cfg.env_file[0] != '\0') {
+    free_config_env_vars(
+        &cfg); // Clear existing env vars before loading from file
+    parse_env_file_to_config(cfg.env_file, &cfg);
+  }
+
   /* Prevent foreground mode in non-interactive environments */
   if (cfg.foreground && (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO))) {
-    ds_die("Foreground mode requires a fully interactive terminal.");
+    ds_error("Foreground mode requires a fully interactive terminal.");
+    ret = 1;
+    goto cleanup;
   }
 
   if (optind >= argc) {
@@ -461,16 +525,21 @@ int main(int argc, char **argv) {
   }
 
   /* Root required commands */
-  if (getuid() != 0)
-    ds_die("Root privileges required for '%s'", cmd);
+  if (getuid() != 0) {
+    ds_error("Root privileges required for '%s'", cmd);
+    ret = 1;
+    goto cleanup;
+  }
   ensure_workspace();
 
   if (strcmp(cmd, "show") == 0) {
     ret = show_containers();
     goto cleanup;
   }
+
   if (strcmp(cmd, "scan") == 0) {
-    ret = scan_containers();
+    scan_containers();
+    ret = 0;
     goto cleanup;
   }
 
@@ -488,6 +557,10 @@ int main(int argc, char **argv) {
       ret = 1;
       goto cleanup;
     }
+    if (reset_config)
+      apply_reset_config(&cfg, cli_net_mode_set, cli_net_mode);
+    enforce_nat_safety(&cfg, argc, argv);
+
     print_ds_banner();
     check_kernel_recommendation();
     if (cfg.container_name[0] == '\0' && cfg.rootfs_path[0]) {
@@ -512,10 +585,13 @@ int main(int argc, char **argv) {
       ret = 1;
       goto cleanup;
     }
-    if (validate_kernel_version() < 0) {
+    if (check_requirements() < 0) {
       ret = 1;
       goto cleanup;
     }
+    if (reset_config)
+      apply_reset_config(&cfg, cli_net_mode_set, cli_net_mode);
+    enforce_nat_safety(&cfg, argc, argv);
     print_ds_banner();
     ret = restart_rootfs(&cfg);
     goto cleanup;

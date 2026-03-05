@@ -114,34 +114,6 @@ void android_remount_data_suid(void) {
 }
 
 /* ---------------------------------------------------------------------------
- * Networking / Firewall
- * ---------------------------------------------------------------------------*/
-
-void android_configure_iptables(void) {
-  if (!is_android())
-    return;
-
-  ds_log("Configuring iptables for container networking...");
-
-  char *cmds[][32] = {{"iptables", "-t", "filter", "-F", NULL},
-                      {"ip6tables", "-t", "filter", "-F", NULL},
-                      {"iptables", "-P", "FORWARD", "ACCEPT", NULL},
-                      {"iptables", "-t", "nat", "-A", "POSTROUTING", "-s",
-                       DS_DEFAULT_SUBNET, "!", "-d", DS_DEFAULT_SUBNET, "-j",
-                       "MASQUERADE", NULL},
-                      {"iptables", "-t", "nat", "-A", "OUTPUT", "-p", "tcp",
-                       "-d", "127.0.0.1", "-m", "tcp", "--dport", "1:65535",
-                       "-j", "REDIRECT", "--to-ports", "1-65535", NULL},
-                      {"iptables", "-t", "nat", "-A", "OUTPUT", "-p", "udp",
-                       "-d", "127.0.0.1", "-m", "udp", "--dport", "1:65535",
-                       "-j", "REDIRECT", "--to-ports", "1-65535", NULL}};
-
-  for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {
-    run_command_quiet(cmds[i]);
-  }
-}
-
-/* ---------------------------------------------------------------------------
  * Storage
  * ---------------------------------------------------------------------------*/
 
