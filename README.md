@@ -12,7 +12,7 @@
 
 What makes Droidspaces unique is its **zero-dependency, native execution** on both Android and Linux. It's statically compiled against musl libc. If your device runs a Linux kernel, Droidspaces runs on it. No Termux, no middlemen, no setup overhead.
 
-- **Tiny footprint:** under 150KB per platform
+- **Tiny footprint:** under 200KB per platform
 - **Truly native:** runs directly on Android and Linux from the same binary
 - **Wide architecture support:** `aarch64`, `armhf`, `x86_64`, and `x86` as a single static binary
 - **Beautiful Android app:** manage unlimited containers and do everything the CLI can, all from a clean, intuitive GUI
@@ -95,16 +95,17 @@ The entire runtime is a **single static binary** under 150KB, compiled against m
 | **Port Forwarding** | Forward host ports to the container in NAT mode (e.g., `--port 22:22`). Supports TCP and UDP. |
 | **Volatile Mode** | Ephemeral containers using OverlayFS. All changes are stored in RAM and discarded on exit. Perfect for testing and development. |
 | **Custom Bind Mounts** | Map host directories into containers at arbitrary mount points. Supports both chained (`-B a:b -B c:d`) and comma-separated (`-B a:b,c:d`) syntax, up to 16 mounts. |
+| **Config File Support** | Load configurations directly from `.config` files using `--conf`. Integrates seamlessly with the CLI overrides (`--reset` is supported) and automatically syncs to the workspace for persistence. |
 | **Hardware Access Mode** | Expose host hardware (GPU, cameras, sensors, USB) to the container via devtmpfs. Enables GPU acceleration with Turnip + Zink / Panfrost on supported Android devices. PulseAudio is also supported in Android |
 | **Multiple Containers** | Run unlimited containers simultaneously, each with its own name, PID file, and configuration. Start, stop, enter, and manage them independently. |
-| **Fast Restart** | Near-instant container restarts (under 200ms) by preserving the loop mount and coordinating state between the CLI and the background monitor process. |
+| **In-container Reboot Support** | Handles in-container `reboot(2)` syscalls via a strict 3-level PID hierarchy to autonomously reinitialize the container sequence - TL;DR: you can restart the container remotely without touching Droidspaces! |
 | **Android Storage** | Bind-mount `/storage/emulated/0` into the container for direct access to the device's shared storage. |
 | **PTY/Console Support** | Full PTY isolation. Foreground mode provides an interactive console with proper terminal resize handling (binary only with the `-f` flag) |
 | **Multi-DNS Support** | Configure custom DNS servers (comma-separated) that bypass the host's default DNS lookup. |
 | **IPv6 Support** | Enable IPv6 networking in containers with a single flag. |
 | **SELinux Permissive Mode** | Optionally set SELinux to permissive mode during container boot if needed. |
 | **Rootfs Image Support** | Boot containers from ext4 `.img` files with automatic loop mounting, filesystem checks, and SELinux context hardening if needed. **The Android app also supports creating portable containers in rootfs.img mode** [ [How to create an ext4 rootfs.img manually ? ](./Documentation/Installation-Linux.md#option-b-create-an-ext4-image-recommended)] |
-| **Auto-Recovery** | Automatic stale PID file cleanup, container scanning for orphaned processes, and robust mount cleanup on exit. |
+| **Auto-Recovery** | Automatic stale PID file cleanup, container scanning for orphaned processes, and robust config resurrection via in-memory metadata syncing from `/run/droidspaces`. |
 | **Cgroup Isolation** | Per-container cgroup hierarchies (`/sys/fs/cgroup/droidspaces/<name>`) with full systemd compatibility. Supports both cgroup v1 and v2. |
 | **Adaptive Seccomp Shield** | Kernel-aware BPF filter that resolves FBE keyring conflicts and prevents VFS deadlocks for **systemd** containers on legacy Android kernels (< 5.0). Automatically grants full namespace freedom to non-systemd containers (Alpine/OpenRC), enabling features like **nested containers/Docker**. |
 
@@ -269,7 +270,7 @@ For the list of devices and distributions verified by the community, see the [Te
 
 The following features are planned for future development. Contributions and Pull Requests are highly welcome!
 
-- [ ] **In-container Reboot Detection**: Implement a robust mechanism to detect and handle `reboot(2)` calls from within the container, allowing the monitor to re-fork a fresh initialization sequence autonomously.
+- [ ] **Network Namespace Support**: Add explicit support for `CLONE_NEWNET` and veth bridging for dedicated per-container networking, instead of host-shared networking.
 
 ---
 

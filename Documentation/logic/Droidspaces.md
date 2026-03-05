@@ -51,12 +51,14 @@ src/
 ├── ds_dhcp.c           Embedded single-lease DHCP server (joinable thread)
 ├── hardware.c          GPU group auto-detection, X11 socket mounting
 ├── android.c           Android-specific: SELinux, optimizations, storage
-├── android_seccomp.c   Android system call filtering (Seccomp) per-container
+├── android_seccomp.c   Adaptive Seccomp BPF filters for legacy Android (< 5.0)
+├── cgroup.c            Cgroup v1/v2 hierarchy mounting and subtree isolation
+├── config.c            `ds_config` file loading, metadata syncing, and memory backup
 ├── environment.c       Environment variables, os-release parsing
 ├── utils.c             File I/O, UUID generation, firmware path mgmt
 ├── pid.c               PID file management, workspace, container naming
-├── check.c             System requirements checker
-└── documentation.c     Interactive Pager-based Help System (docs command)
+├── documentation.c     Interactive terminal-based reference viewer
+└── check.c             System requirements checker
 
 ```
 
@@ -80,10 +82,13 @@ src/
 - **Cgroup Isolation & Session Fix (v4.2.0+):** 
     - Implemented unique host-side cgroup trees per container: `/sys/fs/cgroup/droidspaces/<name>`.
     - Fixed `su` and `login` hangs in entered terminals by physically attaching the entering process to the container's host cgroup *before* joining namespaces. This ensures `systemd-logind` correctly identifies the terminal session.
-- **Fast Container Restart (v4.2.2):**
-    - Implemented a filesystem-based coordination marker (`.restart`) to synchronize state between the `restart` command and the background monitor process.
-    - Moves the mount reuse check (`.mount` sidecar) to the very beginning of the boot sequence, bypassing expensive name resolution and `e2fsck`.
+- **Fast Container Restart (v4.2.2+):**
+    - Moves the mount reuse check to the very beginning of the boot sequence, bypassing expensive name resolution and `e2fsck`.
     - Sanitized PID management to remove filesystem side-effects during status checks and name discovery, ensuring tracking state is preserved for the next boot.
+- **Robust Reboot & Concurrency (v4.6.0+):**
+    - Implemented a rigorous 3-level process hierarchy (Monitor → Intermediate → Init) so that in-container `reboot` syscalls trigger clean internal restarts via deterministic exit codes (249) without ghost processes.
+    - Replaced fragile `.restart` coordination markers with a strict `.lock` ownership model where only CLI commands process state transitions, preventing race conditions.
+    - Added unified configuration recovery (`ds_metadata_sync`), seamlessly resurrecting lost host-side configurations from a running container's isolated `/run` namespace.
 - **Kernel 4.14 Resilience (v4.2.3-v4.2.4):**
     - Implemented a robust 3-attempt retry loop for rootfs image mounting with `sync` and 1-second settle delays.
     - Refined UI logs (v4.2.4) to hide attempt counters on the first try and provide cleaner error reporting.
@@ -168,29 +173,31 @@ Here's the high-level flow from `start` to `stop`, distilled to its essence:
                 │                    │                   │
                 │               fork()│                   │
                 │         ┌──────────┼──────────┐        │
-                │         │          │ PID 1    │        │
+                │         │          │ INTERMEDIATE │        │
+                │         │          │ (unshare PID)│        │
+                │         │          ▼          │        │
+                │         │         fork()      │        │
+                │         │    ┌─────┼─────┐    │        │
+                │         │    │           ▼    │        │
+                │         │    │        PID 1   │        │
+                │         │    │   internal_boot() │      │
+                │         │    │     │ unshare(MNT) │      │
+                │         │    │     │ pivot_root   │      │
+                │         │    │     │ execve(init) │      │
+                │         │    └──waitpid(init)─┘    │        │
                 │         │          │          │        │
                 │         │          ▼          │        │
-                │         │   internal_boot()   │        │
-                │         │     │ unshare(MNT)  │        │
-                │         │     │ mount(/ PRIV) │        │
-                │         │     │ setup_volatile│        │
-                │         │     │ setup_binds   │        │
-                │         │     │ setup_dev     │        │
-                │         │     │ setup_cgroups │        │
-                │         │     │ pivot_root    │        │
-                │         │     │ networking    │        │
-                │         │     │ umount .old   │        │
-                │         │     │ execve(init)  │        │
-                │         │     ▼               │        │
-                │         │ waitpid(init)       │        │
-                │         │ cleanup_resources() │        │
-                │         └─────────────────────┘        │
-                │                                        │
-                ▼                                        │
-      read init_pid from sync_pipe                       │
-      find_and_save_pid()                                │
-                │                                        │
+                │         │    Intermediate returns │      │
+                │         │    exit status (249 if  │      │
+                │         │    reboot, else exit)   │      │
+                │         └──────────┬──────────┘        │
+                │                    ▼                   │
+                │               waitpid(intermediate)    │
+                │             check exit status (249?)   │
+                │              cleanup_resources()       │
+                │                    │                   │
+                └────────────────────┼───────────────────┘
+                                     │
         ┌───────┴────────┐                               │
         │ FOREGROUND?    │                               │
         ├────YES─────┐   │                               │
@@ -206,9 +213,9 @@ Here's the high-level flow from `start` to `stop`, distilled to its essence:
         └────────────────┘                               │
 ```
 
-**Key insight:** The monitor process (`[ds-monitor]`) creates the namespace via `unshare()`, then forks the container init (PID 1). The monitor stays alive via `waitpid()` on init — it holds all PTY master FDs open for the lifetime of the container. When init exits, the monitor checks for a **restart marker**; if absent, it calls `cleanup_container_resources()`.
+**Key insight:** The monitor process (`[ds-monitor]`) creates host isolation via `unshare(UTS|IPC)`, then forks an **intermediate process** which unshares the `PID` namespace, then forks the container init (PID 1). This 3-level hierarchy ensures that an internal `reboot()` syscall causes the container init to terminate with a deterministic signal, which the intermediate translates to an exit code. The monitor stays alive via `waitpid()` on the intermediate. When the intermediate exits, the monitor checks the code (reboot vs final shutdown); if final, it relies on an external CLI `.lock` for coordination, handing off or retaining cleanup responsibility.
 
-**The parent** receives the init PID from the monitor via a sync pipe, saves it to the pidfile, and either enters the foreground console loop or exits after displaying status info.
+**The parent** reads the newly created PID file to determine the initial PID 1 in the host namespace, relying on the intermediate or monitor updates, and either enters the foreground console loop or exits.
 
 ---
 
@@ -250,27 +257,38 @@ if (monitor_pid == 0) {
     /* MONITOR PROCESS */
     setsid();
     prctl(PR_SET_NAME, "[ds-monitor]", 0, 0, 0);
-    unshare(CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWPID);
+    unshare(CLONE_NEWUTS | CLONE_NEWIPC); // Notice PID is NOT here
     
-    pid_t init_pid = fork();
-    if (init_pid == 0) {
-        /* CONTAINER INIT (PID 1) */
-        exit(internal_boot(cfg, -1));
+    pid_t mid_pid = fork();
+    if (mid_pid == 0) {
+        /* INTERMEDIATE PROCESS */
+        unshare(CLONE_NEWPID); // Fresh PID space per boot sequence
+        
+        pid_t init_pid = fork();
+        if (init_pid == 0) {
+            /* CONTAINER INIT (PID 1) */
+            exit(internal_boot(cfg));
+        }
+        
+        /* Wait for init to exit and capture its status */
+        waitpid(init_pid, &status, 0);
+        /* If init called reboot(2), kernel sends SIGHUP -> map to 249 */
+        exit(WIFSIGNALED(status) && WTERMSIG(status) == SIGHUP ? 249 : ...);
     }
     
-    /* Send init_pid to parent via sync pipe */
-    write(sync_pipe[1], &init_pid, sizeof(pid_t));
+    /* Monitor waits for intermediate to exit */
+    waitpid(mid_pid, &status, 0);
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 249) {
+        goto reboot_loop; // Handle an internal reboot
+    }
     
-    /* Wait for init to exit, then cleanup */
-    waitpid(init_pid, &status, 0);
-    cleanup_container_resources(cfg, init_pid, 0);
-    exit(WEXITSTATUS(status));
+    // Not a reboot, proceed to check locks and cleanup...
 }
 ```
 
 **Namespace allocation split:**
-- `CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWPID` — called in the monitor via `unshare()`
-- `CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWPID | CLONE_NEWCGROUP` — called in the monitor via `unshare()`.
+- `CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWCGROUP` — called in the monitor via `unshare()`.
+- `CLONE_NEWPID` — called in the *intermediate* process via `unshare()`. This ensures each internal reboot cycle gets a completely clean, fresh PID tree, and avoids Linux constraints limiting `unshare(CLONE_NEWPID)` to once per process.
     
 **The Cgroup "Jail" Trick (v4.2.0+):**
 To achieve isolation on kernels with cgroup namespace support (4.6+), Droidspaces must be in a non-root cgroup *before* calling `unshare`. 
@@ -379,12 +397,13 @@ for (int i = 0; i < cfg->tty_count; i++) {
 ```
 This is the LXC model: PTY slaves allocated in the parent (e.g., `/dev/pts/3`) are bind-mounted to their container targets (e.g., `dev/console`, `dev/tty1`..`dev/tty6`) **before** `pivot_root`. This is critical because after `pivot_root`, the host `/dev/pts/N` paths would no longer be accessible.
 
-**Step 11 — Write internal markers (`/run`):**
+**Step 11 — Write internal markers (`/run/droidspaces`):**
 ```c
-write_file("run/<uuid>", "init");
-write_file("run/droidspaces", DS_VERSION);
+write_file("run/droidspaces/<uuid>", "");
+write_file("run/droidspaces/version", DS_VERSION);
+ds_config_save("run/droidspaces/container.config", cfg);
 ```
-The UUID marker (`run/<uuid>`) is used by the parent for PID discovery (see Section 5). The `run/droidspaces` file is polled by the parent to confirm the boot sequence has passed `pivot_root`.
+The UUID marker (`run/droidspaces/<uuid>`) is used by the host side to precisely correlate running processes back to the specific container boot session. A normalized copy of the active configuration is also stored inside the volatile `/run` tmpfs. If host-side logs or states (like the config in the workspace) are accidentally deleted, Droidspaces leverages this inner `/run/droidspaces` environment via `/proc` mounts to reconstruct perfectly synchronized configurations back to the host (`ds_metadata_sync`).
 
 **Step 12 — Setup cgroups:**
 ```c
@@ -1281,16 +1300,18 @@ If you're rewriting Droidspaces from scratch, here is the checklist of every dec
 
 ### Phase 1: Configuration
 
-1. Parse CLI arguments into a `struct ds_config`:
+1. Parse CLI arguments or `.config` files into a `struct ds_config`:
    - `rootfs_path` or `rootfs_img_path`
    - `container_name` (auto-generate from os-release if not provided)
    - `hostname`
    - `foreground`, `hw_access`, `enable_ipv6`, `android_storage`, `selinux_permissive`
+   - Capture unrecognized lines for recovery preservation.
 
-2. **Early Restart Detection**: 
-   - Check for `.restart` marker in PIDs directory.
-   - If present, consume the marker, resolve pidfile, and read `.mount` sidecar to identify existing mount.
+2. **Early Restart Detection & Concurrency Lock**: 
+   - Check if an external command lock (`.lock`) is active via `is_external_lock_active()`.
+   - If active, the container is being restarted. Resolve pidfile, and read `.mount` sidecar to identify the existing mount.
    - If mount active, set `cfg->rootfs_path` and `restart_reuse = 1`.
+   - Acquire lock via `acquire_external_lock()` to establish single-writer ownership over the state transition.
 
 3. Validate rootfs path exists and contains `/sbin/init`.
 
@@ -1319,22 +1340,24 @@ If you're rewriting Droidspaces from scratch, here is the checklist of every dec
 
 10. Android optimizations: `max_phantom_processes`, disable `deviceidle`
 
-### Phase 3: Fork Monitor + Fork Init
+### Phase 3: Fork Monitor + Fork Intermediate + Fork Init
 
 11. `fork()` → monitor process
 
 12. In monitor: `setsid()`, `prctl(PR_SET_NAME, "[ds-monitor]")`.
     - **Sub-Cgroup Jailing**: Create `/sys/fs/cgroup/droidspaces` and move the monitor PID into it.
-    - **Namespace Creation**: `unshare(CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWPID | CLONE_NEWCGROUP)`
+    - **Host Isolation**: `unshare(CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWCGROUP)` (Note: No PID namespace here).
 
-13. `fork()` again → PID 1 child (this is the process that becomes init)
+13. `fork()` again → intermediate process.
+    - **Namespace Creation**: `unshare(CLONE_NEWPID)` — Creates a fresh PID tree for the new boot session.
 
-14. Monitor sends `init_pid` to parent via sync pipe
+14. `fork()` again inside intermediate → PID 1 child (this is the process that becomes init). Intermediate begins `waitpid()` blocking on the init process.
 
-15. Monitor: `waitpid(init_pid)`.
-    - Check for `.restart` marker.
-    - If absent, call `cleanup_container_resources()`.
-    - Exit.
+15. Monitor sends `init_pid` to parent via sync pipe, then `waitpid()` on the intermediate process.
+    - If intermediate exits with code 249 (indicating init called `reboot(2)` and generated `SIGHUP`), the monitor loops back to step 13 to spawn a fresh intermediate/init hierarchy.
+    - If intermediate exits normally, the monitor checks `is_external_lock_active()`.
+    - If lock absent, the monitor calls `cleanup_container_resources()`. Otherwise, it hands off cleanup to the CLI.
+    - Monitor exits.
 
 ### Phase 4: internal_boot() (runs as PID 1)
 
@@ -1423,17 +1446,20 @@ If you're rewriting Droidspaces from scratch, here is the checklist of every dec
 
 ### Phase 6: Stop
 
-46. Read PID from pidfile, validate
+46. Read PID from pidfile, validate.
 
-47. `kill(pid, SIGRTMIN + 3)` for systemd
+47. Acquire the external command lock (`.lock`) to prevent race conditions with the background monitor process.
 
-48. Wait up to 8 seconds with 200ms polling
+48. `kill(pid, SIGRTMIN + 3)` for systemd
 
-49. Escalate to `SIGTERM` after 2 seconds
+49. Wait up to 8 seconds with 200ms polling
 
-50. If still alive: `kill(pid, SIGKILL)`
+50. Escalate to `SIGTERM` after 2 seconds
 
-51. Cleanup: remove pidfile, unmount rootfs.img, restore firmware path, restore Android settings, cleanup volatile overlay (namespace-aware)
+51. If still alive: `kill(pid, SIGKILL)`
+
+52. Cleanup: remove pidfile, unmount rootfs.img, restore firmware path, restore Android settings, cleanup volatile overlay (namespace-aware).
+    - If part of a `restart`, do NOT release the lock so the subsequent `start` command can inherit the active mount state. Otherwise, release the lock.
 
 ### Phase 7: Enter
 
@@ -1468,4 +1494,4 @@ provide a link to the license, and indicate if changes were made.
 
 **End of Document**
 
-*This document was written by analyzing v4.2.4 of the Droidspaces source code — approximately 3,300 lines of C across 13 files. Every syscall, every mount, and every design decision described here was verified against the actual implementation.*
+*This document was updated by analyzing v4.7.3 of the Droidspaces source code — approximately 9,200 lines of C across 18 files. Every syscall, every mount, and every design decision described here was verified against the actual implementation.*

@@ -18,9 +18,10 @@ Complete guide to using Droidspaces from the command line on Linux.
 [1. Getting Started](#getting-started)  
 [2. Command Reference](#command-reference)  
 [3. Options & Flags](#options-flags)  
-[4. Common Workflows](#common-workflows)  
-[5. Advanced Usage & Lifecycle](#advanced-usage)  
-[6. System Requirements](#system-requirements)  
+[4. Configuration Files](#configs)  
+[5. Common Workflows](#common-workflows)  
+[6. Advanced Usage & Lifecycle](#advanced-usage)  
+[7. System Requirements](#system-requirements)  
 
 ---
 
@@ -89,13 +90,15 @@ sudo droidspaces --name=web,db,app stop
 
 *Note: These are mutually exclusive. `--name` is mandatory when using `--rootfs-img`.*
 
-### Container Identity
+### Container Identity & Configuration
 
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--name=NAME` | `-n` | Unique name for the container. Auto-generated if omitted. |
 | `--pidfile=PATH` | `-p` | Custom path for the PID file. Mutually exclusive with `--name`. |
 | `--hostname=NAME` | `-h` | Set the container's hostname. Defaults to the container name. |
+| `--conf=PATH` | `-C` | Load container configuration directly from a config file. |
+| `--reset` | | Reset container config to defaults (preserves name, rootfs path, and unrecognized config lines like Android UI metadata). Apply overrides on top. |
 
 ### Networking
 
@@ -131,8 +134,74 @@ sudo droidspaces --name=web,db,app stop
 
 ---
 
+<a id="configs"></a>
+## 4. Configuration Files
+
+Instead of relying solely on long command-line arguments, Droidspaces allows you to define container environments in a `.config` file and load it using `--conf=./myconfig.config`. 
+
+Below is a reference of every supported key in the configuration file:
+
+```ini
+# Droidspaces Container Configuration
+# Generated automatically — Changes may be overwritten
+
+# Unique identifier for the container
+name=ubuntu
+
+# Hostname of the container environment
+hostname=ubuntu-devbox
+
+# Absolute path to the rootfs directory or .img file
+rootfs_path=/home/user/ubuntu-24.04-rootfs.img
+
+# Custom path to store the container's PID file
+pidfile=/var/lib/Droidspaces/Pids/ubuntu.pid
+
+# Comma-separated list of host directories to bind mount (src:dest)
+bind_mounts=/home/user:/mnt/host,/tmp:/mnt/tmp
+
+# Absolute path to a file containing environment variables to load
+env_file=/path/to/env.list
+
+# Unique UUID (Automatically generated, do not change manually)
+uuid=d88107dab4ef48a8874a93897188982d
+
+# Custom DNS servers (comma separated)
+dns_servers=1.1.1.1,8.8.8.8
+
+# -------- Boolean Flags (0 or 1) --------
+
+# Enable IPv6 networking
+enable_ipv6=0
+
+# Expose host hardware nodes to the container (/dev)
+enable_hw_access=0
+
+# Android: Setup Termux X11 socket
+enable_termux_x11=0
+
+# Android: Setup Android internal shared storage mount
+enable_android_storage=0
+
+# Set the host SELinux policy to permissive during boot
+selinux_permissive=0
+
+# Ephemeral mode: changes are lost on exit
+volatile_mode=1
+
+# Run the container in the foreground instead of forking
+foreground=0
+
+# ----------------------------------------
+# Android App Configuration
+# Any lines that the CLI engine does not recognize will be safely 
+# preserved at the bottom of the config file and passed back to the Host.
+```
+
+---
+
 <a id="common-workflows"></a>
-## 4. Common Workflows
+## 5. Common Workflows
 
 ### Persistent Development
 ```bash
@@ -170,16 +239,16 @@ sudo droidspaces --name=mycontainer run sh -c "ps aux | grep init"
 ---
 
 <a id="advanced-usage"></a>
-## 5. Advanced Usage & Lifecycle
+## 6. Advanced Usage & Lifecycle
 
 ### Container Recovery
-If a container was started outside the current session or its PID file was lost, use `scan` to re-register it:
+If a container was started outside the current session, or its host-side PID file / config file was lost or corrupted, use `scan` to resurrect it from the container's isolated `/run` memory:
 ```bash
 sudo droidspaces scan
 ```
 
 ### Fast Restarts
-Droidspaces implements a "fast restart" mechanism that completes in under 200ms by coordinating state between the CLI and the background monitor without unmounting the rootfs image.
+Droidspaces implements a "fast restart" mechanism that completes in under 200ms by preserving the loop mount and coordinating state between the CLI and the background monitor via an external command lock (`.lock`).
 
 ### PID File Storage
 PID files are stored in:
@@ -189,7 +258,7 @@ PID files are stored in:
 ---
 
 <a id="system-requirements"></a>
-## 6. System Requirements
+## 7. System Requirements
 
 Always run the built-in checker to verify your kernel supports the required namespaces and features:
 ```bash
