@@ -225,7 +225,7 @@ private fun ExpandableKernelRequirementsSection(
             // Expandable content
             if (isExpanded) {
                 CodeBox(
-                    code = """# Minimal Droidspaces Support
+                    code = """# Kernel configurations for full DroidSpaces support
 # Copyright (C) 2026 ravindu644 <droidcasts@protonmail.com>
 
 # IPC mechanisms (required for tools that rely on shared memory and IPC namespaces)
@@ -260,6 +260,48 @@ CONFIG_OVERLAY_FS=y
 CONFIG_FW_LOADER=y
 CONFIG_FW_LOADER_USER_HELPER=y
 CONFIG_FW_LOADER_COMPRESS=y
+
+# Droidspaces Network Isolation Support - NAT/none modes
+# Network namespace isolation 
+CONFIG_NET_NS=y
+
+# Virtual ethernet pairs
+CONFIG_VETH=y
+
+# Bridge device
+CONFIG_BRIDGE=y
+
+# Netfilter core
+CONFIG_NETFILTER=y
+CONFIG_NETFILTER_ADVANCED=y
+
+# Connection tracking
+CONFIG_NF_CONNTRACK=y
+# kernels ≤ 4.18 (Android 4.4 / 4.9)
+CONFIG_NF_CONNTRACK_IPV4=y
+
+# iptables infrastructure
+CONFIG_IP_NF_IPTABLES=y
+
+# filter table
+CONFIG_IP_NF_FILTER=y
+
+# NAT table
+CONFIG_NF_NAT=y
+# kernels ≤ 5.0 (Kernel 4.4 / 4.9)
+CONFIG_NF_NAT_IPV4=y
+CONFIG_IP_NF_NAT=y
+
+# MASQUERADE target (renamed in 5.2)
+CONFIG_IP_NF_TARGET_MASQUERADE=y
+CONFIG_NETFILTER_XT_TARGET_MASQUERADE=y
+
+# MSS clamping
+CONFIG_NETFILTER_XT_TARGET_TCPMSS=y
+
+# Policy routing
+CONFIG_IP_ADVANCED_ROUTER=y
+CONFIG_IP_MULTIPLE_TABLES=y
 
 # Disable this on older kernels to make internet work
 CONFIG_ANDROID_PARANOID_NETWORK=n""",
