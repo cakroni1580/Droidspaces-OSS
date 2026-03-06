@@ -54,6 +54,10 @@ void print_usage(void) {
   printf("      --net=MODE            Networking mode: host (default), nat, "
          "none\n");
   printf(
+      "      --port HOST:CONT[/proto] Forward host port to container (nat "
+      "mode)\n"
+      "                            e.g. --port 22:22 --port 8096:8096/tcp\n");
+  printf(
       "  -B, --bind-mount=SRC:DEST Bind mount host directory into container\n");
   printf("  -C, --conf=PATH           Load configuration from file\n");
   printf("      --reset               Reset config to defaults (keeps "
@@ -273,6 +277,7 @@ int main(int argc, char **argv) {
       {"config", required_argument, 0, 'C'},
       {"env", required_argument, 0, 'E'},
       {"net", required_argument, 0, 257},
+      {"port", required_argument, 0, 258},
       {"reset", no_argument, 0, 256},
       {"help", no_argument, 0, 'v'},
       {0, 0, 0, 0}};
@@ -511,6 +516,63 @@ int main(int argc, char **argv) {
       cfg.net_mode = cli_net_mode;
       cli_net_mode_set = 1;
       break;
+
+    case 258: {
+      /* --port HOST:CONTAINER[/proto]  (comma-separated list allowed) */
+      char tmp[256];
+      strncpy(tmp, optarg, sizeof(tmp) - 1);
+      tmp[sizeof(tmp) - 1] = '\0';
+      char *saveptr;
+      char *tok = strtok_r(tmp, ",", &saveptr);
+      while (tok) {
+        if (cfg.port_forward_count >= DS_MAX_PORT_FORWARDS) {
+          ds_error("Too many --port mappings (max %d)", DS_MAX_PORT_FORWARDS);
+          ret = 1;
+          goto cleanup;
+        }
+        struct ds_port_forward *pf = &cfg.port_forwards[cfg.port_forward_count];
+
+        /* Default proto */
+        strncpy(pf->proto, "tcp", sizeof(pf->proto));
+
+        /* Optional /proto suffix */
+        char *slash = strchr(tok, '/');
+        if (slash) {
+          *slash = '\0';
+          strncpy(pf->proto, slash + 1, sizeof(pf->proto) - 1);
+          pf->proto[sizeof(pf->proto) - 1] = '\0';
+          if (strcmp(pf->proto, "tcp") != 0 && strcmp(pf->proto, "udp") != 0) {
+            ds_error("Invalid protocol '%s' in --port (use tcp or udp)",
+                     pf->proto);
+            ret = 1;
+            goto cleanup;
+          }
+        }
+
+        /* HOST:CONTAINER */
+        char *colon = strchr(tok, ':');
+        if (!colon) {
+          ds_error(
+              "Invalid --port format '%s' (expected HOST:CONTAINER[/proto])",
+              tok);
+          ret = 1;
+          goto cleanup;
+        }
+        *colon = '\0';
+        int hp = atoi(tok);
+        int cp = atoi(colon + 1);
+        if (hp <= 0 || hp > 65535 || cp <= 0 || cp > 65535) {
+          ds_error("Invalid port numbers in --port '%s:%s'", tok, colon + 1);
+          ret = 1;
+          goto cleanup;
+        }
+        pf->host_port = (uint16_t)hp;
+        pf->container_port = (uint16_t)cp;
+        cfg.port_forward_count++;
+        tok = strtok_r(NULL, ",", &saveptr);
+      }
+      break;
+    }
 
     case '?':
       /* Ignore unknown options during override if we already found a cmd */

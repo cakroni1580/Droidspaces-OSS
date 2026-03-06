@@ -388,6 +388,16 @@ int setup_veth_host_side(struct ds_config *cfg, pid_t child_pid) {
     const char *dhcp_iface = cfg->net_bridgeless ? veth_host : DS_NAT_BRIDGE;
     ds_dhcp_server_start(cfg, dhcp_iface, offer_ip, inet_addr(DS_NAT_GW_IP),
                          peer_mac);
+
+    /* Store the container IP string for port forward cleanup later */
+    struct in_addr offer_addr;
+    offer_addr.s_addr = offer_ip;
+    inet_ntop(AF_INET, &offer_addr, cfg->nat_container_ip,
+              sizeof(cfg->nat_container_ip));
+
+    /* Install DNAT + FORWARD rules for any --port mappings */
+    if (cfg->port_forward_count > 0)
+      ds_ipt_add_portforwards(cfg, cfg->nat_container_ip);
   }
 
   return 0;
@@ -736,5 +746,6 @@ void ds_net_cleanup(struct ds_config *cfg, pid_t container_pid) {
   if (cfg->net_bridgeless && veth_host[0] != '\0') {
     ds_ipt_remove_iface_rules(veth_host);
   }
+  ds_ipt_remove_portforwards(cfg);
   ds_ipt_remove_ds_rules();
 }

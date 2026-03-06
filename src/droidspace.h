@@ -12,6 +12,7 @@
 #define _GNU_SOURCE
 #endif
 
+#include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -201,13 +202,26 @@ struct ds_config_line {
 };
 
 /* Terminal/TTY info — one per allocated PTY */
-struct ds_tty_info {
+ 
+ struct ds_tty_info {
   int master;          /* master fd (stays in parent/monitor) */
   int slave;           /* slave fd (bind-mounted into container) */
   char name[PATH_MAX]; /* slave device path (e.g. /dev/pts/3) */
 };
 
 /* Container configuration — replaces all global variables */
+/* ---------------------------------------------------------------------------
+ * Port forwarding (--port HOST:CONTAINER[/proto])
+ * ---------------------------------------------------------------------------*/
+
+#define DS_MAX_PORT_FORWARDS 32
+
+struct ds_port_forward {
+  uint16_t host_port;      /* port on the Android/Linux host  */
+  uint16_t container_port; /* port inside the container       */
+  char proto[4];           /* "tcp" or "udp"                  */
+};
+
 struct ds_config {
   /* Paths */
   char rootfs_path[PATH_MAX];     /* --rootfs=  */
@@ -271,6 +285,12 @@ struct ds_config {
   /* Unknown config lines (preserved from Android metadata) */
   struct ds_config_line *unknown_head;
   struct ds_config_line *unknown_tail;
+
+  /* Port forwarding (--port HOST:CONTAINER[/proto]) */
+  struct ds_port_forward port_forwards[DS_MAX_PORT_FORWARDS];
+  int port_forward_count;
+  char nat_container_ip[INET_ADDRSTRLEN]; /* assigned container IP, for cleanup
+                                           */
 };
 
 /* ---------------------------------------------------------------------------
@@ -445,6 +465,8 @@ int ds_ipt_ensure_input_accept(const char *iface);
 int ds_ipt_ensure_mss_clamp(void);
 int ds_ipt_remove_iface_rules(const char *iface);
 int ds_ipt_remove_ds_rules(void);
+int ds_ipt_add_portforwards(struct ds_config *cfg, const char *container_ip);
+int ds_ipt_remove_portforwards(struct ds_config *cfg);
 
 /* ---------------------------------------------------------------------------
  * ds_dhcp.c

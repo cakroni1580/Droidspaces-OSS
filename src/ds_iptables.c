@@ -1056,3 +1056,103 @@ int ds_ipt_remove_ds_rules(void) {
 
   return 0;
 }
+
+/* ---------------------------------------------------------------------------
+ * Public API: ds_ipt_add_portforwards
+ *
+ * For each entry in cfg->port_forwards, inserts:
+ *   -t nat    -I PREROUTING  -p <proto> --dport <host_port> -j DNAT
+ *             --to-destination <container_ip>:<container_port>
+ *   -t filter -I FORWARD     -p <proto> -d <container_ip>
+ *             --dport <container_port> -j ACCEPT
+ *
+ * Binary fallback only — DNAT raw socket construction is disproportionately
+ * complex for a feature that only fires at container start.
+ * ---------------------------------------------------------------------------*/
+
+int ds_ipt_add_portforwards(struct ds_config *cfg, const char *container_ip) {
+  if (!cfg || cfg->port_forward_count <= 0 || !container_ip ||
+      container_ip[0] == '\0')
+    return 0;
+
+  for (int i = 0; i < cfg->port_forward_count; i++) {
+    struct ds_port_forward *pf = &cfg->port_forwards[i];
+
+    char host_port_str[8], cont_port_str[8], to_dest[64];
+    snprintf(host_port_str, sizeof(host_port_str), "%u", pf->host_port);
+    snprintf(cont_port_str, sizeof(cont_port_str), "%u", pf->container_port);
+    snprintf(to_dest, sizeof(to_dest), "%s:%u", container_ip,
+             pf->container_port);
+
+    ds_log("[IPT] portforward: %s %s -> %s", pf->proto, host_port_str, to_dest);
+
+    /* PREROUTING DNAT */
+    char *dnat[] = {"iptables",         "-t",          "nat", "-I",
+                    "PREROUTING",       "1",           "-p",  pf->proto,
+                    "--dport",          host_port_str, "-j",  "DNAT",
+                    "--to-destination", to_dest,       NULL};
+    if (run_command_quiet(dnat) != 0)
+      ds_warn("[IPT] portforward: DNAT insert failed for port %s",
+              host_port_str);
+
+    /* FORWARD ACCEPT */
+    char *fwd[] = {
+        "iptables", "-I",          "FORWARD", "1",
+        "-p",       pf->proto,     "-d",      (char *)(uintptr_t)container_ip,
+        "--dport",  cont_port_str, "-j",      "ACCEPT",
+        NULL};
+    if (run_command_quiet(fwd) != 0)
+      ds_warn("[IPT] portforward: FORWARD insert failed for port %s",
+              cont_port_str);
+  }
+
+  return 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Public API: ds_ipt_remove_portforwards
+ *
+ * Mirrors ds_ipt_add_portforwards — deletes the DNAT + FORWARD rules.
+ * Called from ds_net_cleanup() before ds_ipt_remove_ds_rules().
+ * ---------------------------------------------------------------------------*/
+
+int ds_ipt_remove_portforwards(struct ds_config *cfg) {
+  if (!cfg || cfg->port_forward_count <= 0 || cfg->nat_container_ip[0] == '\0')
+    return 0;
+
+  const char *container_ip = cfg->nat_container_ip;
+
+  for (int i = 0; i < cfg->port_forward_count; i++) {
+    struct ds_port_forward *pf = &cfg->port_forwards[i];
+
+    char host_port_str[8], cont_port_str[8], to_dest[64];
+    snprintf(host_port_str, sizeof(host_port_str), "%u", pf->host_port);
+    snprintf(cont_port_str, sizeof(cont_port_str), "%u", pf->container_port);
+    snprintf(to_dest, sizeof(to_dest), "%s:%u", container_ip,
+             pf->container_port);
+
+    /* Delete PREROUTING DNAT */
+    char *del_dnat[] = {"iptables",    "-t", "nat",     "-D",
+                        "PREROUTING",  "-p", pf->proto, "--dport",
+                        host_port_str, "-j", "DNAT",    "--to-destination",
+                        to_dest,       NULL};
+    run_command_quiet(del_dnat);
+
+    /* Delete FORWARD ACCEPT */
+    char *del_fwd[] = {"iptables",
+                       "-D",
+                       "FORWARD",
+                       "-p",
+                       pf->proto,
+                       "-d",
+                       (char *)(uintptr_t)container_ip,
+                       "--dport",
+                       cont_port_str,
+                       "-j",
+                       "ACCEPT",
+                       NULL};
+    run_command_quiet(del_fwd);
+  }
+
+  return 0;
+}
