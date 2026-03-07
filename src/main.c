@@ -679,13 +679,6 @@ int main(int argc, char **argv) {
     }
   }
 
-  /* If an environment file was specified, load it now */
-  if (cfg.env_file[0] != '\0') {
-    free_config_env_vars(
-        &cfg); // Clear existing env vars before loading from file
-    parse_env_file_to_config(cfg.env_file, &cfg);
-  }
-
   if (optind >= argc) {
     ds_error(C_BOLD "Missing command" C_RESET);
     ret = 1;

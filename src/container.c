@@ -380,7 +380,10 @@ int start_rootfs(struct ds_config *cfg) {
    */
   if (cfg->env_file[0] != '\0') {
     free_config_env_vars(cfg);
+    int _prev = ds_log_silent;
+    ds_log_silent = 1;
     parse_env_file_to_config(cfg->env_file, cfg);
+    ds_log_silent = _prev;
   }
 
   /* Pre-populate volatile_dir for monitor cleanup (actual overlay setup
@@ -1190,6 +1193,7 @@ int enter_rootfs(struct ds_config *cfg, const char *user) {
 
   /* Parse environment file while host paths are reachable */
   if (cfg->env_file[0] != '\0') {
+    free_config_env_vars(cfg);
     int prev_silent = ds_log_silent;
     ds_log_silent = 1;
     parse_env_file_to_config(cfg->env_file, cfg);
@@ -1348,6 +1352,7 @@ int run_in_rootfs(struct ds_config *cfg, int argc, char **argv) {
 
   /* Parse environment file while host paths are reachable */
   if (cfg->env_file[0] != '\0') {
+    free_config_env_vars(cfg);
     int prev_silent = ds_log_silent;
     ds_log_silent = 1;
     parse_env_file_to_config(cfg->env_file, cfg);
