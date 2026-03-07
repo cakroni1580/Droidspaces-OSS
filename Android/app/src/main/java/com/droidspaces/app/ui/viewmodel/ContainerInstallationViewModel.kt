@@ -11,6 +11,7 @@ import com.droidspaces.app.util.ContainerStatus
 import com.droidspaces.app.util.Constants
 
 import com.droidspaces.app.util.BindMount
+import com.droidspaces.app.util.PortForward
 
 class ContainerInstallationViewModel : ViewModel() {
     var tarballUri: Uri? by mutableStateOf(null)
@@ -61,6 +62,12 @@ class ContainerInstallationViewModel : ViewModel() {
     var sparseImageSizeGB: Int by mutableStateOf(8)
         private set
 
+    var upstreamInterfaces: List<String> by mutableStateOf(emptyList())
+        private set
+
+    var portForwards: List<PortForward> by mutableStateOf(emptyList())
+        private set
+
     fun setTarball(uri: Uri) {
         tarballUri = uri
     }
@@ -86,7 +93,9 @@ class ContainerInstallationViewModel : ViewModel() {
         bindMounts: List<BindMount>,
         dnsServers: String,
         runAtBoot: Boolean,
-        envFileContent: String?
+        envFileContent: String?,
+        upstreamInterfaces: List<String>,
+        portForwards: List<PortForward>
     ) {
         this.netMode = netMode
         this.enableIPv6 = enableIPv6
@@ -99,6 +108,8 @@ class ContainerInstallationViewModel : ViewModel() {
         this.dnsServers = dnsServers
         this.runAtBoot = runAtBoot
         this.envFileContent = envFileContent
+        this.upstreamInterfaces = upstreamInterfaces
+        this.portForwards = portForwards
     }
 
     fun buildConfig(): ContainerInfo? {
@@ -126,7 +137,9 @@ class ContainerInstallationViewModel : ViewModel() {
             envFileContent = envFileContent,
             status = ContainerStatus.STOPPED, // Default status for new container
             useSparseImage = useSparseImage,
-            sparseImageSizeGB = if (useSparseImage) sparseImageSizeGB else null
+            sparseImageSizeGB = if (useSparseImage) sparseImageSizeGB else null,
+            upstreamInterfaces = upstreamInterfaces,
+            portForwards = portForwards
         )
     }
 
@@ -147,6 +160,8 @@ class ContainerInstallationViewModel : ViewModel() {
         envFileContent = null
         useSparseImage = false
         sparseImageSizeGB = 8
+        upstreamInterfaces = emptyList()
+        portForwards = emptyList()
     }
 }
 

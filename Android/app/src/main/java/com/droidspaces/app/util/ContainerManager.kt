@@ -18,6 +18,12 @@ data class BindMount(
     val dest: String
 )
 
+data class PortForward(
+    val hostPort: Int,
+    val containerPort: Int,
+    val proto: String = "tcp"
+)
+
 data class ContainerInfo(
     val name: String,
     val hostname: String,
@@ -36,7 +42,9 @@ data class ContainerInfo(
     val pid: Int? = null,
     val useSparseImage: Boolean = false,
     val sparseImageSizeGB: Int? = null,
-    val envFileContent: String? = null
+    val envFileContent: String? = null,
+    val upstreamInterfaces: List<String> = emptyList(),
+    val portForwards: List<PortForward> = emptyList()
 ) {
     val isRunning: Boolean
         get() = status == ContainerStatus.RUNNING
@@ -57,6 +65,12 @@ data class ContainerInfo(
         appendLine("volatile_mode=${if (volatileMode) "1" else "0"}")
         if (bindMounts.isNotEmpty()) {
             appendLine("bind_mounts=${bindMounts.joinToString(",") { "${it.src}:${it.dest}" }}")
+        }
+        if (netMode == "nat" && upstreamInterfaces.isNotEmpty()) {
+            appendLine("upstream_interfaces=${upstreamInterfaces.joinToString(",")}")
+        }
+        if (netMode == "nat" && portForwards.isNotEmpty()) {
+            appendLine("port_forwards=${portForwards.joinToString(",") { "${it.hostPort}:${it.containerPort}/${it.proto}" }}")
         }
         if (dnsServers.isNotEmpty()) {
             appendLine("dns_servers=$dnsServers")
@@ -205,6 +219,25 @@ object ContainerManager {
                 if (parts.size == 2) BindMount(parts[0], parts[1]) else null
             } ?: emptyList()
 
+            // Parse upstream interfaces
+            val upstreamInterfaces = configMap["upstream_interfaces"]?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
+            // Parse port forwards: 8080:80/tcp,9090:90/udp
+            val portForwards = configMap["port_forwards"]?.split(",")?.mapNotNull { pfStr ->
+                try {
+                    val parts = pfStr.trim().split("/")
+                    val proto = if (parts.size > 1) parts[1].lowercase() else "tcp"
+                    val portParts = parts[0].split(":")
+                    if (portParts.size == 2) {
+                        val hostPort = portParts[0].toIntOrNull()
+                        val containerPort = portParts[1].toIntOrNull()
+                        if (hostPort != null && containerPort != null) {
+                            PortForward(hostPort, containerPort, proto)
+                        } else null
+                    } else null
+                } catch (e: Exception) { null }
+            } ?: emptyList()
+
             return ContainerInfo(
                 name = containerName,
                 hostname = configMap["hostname"] ?: containerName,
@@ -227,7 +260,9 @@ object ContainerManager {
                 status = ContainerStatus.STOPPED,
                 useSparseImage = useSparseImage,
                 sparseImageSizeGB = sparseImageSizeGB,
-                envFileContent = loadEnvFileContent(containerName)
+                envFileContent = loadEnvFileContent(containerName),
+                upstreamInterfaces = upstreamInterfaces,
+                portForwards = portForwards
             )
         } catch (e: Exception) {
             return null
@@ -301,6 +336,23 @@ object ContainerManager {
             )
         } else {
             null
+        }
+    }
+
+    /**
+     * List active upstream interfaces using ip route show default
+     */
+    suspend fun listUpstreamInterfaces(): List<String> = withContext(Dispatchers.IO) {
+        try {
+            val cmd = "ip route show default | awk '{for(i=1;i<=NF;i++) if(\$i==\"dev\") print \$(i+1)}' | grep -v '^ds-' | sort -u"
+            val result = Shell.cmd(cmd).exec()
+            if (result.isSuccess) {
+                result.out.map { it.trim() }.filter { it.isNotEmpty() }
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 

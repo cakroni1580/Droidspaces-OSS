@@ -173,6 +173,18 @@
     <string name="network_mode_host">Host (Default)</string>
     <string name="network_mode_nat">NAT (Isolated)</string>
     <string name="network_mode_none">None (Air-gapped)</string>
+    <string name="nat_settings">NAT Settings</string>
+    <string name="upstream_interfaces_mandatory">Upstream Interfaces (Mandatory)</string>
+    <string name="upstream_interfaces_required_error">You must specify at least one upstream interface for NAT mode.</string>
+    <string name="add_upstream_interface">Add Upstream Interface</string>
+    <string name="available_system_interfaces">Available System Interfaces:</string>
+    <string name="enter_manually">Or enter manually:</string>
+    <string name="interface_name_hint">Interface Name (e.g. wlan0)</string>
+    <string name="port_forwarding">Port Forwarding</string>
+    <string name="add_port_forward">Add Port Forward</string>
+    <string name="host_port_hint">Host Port (1-65535)</string>
+    <string name="container_port_hint">Container Port (1-65535)</string>
+    <string name="protocol">Protocol</string>
     <string name="saved">Saved</string>
     <string name="saving">Saving...</string>
     <string name="save_changes">Save Changes</string>
@@ -180,6 +192,7 @@
     <string name="volatile_mode">Volatile Mode</string>
     <string name="volatile_mode_description">RAM-only mode (changes vanish after stop)</string>
     <string name="bind_mounts">Bind Mounts</string>
+    <string name="add">Add</string>
     <string name="bind_mounts_description">Mount host directories or files</string>
     <string name="add_bind_mount">Add Bind Mount</string>
     <string name="select_host_path_title">Select Host path</string>

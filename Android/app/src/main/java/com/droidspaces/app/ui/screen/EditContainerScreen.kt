@@ -40,8 +40,21 @@ import com.droidspaces.app.util.BindMount
 import androidx.compose.ui.text.style.TextOverflow
 import com.droidspaces.app.ui.component.SettingsRowCard
 import com.droidspaces.app.ui.component.EnvironmentVariablesDialog
+import com.droidspaces.app.util.PortForward
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun EditContainerScreen(
     container: ContainerInfo,
@@ -65,6 +78,8 @@ fun EditContainerScreen(
     var dnsServers by remember { mutableStateOf(container.dnsServers) }
     var runAtBoot by remember { mutableStateOf(container.runAtBoot) }
     var envFileContent by remember { mutableStateOf(container.envFileContent ?: "") }
+    var upstreamInterfaces by remember { mutableStateOf(container.upstreamInterfaces) }
+    var portForwards by remember { mutableStateOf(container.portForwards) }
 
     // Track the "saved" baseline values - updated after each successful save
     var savedHostname by remember { mutableStateOf(container.hostname) }
@@ -79,6 +94,8 @@ fun EditContainerScreen(
     var savedDnsServers by remember { mutableStateOf(container.dnsServers) }
     var savedRunAtBoot by remember { mutableStateOf(container.runAtBoot) }
     var savedEnvFileContent by remember { mutableStateOf(container.envFileContent ?: "") }
+    var savedUpstreamInterfaces by remember { mutableStateOf(container.upstreamInterfaces) }
+    var savedPortForwards by remember { mutableStateOf(container.portForwards) }
 
     // Navigation and internal UI states
     var showFilePicker by remember { mutableStateOf(false) }
@@ -89,6 +106,11 @@ fun EditContainerScreen(
     var isSaving by remember { mutableStateOf(false) }
     var isSaved by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    var availableUpstreams by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        availableUpstreams = ContainerManager.listUpstreamInterfaces()
+    }
 
     // Track if any field has changed from SAVED values (not original)
     val hasChanges by remember {
@@ -104,7 +126,9 @@ fun EditContainerScreen(
             bindMounts != savedBindMounts ||
             dnsServers != savedDnsServers ||
             runAtBoot != savedRunAtBoot ||
-            envFileContent != savedEnvFileContent
+            envFileContent != savedEnvFileContent ||
+            upstreamInterfaces != savedUpstreamInterfaces ||
+            portForwards != savedPortForwards
         }
     }
 
@@ -135,7 +159,9 @@ fun EditContainerScreen(
                     bindMounts = bindMounts,
                     dnsServers = dnsServers,
                     runAtBoot = runAtBoot,
-                    envFileContent = if (envFileContent.isBlank()) null else envFileContent
+                    envFileContent = if (envFileContent.isBlank()) null else envFileContent,
+                    upstreamInterfaces = upstreamInterfaces,
+                    portForwards = portForwards
                 )
 
                 // Update config file
@@ -158,6 +184,8 @@ fun EditContainerScreen(
                         savedDnsServers = dnsServers
                         savedRunAtBoot = runAtBoot
                         savedEnvFileContent = envFileContent
+                        savedUpstreamInterfaces = upstreamInterfaces
+                        savedPortForwards = portForwards
 
                         // Refresh container list and SELinux status using ViewModel
                         containerViewModel.refresh()
@@ -266,7 +294,7 @@ fun EditContainerScreen(
                         clearFocus()
                         saveChanges()
                     },
-                    enabled = !isSaving && !isSaved && hasChanges,
+                    enabled = !isSaving && !isSaved && hasChanges && (netMode != "nat" || upstreamInterfaces.isNotEmpty()),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(24.dp)
@@ -427,6 +455,370 @@ fun EditContainerScreen(
                                 expanded = false
                             }
                         )
+                    }
+                }
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = netMode == "nat",
+                enter = androidx.compose.animation.expandVertically(
+                    animationSpec = tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                    expandFrom = Alignment.Top
+                ) + androidx.compose.animation.fadeIn(animationSpec = tween(durationMillis = 300)),
+                exit = androidx.compose.animation.shrinkVertically(
+                    animationSpec = tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                    shrinkTowards = Alignment.Top
+                ) + androidx.compose.animation.fadeOut(animationSpec = tween(durationMillis = 300))
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = context.getString(R.string.nat_settings),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    // Upstream Interfaces
+                    val isUpstreamValid = upstreamInterfaces.isNotEmpty()
+                    Text(
+                        text = context.getString(R.string.upstream_interfaces_mandatory),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (!isUpstreamValid) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    if (!isUpstreamValid) {
+                        Text(
+                            text = context.getString(R.string.upstream_interfaces_required_error),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    // Existing selected interfaces
+                    upstreamInterfaces.forEach { iface ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = iface, modifier = Modifier.weight(1f))
+                                IconButton(onClick = { clearFocus(); upstreamInterfaces = upstreamInterfaces - iface }) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                    }
+
+                    // Add Interface dialog logic
+                    var showUpstreamDialog by remember { mutableStateOf(false) }
+                    if (showUpstreamDialog) {
+                        var customIface by remember { mutableStateOf("") }
+                        var isManuallyRefreshing by remember { mutableStateOf(false) }
+                        val rotation by animateFloatAsState(
+                            targetValue = if (isManuallyRefreshing) 360f else 0f,
+                            animationSpec = if (isManuallyRefreshing) {
+                                tween(durationMillis = 600, easing = LinearEasing)
+                            } else {
+                                tween(durationMillis = 0, easing = LinearEasing)
+                            },
+                            label = "refresh_rotation"
+                        )
+
+                        Dialog(
+                            onDismissRequest = { showUpstreamDialog = false },
+                            properties = DialogProperties(usePlatformDefaultWidth = false)
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.92f)
+                                    .wrapContentHeight(),
+                                shape = RoundedCornerShape(28.dp),
+                                color = MaterialTheme.colorScheme.surface
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = context.getString(R.string.add_upstream_interface),
+                                            style = MaterialTheme.typography.headlineSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        IconButton(
+                                            onClick = {
+                                                clearFocus()
+                                                if (!isManuallyRefreshing) {
+                                                    isManuallyRefreshing = true
+                                                    scope.launch {
+                                                        val startTime = System.currentTimeMillis()
+                                                        val newUpstreams = ContainerManager.listUpstreamInterfaces()
+                                                        availableUpstreams = newUpstreams
+                                                        val elapsed = System.currentTimeMillis() - startTime
+                                                        val minRotationTime = 600L
+                                                        if (elapsed < minRotationTime) {
+                                                            delay(minRotationTime - elapsed)
+                                                        }
+                                                        isManuallyRefreshing = false
+                                                    }
+                                                }
+                                            },
+                                            enabled = !isManuallyRefreshing,
+                                            modifier = Modifier.size(40.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Refresh,
+                                                contentDescription = "Refresh Interfaces",
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .graphicsLayer { rotationZ = rotation },
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    if (availableUpstreams.isNotEmpty()) {
+                                        Text(context.getString(R.string.available_system_interfaces), style = MaterialTheme.typography.labelMedium)
+                                        
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .weight(1f, fill = false)
+                                                .heightIn(max = 240.dp)
+                                        ) {
+                                            FlowRow(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .verticalScroll(rememberScrollState()),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                availableUpstreams.forEach { iface ->
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            clearFocus()
+                                                            if (upstreamInterfaces.size < 8 && !upstreamInterfaces.contains(iface)) {
+                                                                upstreamInterfaces = upstreamInterfaces + iface
+                                                                showUpstreamDialog = false
+                                                            }
+                                                        },
+                                                        enabled = !upstreamInterfaces.contains(iface),
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                                    ) {
+                                                        Text(iface)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(context.getString(R.string.enter_manually), style = MaterialTheme.typography.labelMedium)
+                                    OutlinedTextField(
+                                        value = customIface,
+                                        onValueChange = { customIface = it },
+                                        label = { Text(context.getString(R.string.interface_name_hint)) },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        TextButton(onClick = { clearFocus(); showUpstreamDialog = false }) {
+                                            Text(context.getString(R.string.cancel))
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Button(
+                                            onClick = {
+                                                clearFocus()
+                                                if (customIface.isNotBlank() && upstreamInterfaces.size < 8 && !upstreamInterfaces.contains(customIface.trim())) {
+                                                    upstreamInterfaces = upstreamInterfaces + customIface.trim()
+                                                    showUpstreamDialog = false
+                                                }
+                                            },
+                                            enabled = customIface.isNotBlank() && upstreamInterfaces.size < 8
+                                        ) {
+                                            Text(context.getString(R.string.add))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (upstreamInterfaces.size < 8) {
+                        OutlinedButton(
+                            onClick = { clearFocus(); showUpstreamDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(context.getString(R.string.add_upstream_interface))
+                        }
+                    }
+
+                    // Port Forwards
+                    Text(
+                        text = context.getString(R.string.port_forwarding),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+
+                    portForwards.forEach { pf ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${pf.hostPort} \u2192 ${pf.containerPort} [${pf.proto.uppercase()}]",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = { clearFocus(); portForwards = portForwards - pf }) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                    }
+
+                    var showPortDialog by remember { mutableStateOf(false) }
+                    if (showPortDialog) {
+                        var hostPort by remember { mutableStateOf("") }
+                        var containerPort by remember { mutableStateOf("") }
+                        var protoExpanded by remember { mutableStateOf(false) }
+                        var proto by remember { mutableStateOf("tcp") }
+                        
+                        val isHostValid = hostPort.isBlank() || (hostPort.toIntOrNull() != null && hostPort.toInt() in 1..65535)
+                        val isContainerValid = containerPort.isBlank() || (containerPort.toIntOrNull() != null && containerPort.toInt() in 1..65535)
+                        val isFormValid = hostPort.isNotBlank() && isHostValid && containerPort.isNotBlank() && isContainerValid
+
+                        Dialog(
+                            onDismissRequest = { showPortDialog = false },
+                            properties = DialogProperties(usePlatformDefaultWidth = false)
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.92f)
+                                    .wrapContentHeight(),
+                                shape = RoundedCornerShape(28.dp),
+                                color = MaterialTheme.colorScheme.surface
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    Text(
+                                        text = context.getString(R.string.add_port_forward),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f, fill = false)
+                                    ) {
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                                            modifier = Modifier.verticalScroll(rememberScrollState())
+                                        ) {
+                                            OutlinedTextField(
+                                                value = hostPort,
+                                                onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) hostPort = it },
+                                                label = { Text(context.getString(R.string.host_port_hint)) },
+                                                singleLine = true,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                isError = !isHostValid
+                                            )
+                                            
+                                            OutlinedTextField(
+                                                value = containerPort,
+                                                onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) containerPort = it },
+                                                label = { Text(context.getString(R.string.container_port_hint)) },
+                                                singleLine = true,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                isError = !isContainerValid
+                                            )
+                                            
+                                            ExposedDropdownMenuBox(
+                                                expanded = protoExpanded,
+                                                onExpandedChange = { protoExpanded = !protoExpanded }
+                                            ) {
+                                                OutlinedTextField(
+                                                    value = proto.uppercase(),
+                                                    onValueChange = {},
+                                                    readOnly = true,
+                                                    label = { Text(context.getString(R.string.protocol)) },
+                                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = protoExpanded) },
+                                                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                                                )
+                                                ExposedDropdownMenu(
+                                                    expanded = protoExpanded,
+                                                    onDismissRequest = { protoExpanded = false }
+                                                ) {
+                                                    DropdownMenuItem(text = { Text("TCP") }, onClick = { clearFocus(); proto = "tcp"; protoExpanded = false })
+                                                    DropdownMenuItem(text = { Text("UDP") }, onClick = { clearFocus(); proto = "udp"; protoExpanded = false })
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        TextButton(onClick = { clearFocus(); showPortDialog = false }) {
+                                            Text(context.getString(R.string.cancel))
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Button(
+                                            onClick = {
+                                                clearFocus()
+                                                if (isFormValid) {
+                                                    val pf = PortForward(hostPort.toInt(), containerPort.toInt(), proto)
+                                                    if (!portForwards.contains(pf)) {
+                                                        portForwards = portForwards + pf
+                                                    }
+                                                    showPortDialog = false
+                                                }
+                                            },
+                                            enabled = isFormValid
+                                        ) {
+                                            Text(context.getString(R.string.add))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { clearFocus(); showPortDialog = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(context.getString(R.string.add_port_forward))
                     }
                 }
             }
