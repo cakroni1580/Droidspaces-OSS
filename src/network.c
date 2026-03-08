@@ -14,6 +14,7 @@
 
 #include "droidspace.h"
 #include <arpa/inet.h>
+#include <fnmatch.h>
 #include <linux/ethtool.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
@@ -82,6 +83,20 @@ static int iface_is_running(const char *ifname) {
     ret = (ifr.ifr_flags & (IFF_UP | IFF_RUNNING)) == (IFF_UP | IFF_RUNNING);
   close(fd);
   return ret;
+}
+
+/* Returns 1 if `pattern` contains a glob wildcard character ('*' or '?').
+ * Used to decide whether fnmatch() or strcmp() is appropriate. */
+static int is_wildcard_pattern(const char *pattern) {
+  return strchr(pattern, '*') != NULL || strchr(pattern, '?') != NULL;
+}
+
+/* Returns 1 if `iface` matches `pattern`.
+ * If pattern is a plain name, falls back to strcmp for speed. */
+static int iface_matches_pattern(const char *pattern, const char *iface) {
+  if (is_wildcard_pattern(pattern))
+    return fnmatch(pattern, iface, 0) == 0;
+  return strcmp(pattern, iface) == 0;
 }
 
 /* ---------------------------------------------------------------------------
@@ -169,20 +184,23 @@ int fix_networking_host(struct ds_config *cfg) {
  * rules distinguish which is active, and parsing those rules was fragile.
  * ---------------------------------------------------------------------------*/
 
+/* Forward declaration — defined later in this file after route monitor globals
+ */
+static int find_active_upstream(ds_nl_ctx_t *ctx, char *iface_out,
+                                int *table_out);
+
 static void ds_net_setup_android_routing(ds_nl_ctx_t *ctx,
                                          const char ifaces[][IFNAMSIZ],
                                          int iface_count) {
+  /* Temporarily populate the globals so find_active_upstream() can use them.
+   * setup_veth_host_side() copies these right after this call anyway. */
+  for (int _i = 0; _i < iface_count && _i < DS_MAX_UPSTREAM_IFACES; _i++)
+    safe_strncpy(g_upstream_ifaces[_i], ifaces[_i], IFNAMSIZ);
+  g_upstream_count = iface_count;
+
   char active_iface[IFNAMSIZ] = {0};
   int gw_table = 0;
-
-  for (int i = 0; i < iface_count; i++) {
-    if (!iface_is_running(ifaces[i]))
-      continue;
-    if (ds_nl_get_iface_table(ctx, ifaces[i], &gw_table) == 0) {
-      safe_strncpy(active_iface, ifaces[i], IFNAMSIZ);
-      break;
-    }
-  }
+  find_active_upstream(ctx, active_iface, &gw_table);
 
   uint32_t subnet_be, mask_be;
   parse_cidr(DS_DEFAULT_SUBNET, &subnet_be, &mask_be);
@@ -619,19 +637,70 @@ int detect_ipv6_in_container(pid_t pid) {
  * ---------------------------------------------------------------------------*/
 
 /* Scan upstream interfaces in priority order; return the first that is
- * RUNNING and has an IPv4 default route in any table. */
+ * RUNNING and has an IPv4 default route in any table.
+ *
+ * Entries without wildcards are checked directly (fast path).
+ * Entries containing '*' or '?' are expanded via a full RTM_GETLINK dump
+ * and matched with fnmatch() — this handles dynamic interface names like
+ * "*rmnet_data*" or "v4-rmnet_data*" on Qualcomm/CLAT devices where the
+ * interface number changes on every reboot.
+ *
+ * Each wildcard pattern slot remembers the interface it last resolved to.
+ * A discovery log fires only when the resolved name changes — this handles
+ * cleanup (dead interfaces are overwritten), prevents log spam on heartbeat
+ * reprobes, and uses zero dynamic allocation. */
+
+/* Per-pattern "last wildcard match" tracker.  Index matches g_upstream_ifaces.
+ * An empty string means "never matched yet". */
+static char g_last_wildcard_match[DS_MAX_UPSTREAM_IFACES][IFNAMSIZ];
+
 static int find_active_upstream(ds_nl_ctx_t *ctx, char *iface_out,
                                 int *table_out) {
   for (int i = 0; i < g_upstream_count; i++) {
-    if (!iface_is_running(g_upstream_ifaces[i]))
-      continue;
-    int tbl = 0;
-    if (ds_nl_get_iface_table(ctx, g_upstream_ifaces[i], &tbl) == 0) {
-      if (iface_out)
-        safe_strncpy(iface_out, g_upstream_ifaces[i], IFNAMSIZ);
-      if (table_out)
-        *table_out = tbl;
-      return 0;
+    const char *pattern = g_upstream_ifaces[i];
+
+    if (!is_wildcard_pattern(pattern)) {
+      /* Fast path: literal name */
+      if (!iface_is_running(pattern))
+        continue;
+      int tbl = 0;
+      if (ds_nl_get_iface_table(ctx, pattern, &tbl) == 0) {
+        if (iface_out)
+          safe_strncpy(iface_out, pattern, IFNAMSIZ);
+        if (table_out)
+          *table_out = tbl;
+        return 0;
+      }
+    } else {
+      /* Wildcard path: enumerate all real interfaces and fnmatch */
+      char all_ifaces[64][IFNAMSIZ];
+      int all_count = ds_nl_list_ifaces(ctx, all_ifaces, 64);
+      for (int j = 0; j < all_count; j++) {
+        if (!iface_matches_pattern(pattern, all_ifaces[j]))
+          continue;
+        /* Skip our own bridge/veth and loopback */
+        if (strncmp(all_ifaces[j], "ds-", 3) == 0)
+          continue;
+        if (strcmp(all_ifaces[j], "lo") == 0)
+          continue;
+        if (!iface_is_running(all_ifaces[j]))
+          continue;
+        int tbl = 0;
+        if (ds_nl_get_iface_table(ctx, all_ifaces[j], &tbl) == 0) {
+          /* Log only when the resolved interface changes for this pattern */
+          if (strcmp(g_last_wildcard_match[i], all_ifaces[j]) != 0) {
+            ds_log("[NET] Wildcard '%s' matched active interface '%s' "
+                   "(table %d)",
+                   pattern, all_ifaces[j], tbl);
+            safe_strncpy(g_last_wildcard_match[i], all_ifaces[j], IFNAMSIZ);
+          }
+          if (iface_out)
+            safe_strncpy(iface_out, all_ifaces[j], IFNAMSIZ);
+          if (table_out)
+            *table_out = tbl;
+          return 0;
+        }
+      }
     }
   }
   return -ENOENT;
@@ -699,7 +768,9 @@ static void *route_monitor_loop(void *arg) {
   (void)arg;
 
   /* Build a comma-separated list for the log line */
-  char iface_list[256] = {0};
+  /* DS_MAX_UPSTREAM_IFACES * (IFNAMSIZ + 1 for comma) + NUL */
+  char iface_list[DS_MAX_UPSTREAM_IFACES * (IFNAMSIZ + 1) + 1];
+  memset(iface_list, 0, sizeof(iface_list));
   for (int i = 0; i < g_upstream_count; i++) {
     if (i > 0)
       strncat(iface_list, ",", sizeof(iface_list) - strlen(iface_list) - 1);
@@ -784,14 +855,19 @@ static void *route_monitor_loop(void *arg) {
         break;
 
       if (h->nlmsg_type == RTM_NEWLINK || h->nlmsg_type == RTM_DELLINK) {
-        /* Filter: only care about events on our upstream interfaces */
+        /* Filter: care about events on declared upstream interfaces or any
+         * interface matching a wildcard pattern (e.g. "*rmnet_data*").
+         * A new rmnet_dataX popping up mid-session triggers a reprobe so
+         * the monitor can adopt the newly-active interface immediately. */
         struct ifinfomsg *ifi = NLMSG_DATA(h);
         char evname[IFNAMSIZ] = {0};
         if_indextoname((unsigned int)ifi->ifi_index, evname);
-        for (int i = 0; i < g_upstream_count; i++) {
-          if (strcmp(evname, g_upstream_ifaces[i]) == 0) {
-            should_reprobe = 1;
-            break;
+        if (evname[0] && strncmp(evname, "ds-", 3) != 0) {
+          for (int i = 0; i < g_upstream_count; i++) {
+            if (iface_matches_pattern(g_upstream_ifaces[i], evname)) {
+              should_reprobe = 1;
+              break;
+            }
           }
         }
       } else if (h->nlmsg_type == RTM_NEWADDR || h->nlmsg_type == RTM_DELADDR) {
@@ -799,10 +875,12 @@ static void *route_monitor_loop(void *arg) {
         if (ifa->ifa_family == AF_INET) {
           char evname[IFNAMSIZ] = {0};
           if_indextoname((unsigned int)ifa->ifa_index, evname);
-          for (int i = 0; i < g_upstream_count; i++) {
-            if (strcmp(evname, g_upstream_ifaces[i]) == 0) {
-              should_reprobe = 1;
-              break;
+          if (evname[0] && strncmp(evname, "ds-", 3) != 0) {
+            for (int i = 0; i < g_upstream_count; i++) {
+              if (iface_matches_pattern(g_upstream_ifaces[i], evname)) {
+                should_reprobe = 1;
+                break;
+              }
             }
           }
         }

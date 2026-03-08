@@ -216,7 +216,7 @@ struct ds_tty_info {
  * ---------------------------------------------------------------------------*/
 
 #define DS_MAX_PORT_FORWARDS 32
-#define DS_MAX_UPSTREAM_IFACES 8
+#define DS_MAX_UPSTREAM_IFACES 32
 
 struct ds_port_forward {
   uint16_t host_port;      /* port on the Android/Linux host  */
@@ -461,6 +461,7 @@ int ds_nl_del_rule4(ds_nl_ctx_t *ctx, uint32_t src_be, uint8_t src_len,
                     uint32_t dst_be, uint8_t dst_len, int table, int priority);
 void ds_nl_flush_stale_veths(ds_nl_ctx_t *ctx, const char *prefix);
 int ds_nl_count_ifaces_with_prefix(ds_nl_ctx_t *ctx, const char *prefix);
+int ds_nl_list_ifaces(ds_nl_ctx_t *ctx, char names[][IFNAMSIZ], int max);
 /* Kernel capability probe — call before any NAT setup */
 int ds_nl_probe_nat_capability(char *reason, size_t rsz);
 

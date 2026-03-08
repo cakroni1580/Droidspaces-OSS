@@ -340,12 +340,17 @@ object ContainerManager {
     }
 
     /**
-     * List active upstream interfaces using ip route show default
+     * List active upstream interfaces by scanning all routing tables.
+     *
+     * Uses `table all` instead of the default table so that CLAT/Qualcomm
+     * devices are correctly detected — on these devices every interface has
+     * its own per-interface routing table and nothing appears in the main
+     * table, so `ip route show default` returns empty.
      */
     suspend fun listUpstreamInterfaces(): List<String> = withContext(Dispatchers.IO) {
         try {
             val busybox = Constants.BUSYBOX_BINARY_PATH
-            val cmd = "ip route show default | $busybox awk '{for(i=1;i<=NF;i++) if(\$i==\"dev\") print \$(i+1)}' | $busybox grep -v '^ds-' | $busybox sort -u"
+            val cmd = "ip route show table all | $busybox grep '^default' | $busybox awk '{for(i=1;i<=NF;i++) if(\$i==\"dev\") print \$(i+1)}' | $busybox grep -Ev '^(ds-|dummy)' | $busybox sort -u"
             val result = Shell.cmd(cmd).exec()
             if (result.isSuccess) {
                 result.out.map { it.trim() }.filter { it.isNotEmpty() }
@@ -541,4 +546,3 @@ object ContainerManager {
         }
     }
 }
-
