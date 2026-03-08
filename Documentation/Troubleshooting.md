@@ -15,6 +15,7 @@ Common issues, their causes, and how to fix them.
 - [Rootfs Image I/O Errors on Android](#rootfs-image-io-errors-on-android)
 - [DNS / Name Resolution Issues](#dns--name-resolution-issues)
 - [WiFi/Mobile Data Disconnects](#wifimobile-data-disconnects)
+- [NAT Mode: No Internet / IPv6-Only Upstream](#ipv4-quirks)
 - [SELinux-Induced Rootfs Corruption](#selinux-induced-rootfs-corruption-directory-mode)
 - [Systemd Service Sandboxing Conflicts](#systemd-service-sandboxing-conflicts-legacy-kernels)
 - [Getting Help](#getting-help)
@@ -304,6 +305,34 @@ With `--hw-access` enabled, Droidspaces **automatically** creates GPU groups and
    - **Enable X11 Support**: Ensure either `--hw-access` or the dedicated `--termux-x11` flag is used.
    - Set `export DISPLAY=:0` inside the container
    - Check socket exists: `ls -la /tmp/.X11-unix/`
+
+---
+
+<a id="ipv4-quirks"></a>
+## NAT Mode: No Internet / IPv6-Only Upstream
+
+**Symptoms**: Container starts in NAT mode but has no internet access, even with correct `--upstream` interfaces. `ping 8.8.8.8` fails inside the container.
+
+**Cause**: Droidspaces NAT mode currently supports **IPv4 only**. If your upstream interface (e.g., `rmnet_data0`) does not have an assigned IPv4 address (common with certain ISPs that use IPv6-only APNs/networks), NAT will fail.
+
+**Workaround: Forcing IPv4 Connection (Android Root Shell)**
+If your carrier is only providing an IPv6 address, you can often "trick" it into assigning an IPv4 address by temporarily disabling IPv6 globally:
+
+1.  **Preparation**: Turn off Mobile Data and enable **Airplane Mode**.
+2.  **Disable IPv6**: Run these commands in an Android root shell (or Termux with `su`):
+    ```bash
+    sysctl -w net.ipv6.conf.all.disable_ipv6=1
+    sysctl -w net.ipv6.conf.default.disable_ipv6=1
+    ```
+3.  **Reconnect**: Turn off Airplane Mode and re-enable Mobile Data.
+4.  **Verify**: Check if an interface with a default route appears:
+    ```bash
+    ip route show default
+    ```
+5.  **Configure**: Use the discovered interface in your Droidspaces `--upstream` configuration.
+
+> [!NOTE]
+> These settings will reset after a device reboot.
 
 ---
 

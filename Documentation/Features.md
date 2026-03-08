@@ -254,6 +254,9 @@ The container is placed in a private network namespace (`CLONE_NEWNET`) and conn
 - **Pure Isolation**: The container cannot see or interact with the host's network interfaces directly.
 - **Mandatory Upstream**: You **must** specify which host interfaces provide internet access via `--upstream` (e.g., `--upstream wlan0,rmnet0`).
 
+> [!IMPORTANT]
+> NAT mode is **IPv4 only**. If your upstream interface lacks an IPv4 address (IPv6-only network), internet access will not work. See [IPv4 NAT Quirks](Troubleshooting.md#ipv4-quirks) for a workaround.
+
 ### 3. None Mode (`--net=none`)
 The container gets a private network namespace with only the loopback (`lo`) interface enabled.
 - **Use Case**: Maximum security for offline tasks.
