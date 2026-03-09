@@ -82,13 +82,13 @@ int is_dangerous_node(const char *name) {
     /* Dangerous: VT masters */
     if (isdigit(name[3]))
       return 1;
-    /* Dangerous: explicit host console and modem prefixes */
-    if (strncmp(name, "ttyS", 4) == 0 ||   /* x86 hardware serial console */
-        strncmp(name, "ttyGS", 5) == 0 ||  /* USB gadget serial            */
-        strncmp(name, "ttyHSL", 6) == 0 || /* Qualcomm HS-UART             */
-        strncmp(name, "ttyMSM", 6) == 0)   /* Qualcomm MSM console         */
-      return 1;
-    /* Unknown tty* falls through - safe default for future devices */
+    /* Everything else is dangerous.
+     * Android kernels register hundreds of tty* nodes for virtual UARTs,
+     * modem channels (ttyCMIPC*), AT command interfaces (ttyC_AT), and
+     * arbitrary vendor UART drivers (ttya*..ttyz*, ttyC*, ttyb*, etc.).
+     * The old "unknown = safe" default was the bug - on Android the correct
+     * default is BLOCKED.  Explicit safe entries above still pass through. */
+    return 1;
   }
 
   /* Tier 6: MediaTek Modem & Legacy BSD PTYs */
