@@ -189,13 +189,13 @@ Android kernels are often heavily modified and may have critical container featu
 
 ##### Non-GKI (Legacy Kernels)
 Covers kernels: **3.18, 4.4, 4.9, 4.14, 4.19**. These kernels work plug-and-play after adding the required config fragments.
-See: [Legacy Kernel Configuration](Documentation/Kernel-Configuration.md#non-gki-devices-legacy-kernels)
+See: [Legacy Kernel Configuration](Documentation/Kernel-Configuration.md#configuring-non-gki-kernels-legacy-kernels)
 
 <a id="GKI"></a>
 
 ##### GKI (Modern Kernels)
 Covers kernels: **5.4, 5.10, 5.15, 6.1+**. These kernels require additional steps to handle ABI breakage caused by configuration changes.
-See: [Modern GKI Kernel Configuration](Documentation/Kernel-Configuration.md#gki-devices-modern-kernels)
+See: [Modern GKI Kernel Configuration](Documentation/Kernel-Configuration.md#configuring-gki-kernels-modern-kernels)
 
 **Next Steps for Kernel Support:**
 - **Check automatically**: Use the built-in requirements checker in the Android app (**Settings** -> **Requirements**).

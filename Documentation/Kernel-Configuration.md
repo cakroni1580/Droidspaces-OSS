@@ -164,6 +164,7 @@ Applying these patches helps avoid "weird issues" and kernel panics that can occ
 ---
 
 <a id="non-gki"></a>
+
 ## Configuring Non-GKI Kernels (Legacy Kernels)
 
 **Applies to:** Kernel 3.18, 4.4, 4.9, 4.14, 4.19
