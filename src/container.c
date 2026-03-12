@@ -1276,10 +1276,14 @@ int enter_rootfs(struct ds_config *cfg, const char *user) {
     if (enter_namespace(pid, cfg) < 0)
       _exit(EXIT_FAILURE);
 
-    /* Apply identical security hardening as internal_boot(). */
+    /* Apply identical security hardening as internal_boot().
+     * Seccomp filters and capability bounding set drops are per-process and
+     * inherited only via fork/exec from PID 1 - entering processes arrive via
+     * setns() and are NOT children of init, so they inherit nothing. */
     ds_log_silent = 1;
     ds_seccomp_apply_minimal(cfg->hw_access);
-    android_seccomp_setup(is_systemd_rootfs("/"), cfg->block_nested_ns);
+    android_seccomp_setup(0, cfg->block_nested_ns);
+    ds_apply_capability_hardening(cfg->hw_access);
     ds_log_silent = 0;
 
     /* Allocate TTY INSIDE the container namespaces */
@@ -1470,10 +1474,12 @@ int run_in_rootfs(struct ds_config *cfg, int argc, char **argv) {
     if (enter_namespace(pid, cfg) < 0)
       _exit(EXIT_FAILURE);
 
-    /* Apply identical security hardening as internal_boot(). */
+    /* Apply identical security hardening as internal_boot() and enter_rootfs().
+     * Same reasoning: run processes are not children of container PID 1. */
     ds_log_silent = 1;
     ds_seccomp_apply_minimal(cfg->hw_access);
-    android_seccomp_setup(is_systemd_rootfs("/"), cfg->block_nested_ns);
+    android_seccomp_setup(0, cfg->block_nested_ns);
+    ds_apply_capability_hardening(cfg->hw_access);
     ds_log_silent = 0;
 
     pid_t cmd_pid = fork();
