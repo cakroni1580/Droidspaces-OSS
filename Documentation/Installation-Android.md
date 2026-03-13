@@ -40,7 +40,7 @@ You don't need to manually extract rootfs files. The app handles it:
 You can verify your system status at any time:
 1. Go to **Settings** (gear icon) -> **Requirements**.
 2. Tap **Check Requirements**. This runs the full `droidspaces check` suite internally.
-3. **Kernel Config**: If you are a kernel developer, you can find a copyable `droidspaces.config` defconfig fragmenr on [this page](./Kernel-Configuration.md#required-kernel-configuration) to ensure your kernel is perfectly compatible with Droidspaces.
+3. **Kernel Config**: If you are a kernel developer, you can find a copyable `droidspaces.config` defconfig fragment on [this page](./Kernel-Configuration.md#required-kernel-configuration) to ensure your kernel is perfectly compatible with Droidspaces.
 
 ## Next Steps
 

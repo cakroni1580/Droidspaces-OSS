@@ -16,6 +16,7 @@ Common issues, their causes, and how to fix them.
 - [NAT Mode: No Internet / IPv6-Only Upstream](#ipv4-quirks)
 - [SELinux-Induced Rootfs Corruption](#selinux-induced-rootfs-corruption-directory-mode)
 - [Systemd Service Sandboxing Conflicts](#systemd-service-sandboxing-conflicts-legacy-kernels)
+- [WIFI `Power save: on` make the networking experience sluggish in Android](#nuke-wifi-powersave)
 - [Getting Help](#getting-help)
 
 ---
@@ -287,6 +288,113 @@ With `--hw-access` enabled, Droidspaces **automatically** creates GPU groups and
 
 **Tip: Using Wildcards**  
 To handle unpredictable interface names on mobile data, you can use wildcards in your `--upstream` configuration (e.g., `--upstream "rmnet_data*,wlan0"`). Droidspaces will automatically monitor and match any active interface that fits the pattern - in real time.
+
+---
+
+<a id="nuke-wifi-powersave"></a>
+
+## Wi-Fi `Power save: on` Causing Sluggish Networking on Android
+
+**Symptoms:** Android automatically puts Wi-Fi hardware into power-saving mode when the device's screen turns off. This can cause sluggish networking or dropped connections within containers. Because there is no universal toggle to disable this behavior from the Android userspace, you must explicitly force the power save state to "off" using a background service.
+
+**Solution:** You can create a lightweight, dedicated container in host networking mode (`--net=host`) that runs a simple "watchdog" script to keep Wi-Fi power save disabled. We recommend using a minimal Alpine Linux container for this purpose.
+
+Here is how to set it up:
+
+### 1. Install Required Utilities
+First, ensure that the `iw` utility is installed in your container.
+- **Alpine:** `apk add iw`
+- **Ubuntu/Debian:** `apt install iw`
+
+### 2. Create the Watchdog Script
+Create a new file at `/usr/local/bin/wifi-watchdog.sh` with the following content:
+
+```shell
+#!/bin/sh
+while true; do
+    # Check if power save is "on"
+    if /usr/sbin/iw dev wlan0 get power_save 2>/dev/null | grep -q "on"; then
+        /usr/sbin/iw dev wlan0 set power_save off
+        echo "$(date): WiFi Power Save was ON. Forced OFF." >> /tmp/wifi-fix.log
+    fi
+    sleep 60
+done
+```
+
+Make the script executable:
+```shell
+chmod +x /usr/local/bin/wifi-watchdog.sh
+```
+
+### 3. Wire Up the Init Service
+
+Depending on your container's init system, configure the script to run as a background service.
+
+**For OpenRC (Alpine Linux)**
+
+Create a service file at `/etc/init.d/wifi-watchdog`:
+
+```shell
+#!/sbin/openrc-run
+
+name="WiFi PowerSave Watchdog"
+description="Ensures wlan0 power_save stays off"
+
+# Use the path to your loop script
+command="/usr/local/bin/wifi-watchdog.sh"
+
+# This tells OpenRC to handle the backgrounding and PID creation
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+
+# Ensure it only starts after the network is available
+depend() {
+    need networking
+}
+```
+
+Make the service file executable and start it:
+
+```shell
+chmod +x /etc/init.d/wifi-watchdog
+rc-update add wifi-watchdog default
+rc-service wifi-watchdog start
+```
+
+**For systemd (Ubuntu/Debian)**
+
+Create a systemd unit file at `/etc/systemd/system/wifi-watchdog.service`:
+
+```ini
+[Unit]
+Description=WiFi PowerSave Watchdog
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/wifi-watchdog.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+
+```shell
+# Reload systemd to pick up the new service
+systemctl daemon-reload
+
+# Enable it to start on boot
+systemctl enable wifi-watchdog
+
+# Start it now
+systemctl start wifi-watchdog
+```
+
+> [!NOTE]
+> This workaround **requires Host Networking Mode** (`--net=host`). The script expects direct access to Android's `wlan0` interface, which is not visible in `NAT` or `None` modes. We recommend dedicating a small "burner" container specifically for this watchdog.
 
 ---
 
