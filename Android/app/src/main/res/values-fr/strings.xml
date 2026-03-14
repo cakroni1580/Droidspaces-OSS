@@ -146,8 +146,9 @@
     <string name="container_is_running">Le conteneur est en cours d\'exécution</string>
     <string name="changes_take_effect_after_restart">Les changements prendront effet après le redémarrage</string>
     <string name="hostname_label_edit">Nom d\'hôte</string>
-    <string name="enable_ipv6">Activer IPv6</string>
-    <string name="enable_ipv6_description">Activer le réseau IPv6</string>
+    <string name="disable_ipv6">Désactiver IPv6</string>
+    <string name="disable_ipv6_description">Désactiver IPv6 dans ce conteneur. La désactivation d\'IPv6 peut casser les applications VPN sur l\'hôte.</string>
+    <string name="disable_ipv6_nat_forced">IPv6 est toujours désactivé en mode NAT et None.</string>
     <string name="android_storage">Stockage Android</string>
     <string name="android_storage_description">Monter le stockage Android</string>
     <string name="hardware_access">Accès matériel</string>

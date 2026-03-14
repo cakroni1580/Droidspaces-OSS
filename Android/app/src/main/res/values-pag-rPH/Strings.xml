@@ -136,8 +136,9 @@
     <string name="container_is_running">Aandar so container</string>
     <string name="changes_take_effect_after_restart">Na-apply iray anguman kayari na restart</string>
     <string name="hostname_label_edit">Hostname</string>
-    <string name="enable_ipv6">Paganayen so IPv6</string>
-    <string name="enable_ipv6_description">Paganayen so IPv6 networking</string>
+    <string name="disable_ipv6">Iwasan so IPv6</string>
+    <string name="disable_ipv6_description">Iwasan so IPv6 ed sayan container. No naiwasan so IPv6, nayarin onlugo iray VPN app ed host.</string>
+    <string name="disable_ipv6_nat_forced">Naiwasan lawas so IPv6 ed NAT tan None network mode.</string>
     <string name="android_storage">Android Storage</string>
     <string name="android_storage_description">I-mount so Android storage</string>
     <string name="hardware_access">Hardware Access</string>

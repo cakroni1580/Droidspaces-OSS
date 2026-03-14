@@ -1640,9 +1640,20 @@ int show_info(struct ds_config *cfg, int trust_cfg_pid) {
       printf("  SELinux: %s\n", sel);
     }
 
-    /* IPv6 */
-    printf("  IPv6: %s\n",
-           detect_ipv6_in_container(pid) ? "enabled" : "disabled");
+    /* Networking */
+    const char *net;
+    switch (cfg->net_mode) {
+    case DS_NET_NAT:
+      net = "NAT";
+      break;
+    case DS_NET_NONE:
+      net = "none";
+      break;
+    default:
+      net = "host";
+      break;
+    }
+    printf("  Networking: %s\n", net);
 
     /* Android storage */
     printf("  Android storage: %s\n",

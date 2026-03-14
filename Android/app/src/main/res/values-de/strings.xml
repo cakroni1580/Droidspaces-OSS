@@ -149,8 +149,9 @@
     <string name="container_is_running">Container läuft</string>
     <string name="changes_take_effect_after_restart">Änderungen werden nach Neustart wirksam</string>
     <string name="hostname_label_edit">Hostname</string>
-    <string name="enable_ipv6">IPv6 aktivieren</string>
-    <string name="enable_ipv6_description">IPv6-Netzwerk aktivieren</string>
+    <string name="disable_ipv6">IPv6 deaktivieren</string>
+    <string name="disable_ipv6_description">IPv6 in diesem Container deaktivieren. Das Deaktivieren von IPv6 kann VPN-Apps auf dem Host beeinträchtigen.</string>
+    <string name="disable_ipv6_nat_forced">IPv6 ist in den Modi NAT und None immer deaktiviert.</string>
     <string name="android_storage">Android-Speicher</string>
     <string name="android_storage_description">Android-Speicher einbinden</string>
     <string name="hardware_access">Hardware-Zugriff</string>

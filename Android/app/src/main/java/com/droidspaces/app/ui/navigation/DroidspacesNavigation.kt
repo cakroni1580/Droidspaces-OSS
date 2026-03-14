@@ -34,6 +34,7 @@ import com.droidspaces.app.ui.screen.EditContainerScreen
 import com.droidspaces.app.ui.screen.ContainerDetailsScreen
 import com.droidspaces.app.ui.screen.ProcessListScreen
 import com.droidspaces.app.ui.screen.SystemdScreen
+import com.droidspaces.app.ui.screen.ContainerTerminalScreen
 import com.droidspaces.app.ui.viewmodel.ContainerInstallationViewModel
 import com.droidspaces.app.ui.viewmodel.ContainerViewModel
 import com.droidspaces.app.util.ContainerManager
@@ -90,6 +91,10 @@ sealed class Screen(val route: String) {
     }
     data object Systemd : Screen("systemd/{containerName}") {
         fun createRoute(containerName: String) = "systemd/${Uri.encode(containerName)}"
+    }
+
+    data object Terminal : Screen("terminal/{containerName}") {
+        fun createRoute(containerName: String) = "terminal/${Uri.encode(containerName)}"
     }
 }
 
@@ -285,7 +290,7 @@ fun DroidspacesNavigation(
 
             ContainerConfigScreen(
                 initialNetMode = viewModel.netMode,
-                initialEnableIPv6 = viewModel.enableIPv6,
+                initialDisableIPv6 = viewModel.disableIPv6,
                 initialEnableAndroidStorage = viewModel.enableAndroidStorage,
                 initialEnableHwAccess = viewModel.enableHwAccess,
                 initialSelinuxPermissive = viewModel.selinuxPermissive,
@@ -298,8 +303,8 @@ fun DroidspacesNavigation(
                 initialEnvFileContent = viewModel.envFileContent ?: "",
                 initialUpstreamInterfaces = viewModel.upstreamInterfaces,
                 initialPortForwards = viewModel.portForwards,
-                onNext = { netMode, enableIPv6, enableAndroidStorage, enableHwAccess, enableTermuxX11, selinuxPermissive, volatileMode, bindMounts, dnsServers, runAtBoot, forceCgroupv1, blockNestedNs, envFileContent, upstreamInterfaces, portForwards ->
-                    viewModel.setConfig(netMode, enableIPv6, enableAndroidStorage, enableHwAccess, enableTermuxX11, selinuxPermissive, volatileMode, bindMounts, dnsServers, runAtBoot, envFileContent, upstreamInterfaces, portForwards, forceCgroupv1, blockNestedNs)
+                onNext = { netMode, disableIPv6, enableAndroidStorage, enableHwAccess, enableTermuxX11, selinuxPermissive, volatileMode, bindMounts, dnsServers, runAtBoot, forceCgroupv1, blockNestedNs, envFileContent, upstreamInterfaces, portForwards ->
+                    viewModel.setConfig(netMode, disableIPv6, enableAndroidStorage, enableHwAccess, enableTermuxX11, selinuxPermissive, volatileMode, bindMounts, dnsServers, runAtBoot, envFileContent, upstreamInterfaces, portForwards, forceCgroupv1, blockNestedNs)
                     navController.navigate(Screen.SparseImageConfig.route)
                 },
                 onBack = {
@@ -519,6 +524,9 @@ fun DroidspacesNavigation(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToSystemd = {
                         navController.navigate(Screen.Systemd.createRoute(containerName))
+                    },
+                    onNavigateToTerminal = {
+                        navController.navigate(Screen.Terminal.createRoute(containerName))
                     }
                 )
             } ?: LaunchedEffect(Unit) {
@@ -552,6 +560,29 @@ fun DroidspacesNavigation(
             val containerName = backStackEntry.arguments?.getString("containerName") ?: ""
             SystemdScreen(
                 containerName = containerName,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.Terminal.route,
+            arguments = listOf(
+                navArgument("containerName") { type = NavType.StringType }
+            ),
+            enterTransition = defaultEnterTransition,
+            exitTransition = defaultExitTransition,
+            popEnterTransition = defaultEnterTransition,
+            popExitTransition = defaultExitTransition
+        ) { backStackEntry ->
+            val containerName = backStackEntry.arguments?.getString("containerName") ?: ""
+            // Resolve cached users for the user picker dialog
+            val users = remember(containerName) {
+                com.droidspaces.app.util.ContainerUsersManager.getCachedUsers(containerName)
+                    ?: listOf("root")
+            }
+            ContainerTerminalScreen(
+                containerName = containerName,
+                initialUsers = users,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

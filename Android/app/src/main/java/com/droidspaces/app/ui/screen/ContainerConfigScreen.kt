@@ -42,7 +42,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 @Composable
 fun ContainerConfigScreen(
     initialNetMode: String = "host",
-    initialEnableIPv6: Boolean = false,
+    initialDisableIPv6: Boolean = false,
     initialEnableAndroidStorage: Boolean = false,
     initialEnableHwAccess: Boolean = false,
     initialEnableTermuxX11: Boolean = false,
@@ -58,7 +58,7 @@ fun ContainerConfigScreen(
     initialPortForwards: List<PortForward> = emptyList(),
     onNext: (
         netMode: String,
-        enableIPv6: Boolean,
+        disableIPv6: Boolean,
         enableAndroidStorage: Boolean,
         enableHwAccess: Boolean,
         enableTermuxX11: Boolean,
@@ -76,7 +76,7 @@ fun ContainerConfigScreen(
     onBack: () -> Unit
 ) {
     var netMode by remember { mutableStateOf(initialNetMode) }
-    var enableIPv6 by remember { mutableStateOf(initialEnableIPv6) }
+    var disableIPv6 by remember { mutableStateOf(initialDisableIPv6) }
     var enableAndroidStorage by remember { mutableStateOf(initialEnableAndroidStorage) }
     var enableHwAccess by remember { mutableStateOf(initialEnableHwAccess) }
     var enableTermuxX11 by remember { mutableStateOf(initialEnableTermuxX11) }
@@ -180,7 +180,7 @@ fun ContainerConfigScreen(
             ) {
                 Button(
                     onClick = {
-                        onNext(netMode, enableIPv6, enableAndroidStorage, enableHwAccess, if (enableHwAccess) true else enableTermuxX11, selinuxPermissive, volatileMode, bindMounts, dnsServers, runAtBoot, forceCgroupv1, blockNestedNs, if (envFileContent.isBlank()) null else envFileContent, upstreamInterfaces, portForwards)
+                        onNext(netMode, disableIPv6, enableAndroidStorage, enableHwAccess, if (enableHwAccess) true else enableTermuxX11, selinuxPermissive, volatileMode, bindMounts, dnsServers, runAtBoot, forceCgroupv1, blockNestedNs, if (envFileContent.isBlank()) null else envFileContent, upstreamInterfaces, portForwards)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -247,8 +247,9 @@ fun ContainerConfigScreen(
                             text = { Text(modeNames[mode] ?: mode) },
                             onClick = {
                                 netMode = mode
+                                // IPv6 is always disabled in NAT/NONE, clear any saved value
                                 if (mode != "host") {
-                                    enableIPv6 = false
+                                    disableIPv6 = false
                                 }
                                 expanded = false
                             }
@@ -641,13 +642,18 @@ fun ContainerConfigScreen(
                 }
             )
 
+            // In NAT/NONE mode, IPv6 is always disabled (forced). In host mode the user can opt in.
+            val ipv6IsForced = netMode != "host"
             ToggleCard(
                 icon = Icons.Default.NetworkCheck,
-                title = context.getString(R.string.enable_ipv6),
-                description = context.getString(R.string.enable_ipv6_description),
-                checked = enableIPv6,
-                onCheckedChange = { enableIPv6 = it },
-                enabled = netMode == "host"
+                title = context.getString(R.string.disable_ipv6),
+                description = if (ipv6IsForced)
+                    context.getString(R.string.disable_ipv6_nat_forced)
+                else
+                    context.getString(R.string.disable_ipv6_description),
+                checked = if (ipv6IsForced) true else disableIPv6,
+                onCheckedChange = { disableIPv6 = it },
+                enabled = !ipv6IsForced
             )
 
             Text(

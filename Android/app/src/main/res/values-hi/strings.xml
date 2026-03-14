@@ -146,8 +146,9 @@
     <string name="container_is_running">कंटेनर चल रहा है</string>
     <string name="changes_take_effect_after_restart">परिवर्तन पुनः प्रारंभ के बाद प्रभावी होंगे</string>
     <string name="hostname_label_edit">होस्टनेम</string>
-    <string name="enable_ipv6">IPv6 सक्षम करें</string>
-    <string name="enable_ipv6_description">IPv6 नेटवर्किंग सक्षम करें</string>
+    <string name="disable_ipv6">IPv6 अक्षम करें</string>
+    <string name="disable_ipv6_description">इस कंटेनर में IPv6 अक्षम करें। IPv6 अक्षम करने से होस्ट पर VPN ऐप्स टूट सकते हैं।</string>
+    <string name="disable_ipv6_nat_forced">NAT और None नेटवर्क मोड में IPv6 हमेशा अक्षम रहता है।</string>
     <string name="android_storage">Android स्टोरेज</string>
     <string name="android_storage_description">Android स्टोरेज माउंट करें</string>
     <string name="hardware_access">हार्डवेयर एक्सेस</string>

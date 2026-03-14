@@ -26,7 +26,7 @@ class ContainerInstallationViewModel : ViewModel() {
     var netMode: String by mutableStateOf("host")
         private set
 
-    var enableIPv6: Boolean by mutableStateOf(false)
+    var disableIPv6: Boolean by mutableStateOf(false)
         private set
 
     var enableAndroidStorage: Boolean by mutableStateOf(false)
@@ -90,7 +90,7 @@ class ContainerInstallationViewModel : ViewModel() {
 
     fun setConfig(
         netMode: String,
-        enableIPv6: Boolean,
+        disableIPv6: Boolean,
         enableAndroidStorage: Boolean,
         enableHwAccess: Boolean,
         enableTermuxX11: Boolean,
@@ -106,7 +106,7 @@ class ContainerInstallationViewModel : ViewModel() {
         blockNestedNs: Boolean
     ) {
         this.netMode = netMode
-        this.enableIPv6 = enableIPv6
+        this.disableIPv6 = disableIPv6
         this.enableAndroidStorage = enableAndroidStorage
         this.enableHwAccess = enableHwAccess
         this.enableTermuxX11 = enableTermuxX11
@@ -135,7 +135,7 @@ class ContainerInstallationViewModel : ViewModel() {
                 ContainerManager.getRootfsPath(containerName)
             },
             netMode = netMode,
-            enableIPv6 = enableIPv6,
+            disableIPv6 = disableIPv6,
             enableAndroidStorage = enableAndroidStorage,
             enableHwAccess = enableHwAccess,
             enableTermuxX11 = if (enableHwAccess) true else enableTermuxX11,
@@ -160,7 +160,7 @@ class ContainerInstallationViewModel : ViewModel() {
         containerName = ""
         hostname = ""
         netMode = "host"
-        enableIPv6 = false
+        disableIPv6 = false
         enableAndroidStorage = false
         enableHwAccess = false
         enableTermuxX11 = false

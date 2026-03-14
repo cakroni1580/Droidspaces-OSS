@@ -146,8 +146,9 @@
     <string name="container_is_running">Контейнер запущен</string>
     <string name="changes_take_effect_after_restart">Изменения вступят в силу после перезапуска</string>
     <string name="hostname_label_edit">Имя хоста</string>
-    <string name="enable_ipv6">Включить IPv6</string>
-    <string name="enable_ipv6_description">Включить сеть IPv6</string>
+    <string name="disable_ipv6">Отключить IPv6</string>
+    <string name="disable_ipv6_description">Отключить IPv6 в этом контейнере. Отключение IPv6 может нарушить работу VPN-приложений на хосте.</string>
+    <string name="disable_ipv6_nat_forced">IPv6 всегда отключён в режимах NAT и None.</string>
     <string name="android_storage">Хранилище Android</string>
     <string name="android_storage_description">Подключить хранилище Android</string>
     <string name="hardware_access">Доступ к оборудованию</string>

@@ -103,7 +103,7 @@ fun InstallationSummaryScreen(
                         fontWeight = FontWeight.SemiBold
                     )
 
-                    if (config.enableIPv6) SummaryItem("IPv6", "Enabled", Icons.Default.NetworkCheck)
+                    if (config.disableIPv6) SummaryItem("IPv6", "Disabled", Icons.Default.NetworkCheck)
                     if (config.enableAndroidStorage) SummaryItem("Android Storage", "Enabled", Icons.Default.Storage)
                     if (config.enableHwAccess) SummaryItem("Hardware Access", "Enabled", Icons.Default.Devices)
                     if (config.enableTermuxX11) SummaryItem("Termux X11", "Enabled", painterResource(id = R.drawable.ic_x11))
@@ -129,7 +129,7 @@ fun InstallationSummaryScreen(
                         }
                     }
 
-                    if (!config.enableIPv6 && !config.enableAndroidStorage &&
+                    if (!config.enableAndroidStorage &&
                         !config.enableHwAccess && !config.selinuxPermissive && 
                         !config.volatileMode && config.bindMounts.isEmpty() && 
                         !config.runAtBoot && config.envFileContent.isNullOrBlank()) {

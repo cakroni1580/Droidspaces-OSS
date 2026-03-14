@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import com.droidspaces.app.ui.util.LoadingIndicator
 import com.droidspaces.app.ui.util.LoadingSize
 import androidx.compose.ui.platform.LocalContext
 import com.droidspaces.app.R
+import com.droidspaces.app.service.TerminalSessionService
 
 /**
  * Premium Container Details Screen - Zero glitches, buttery smooth animations
@@ -43,7 +45,8 @@ import com.droidspaces.app.R
 fun ContainerDetailsScreen(
     container: ContainerInfo,
     onNavigateBack: () -> Unit,
-    onNavigateToSystemd: () -> Unit = {}
+    onNavigateToSystemd: () -> Unit = {},
+    onNavigateToTerminal: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -134,7 +137,13 @@ fun ContainerDetailsScreen(
                     )
                 }
 
-                // Systemd Card - PREMIUM, GLITCH-FREE implementation
+                item(key = "terminal_${container.name}") {
+                    TerminalCard(
+                        containerName = container.name,
+                        onOpenTerminal = onNavigateToTerminal
+                    )
+                }
+
                 item(key = "systemd_${container.name}") {
                     PremiumSystemdCard(
                         state = systemdState,
@@ -294,7 +303,109 @@ private fun InfoRow(
             modifier = Modifier.weight(0.6f)
         )
     }
+}
+
+/**
+ * Terminal Card - opens a real interactive shell inside the container.
+ */
+@Composable
+private fun TerminalCard(
+    containerName: String,
+    onOpenTerminal: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+
+    val sessionCount by remember {
+        derivedStateOf {
+            TerminalSessionService.globalSessionList.values.count { it.containerName == containerName }
+        }
+    }
+
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = AnimationUtils.cardFadeSpec(),
+        label = "terminal_card_fade"
+    )
+
+    ElevatedCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 88.dp)
+            .alpha(alpha)
+            .graphicsLayer { this.alpha = alpha },
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.elevatedCardElevation(
+            defaultElevation = 2.dp,
+            pressedElevation = 4.dp
+        ),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Terminal,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                    tint = MaterialTheme.colorScheme.tertiary
+                )
+                Column {
+                    Text(
+                        text = context.getString(R.string.terminal),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    val description = if (sessionCount > 0) {
+                        "$sessionCount ${if (sessionCount == 1) "session" else "sessions"} running · tap to restore"
+                    } else {
+                        context.getString(R.string.terminal_card_desc)
+                    }
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                    )
                 }
+            }
+
+            Button(
+                onClick = onOpenTerminal,
+                modifier = Modifier.widthIn(min = 140.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary,
+                    contentColor = MaterialTheme.colorScheme.onTertiary
+                )
+            ) {
+                Icon(
+                    if (sessionCount > 0) Icons.Default.Terminal else Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    if (sessionCount > 0) "Restore" else context.getString(R.string.open),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
 
 /**
  * PREMIUM SYSTEMD CARD - Zero glitches, buttery smooth

@@ -211,7 +211,7 @@ fun ContainerCard(
 
             // Options summary
             val options = mutableListOf<String>()
-            if (container.enableIPv6) options.add(context.getString(R.string.ipv6_option))
+            if (container.disableIPv6) options.add(context.getString(R.string.ipv6_option))
             if (container.enableAndroidStorage) options.add(context.getString(R.string.storage_option))
             if (container.enableHwAccess) options.add(context.getString(R.string.hw_option))
             if (container.enableTermuxX11) options.add(context.getString(R.string.x11_option))

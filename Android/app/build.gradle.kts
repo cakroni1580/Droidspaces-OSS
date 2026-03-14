@@ -210,6 +210,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("com.google.android.material:material:1.11.0")
 
     // Removed App Startup library - direct initialization in Application.onCreate() is faster
     // Eliminates ContentProvider overhead (~5-10ms saved)
@@ -228,6 +229,10 @@ dependencies {
     // Coroutines - latest version for better performance
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+
+    // Terminal emulator (ported from LXC-Manager / termux-app)
+    implementation("com.github.termux.termux-app:terminal-view:0.118.1")
+    implementation("com.github.termux.termux-app:terminal-emulator:0.118.1")
 
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")

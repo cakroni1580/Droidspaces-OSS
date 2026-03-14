@@ -68,7 +68,7 @@ fun EditContainerScreen(
     // State for editable fields
     var hostname by remember { mutableStateOf(container.hostname) }
     var netMode by remember { mutableStateOf(container.netMode) }
-    var enableIPv6 by remember { mutableStateOf(container.enableIPv6) }
+    var disableIPv6 by remember { mutableStateOf(container.disableIPv6) }
     var enableAndroidStorage by remember { mutableStateOf(container.enableAndroidStorage) }
     var enableHwAccess by remember { mutableStateOf(container.enableHwAccess) }
     var enableTermuxX11 by remember { mutableStateOf(container.enableTermuxX11) }
@@ -86,7 +86,7 @@ fun EditContainerScreen(
     // Track the "saved" baseline values - updated after each successful save
     var savedHostname by remember { mutableStateOf(container.hostname) }
     var savedNetMode by remember { mutableStateOf(container.netMode) }
-    var savedEnableIPv6 by remember { mutableStateOf(container.enableIPv6) }
+    var savedDisableIPv6 by remember { mutableStateOf(container.disableIPv6) }
     var savedEnableAndroidStorage by remember { mutableStateOf(container.enableAndroidStorage) }
     var savedEnableHwAccess by remember { mutableStateOf(container.enableHwAccess) }
     var savedEnableTermuxX11 by remember { mutableStateOf(container.enableTermuxX11) }
@@ -121,7 +121,7 @@ fun EditContainerScreen(
         derivedStateOf {
             hostname != savedHostname ||
             netMode != savedNetMode ||
-            enableIPv6 != savedEnableIPv6 ||
+            disableIPv6 != savedDisableIPv6 ||
             enableAndroidStorage != savedEnableAndroidStorage ||
             enableHwAccess != savedEnableHwAccess ||
             enableTermuxX11 != savedEnableTermuxX11 ||
@@ -156,7 +156,7 @@ fun EditContainerScreen(
                 val updatedConfig = container.copy(
                     hostname = hostname,
                     netMode = netMode,
-                    enableIPv6 = enableIPv6,
+                    disableIPv6 = disableIPv6,
                     enableAndroidStorage = enableAndroidStorage,
                     enableHwAccess = enableHwAccess,
                     enableTermuxX11 = if (enableHwAccess) true else enableTermuxX11,
@@ -182,7 +182,7 @@ fun EditContainerScreen(
                         // Success - update saved baseline values to current values
                         savedHostname = hostname
                         savedNetMode = netMode
-                        savedEnableIPv6 = enableIPv6
+                        savedDisableIPv6 = disableIPv6
                         savedEnableAndroidStorage = enableAndroidStorage
                         savedEnableHwAccess = enableHwAccess
                         savedEnableTermuxX11 = enableTermuxX11
@@ -459,8 +459,9 @@ fun EditContainerScreen(
                             onClick = {
                                 clearFocus()
                                 netMode = mode
+                                // IPv6 is always disabled in NAT/NONE, clear any saved value
                                 if (mode != "host") {
-                                    enableIPv6 = false
+                                    disableIPv6 = false
                                 }
                                 expanded = false
                             }
@@ -856,16 +857,21 @@ fun EditContainerScreen(
                 }
             )
 
+            // In NAT/NONE mode, IPv6 is always disabled (forced). In host mode the user can opt in.
+            val ipv6IsForced = netMode != "host"
             ToggleCard(
                 icon = Icons.Default.NetworkCheck,
-                title = context.getString(R.string.enable_ipv6),
-                description = context.getString(R.string.enable_ipv6_description),
-                checked = enableIPv6,
+                title = context.getString(R.string.disable_ipv6),
+                description = if (ipv6IsForced)
+                    context.getString(R.string.disable_ipv6_nat_forced)
+                else
+                    context.getString(R.string.disable_ipv6_description),
+                checked = if (ipv6IsForced) true else disableIPv6,
                 onCheckedChange = {
                     clearFocus()
-                    enableIPv6 = it
+                    disableIPv6 = it
                 },
-                enabled = netMode == "host"
+                enabled = !ipv6IsForced
             )
 
             Text(

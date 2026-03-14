@@ -29,7 +29,7 @@ data class ContainerInfo(
     val hostname: String,
     val rootfsPath: String,
     val netMode: String = "host",
-    val enableIPv6: Boolean = false,
+    val disableIPv6: Boolean = false,
     val enableAndroidStorage: Boolean = false,
     val enableHwAccess: Boolean = false,
     val enableTermuxX11: Boolean = false,
@@ -59,7 +59,7 @@ data class ContainerInfo(
         appendLine("hostname=$hostname")
         appendLine("rootfs_path=$rootfsPath")
         appendLine("net_mode=$netMode")
-        appendLine("enable_ipv6=${if (enableIPv6) "1" else "0"}")
+        appendLine("disable_ipv6=${if (disableIPv6) "1" else "0"}")
         appendLine("enable_android_storage=${if (enableAndroidStorage) "1" else "0"}")
         appendLine("enable_hw_access=${if (enableHwAccess) "1" else "0"}")
         appendLine("enable_termux_x11=${if (enableTermuxX11) "1" else "0"}")
@@ -252,7 +252,7 @@ object ContainerManager {
                     getRootfsPath(containerName)
                 },
                 netMode = configMap["net_mode"] ?: "host",
-                enableIPv6 = configMap["enable_ipv6"] == "1",
+                disableIPv6 = configMap["disable_ipv6"] == "1",
                 enableAndroidStorage = configMap["enable_android_storage"] == "1",
                 enableHwAccess = configMap["enable_hw_access"] == "1",
                 enableTermuxX11 = configMap["enable_termux_x11"] == "1",

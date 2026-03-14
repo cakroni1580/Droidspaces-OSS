@@ -127,7 +127,7 @@
     <string name="start">Start</string>
     <string name="stop">Stop</string>
     <string name="restart">Restart</string>
-    <string name="ipv6_option">IPv6</string>
+    <string name="ipv6_option">No IPv6</string>
     <string name="storage_option">Storage</string>
     <string name="hw_option">HW</string>
     <string name="x11_option">X11</string>
@@ -154,8 +154,9 @@
     <string name="container_is_running">Container is running</string>
     <string name="changes_take_effect_after_restart">Changes will take effect after restart</string>
     <string name="hostname_label_edit">Hostname</string>
-    <string name="enable_ipv6">Enable IPv6</string>
-    <string name="enable_ipv6_description">Enable IPv6 networking</string>
+    <string name="disable_ipv6">Disable IPv6</string>
+    <string name="disable_ipv6_description">Disable IPv6 in this container. Disabling IPv6 may break VPN apps running in the host.</string>
+    <string name="disable_ipv6_nat_forced">IPv6 is always disabled in NAT and None network modes.</string>
     <string name="android_storage">Android Storage</string>
     <string name="android_storage_description">Mount Android storage</string>
     <string name="hardware_access">Hardware Access</string>
@@ -392,5 +393,19 @@
     <string name="kernel_requirements_copied">Kernel requirements copied to clipboard</string>
 
     <string name="logs_copied">Logs copied to clipboard</string>
+
+    <!-- Terminal -->
+    <string name="terminal">Terminal</string>
+    <string name="terminal_card_desc">Open an interactive shell inside this container</string>
+    <string name="open">Open</string>
+    <string name="open_terminal">Open Terminal</string>
+    <string name="select_user_to_enter">Select the user to enter the container as:</string>
+
+    <!-- Notification Permission -->
+    <string name="notification_permission_title">Notification Permission</string>
+    <string name="notification_permission_rationale">Droidspaces needs to show a persistent notification to keep your terminal sessions running in the background. Without this, Android (especially on Samsung devices) might kill the terminal service unexpectedly.</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="open_settings">Open Settings</string>
+    <string name="i_understand">I Understand</string>
 </resources>
 

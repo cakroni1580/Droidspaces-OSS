@@ -136,8 +136,9 @@
     <string name="container_is_running">Nagdagan ang container</string>
     <string name="changes_take_effect_after_restart">Ang mga kausaban mo-epekto pagkahuman sa restart</string>
     <string name="hostname_label_edit">Hostname</string>
-    <string name="enable_ipv6">I-enable ang IPv6</string>
-    <string name="enable_ipv6_description">I-enable ang IPv6 networking</string>
+    <string name="disable_ipv6">I-disable ang IPv6</string>
+    <string name="disable_ipv6_description">I-disable ang IPv6 niining container. Mahimong maputol ang mga VPN app sa host kung gi-disable ang IPv6.</string>
+    <string name="disable_ipv6_nat_forced">Kanunay nga naka-disable ang IPv6 sa NAT ug None nga network mode.</string>
     <string name="android_storage">Android Storage</string>
     <string name="android_storage_description">I-mount ang Android storage</string>
     <string name="hardware_access">Hardware Access</string>
