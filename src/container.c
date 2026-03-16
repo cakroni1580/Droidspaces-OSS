@@ -806,6 +806,11 @@ int start_rootfs(struct ds_config *cfg) {
             /* Start the dynamic route monitor thread to handle WiFi/Mobile
              * switches */
             ds_net_start_route_monitor();
+
+            /* Start the DNS proxy on 172.28.0.1:53.  Must come after
+             * setup_veth_host_side() so the bridge IP is already assigned.
+             * Skipped when --dns was given (custom servers bypass the proxy). */
+            ds_dns_proxy_start(cfg, netns_pid);
           }
         }
 

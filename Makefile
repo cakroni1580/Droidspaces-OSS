@@ -29,6 +29,7 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/ds_iptables.c \
        $(SRC_DIR)/ds_netlink.c \
        $(SRC_DIR)/ds_dhcp.c \
+	   $(SRC_DIR)/ds_dns_proxy.c \
        $(SRC_DIR)/check.c
 
 # Compiler flags — hardened warning set, all warnings are errors

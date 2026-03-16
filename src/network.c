@@ -775,12 +775,22 @@ int fix_networking_rootfs(struct ds_config *cfg) {
 
   write_file("/etc/hosts", hosts_content);
 
-  /* 3. resolv.conf (from in-memory config passed via cfg struct) */
+  /* 3. resolv.conf
+   *
+   * NAT mode without --dns:  write "nameserver 172.28.0.1" so every DNS query
+   * from inside the container goes to the proxy running on the bridge gateway.
+   * The proxy dynamically discovers and tracks the real upstream DNS — the
+   * container's resolv.conf never needs to change when interfaces switch.
+   *
+   * NAT mode with --dns / host mode / none mode:  write the explicit servers
+   * from the in-memory cfg (set by fix_networking_host) or fall back to the
+   * compiled-in defaults. */
   mkdir("/run/resolvconf", 0755);
-  if (cfg->dns_server_content[0]) {
+  if (cfg->net_mode == DS_NET_NAT && !cfg->dns_servers[0]) {
+    write_file("/run/resolvconf/resolv.conf", "nameserver " DS_NAT_GW_IP "\n");
+  } else if (cfg->dns_server_content[0]) {
     write_file("/run/resolvconf/resolv.conf", cfg->dns_server_content);
   } else {
-    /* Fallback if DNS content is empty */
     char dns_fallback[256];
     snprintf(dns_fallback, sizeof(dns_fallback),
              "nameserver %s\nnameserver %s\n", DS_DNS_DEFAULT_1,
@@ -985,14 +995,13 @@ static void do_upstream_reprobe(void) {
     ds_log("[NET] Route monitor: rule updated → from %s lookup %d (prio %d)",
            DS_DEFAULT_SUBNET, new_table, DS_RULE_PRIO_FROM_SUBNET);
 
-    /* Android's netd aggressively disables ip_forward when interfaces go down
-     * or when tethering is halted. Re-enable it whenever we find a valid active
-     * upstream to prevent the container's internet from falling into a black
-     * hole.
-     */
-    if (is_android()) {
+    if (is_android())
       write_file("/proc/sys/net/ipv4/ip_forward", "1");
-    }
+
+    /* Re-probe ISP DNS for the new upstream interface and hot-swap it into
+     * the proxy.  The container's resolv.conf still says 172.28.0.1 - no
+     * container-side changes needed at all. */
+    ds_dns_proxy_update_upstream(new_iface);
   } else {
     ds_warn("[NET] Route monitor: failed to install new rule for table %d",
             new_table);
@@ -1193,6 +1202,7 @@ void ds_net_cleanup(struct ds_config *cfg, pid_t container_pid) {
   } else {
     veth_host_name(effective_pid, veth_host, sizeof(veth_host));
     ds_dhcp_server_stop();
+    ds_dns_proxy_stop();
     ds_nl_del_link(ctx, veth_host);
   }
 

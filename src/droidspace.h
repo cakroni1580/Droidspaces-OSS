@@ -319,7 +319,8 @@ struct ds_config {
   /* Port forwarding (--port HOST:CONTAINER[/proto]) */
   struct ds_port_forward port_forwards[DS_MAX_PORT_FORWARDS];
   int port_forward_count;
-  char nat_container_ip[INET_ADDRSTRLEN]; /* assigned container IP, for cleanup */
+  char nat_container_ip[INET_ADDRSTRLEN]; /* assigned container IP, for cleanup
+                                           */
 
   /* Static NAT IP (--nat-ip, or auto-assigned on first boot and persisted).
    * Once set in container.config, this IP is reused on every subsequent boot
@@ -558,6 +559,29 @@ void ds_dhcp_server_start(struct ds_config *cfg, const char *veth_host,
 /* Stop the DHCP server and unblock its recv() loop. Call before veth teardown.
  */
 void ds_dhcp_server_stop(void);
+
+/* ---------------------------------------------------------------------------
+ * ds_dns_proxy.c
+ *
+ * Transparent DNS proxy for NAT containers.  Binds to DS_NAT_GW_IP:53 so
+ * the container can always reach it regardless of which host upstream is
+ * active.  Dynamically discovers the real ISP DNS and re-probes it when the
+ * route monitor switches interfaces.
+ *
+ * Only started in NAT mode when --dns is NOT given (custom DNS bypasses the
+ * proxy entirely - those servers are written directly to resolv.conf).
+ * ---------------------------------------------------------------------------*/
+
+/* Start the DNS proxy thread.  Must be called after setup_veth_host_side()
+ * so DS_NAT_GW_IP (172.28.0.1) is already assigned to the bridge/veth. */
+void ds_dns_proxy_start(struct ds_config *cfg, pid_t container_pid);
+
+/* Stop the proxy and join its thread.  Called from ds_net_cleanup(). */
+void ds_dns_proxy_stop(void);
+
+/* Re-probe upstream DNS for new_iface and update the proxy in-memory.
+ * Called from do_upstream_reprobe() when the route monitor switches tables. */
+void ds_dns_proxy_update_upstream(const char *new_iface);
 
 /* ---------------------------------------------------------------------------
  * terminal.c
