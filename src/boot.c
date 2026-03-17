@@ -268,18 +268,6 @@ int internal_boot(struct ds_config *cfg) {
     return -1;
   }
 
-  /* 10b. Optional: Mount binfmt_misc if supported by the kernel (Android only).
-   * This facilitates foreign architecture execution (e.g. via QEMU). */
-  if (is_android() && is_binfmt_misc_supported()) {
-    mkdir_p("proc/sys/fs/binfmt_misc", 0755);
-    if (domount("binfmt_misc", "proc/sys/fs/binfmt_misc", "binfmt_misc", 0,
-                NULL) < 0) {
-      /* This is non-fatal; may fail if already mounted or restricted. */
-      if (errno != EBUSY)
-        ds_warn("Failed to mount binfmt_misc: %s", strerror(errno));
-    }
-  }
-
   /* Mount /sys */
   if (domount("sysfs", "sys", "sysfs", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL) <
       0) {

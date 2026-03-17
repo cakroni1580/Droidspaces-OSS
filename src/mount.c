@@ -11,22 +11,6 @@
  * Helpers
  * ---------------------------------------------------------------------------*/
 
-int is_binfmt_misc_supported(void) {
-  FILE *f = fopen("/proc/filesystems", "re");
-  if (!f)
-    return 0;
-  char line[256];
-  int found = 0;
-  while (fgets(line, sizeof(line), f)) {
-    if (strstr(line, "binfmt_misc")) {
-      found = 1;
-      break;
-    }
-  }
-  fclose(f);
-  return found;
-}
-
 /* Check if a path is a mountpoint */
 int is_mountpoint(const char *path) {
   struct stat st1, st2;

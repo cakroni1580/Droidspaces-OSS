@@ -428,7 +428,6 @@ int get_container_mount_fstype(pid_t pid, const char *path, char *fstype,
 int detect_android_storage_in_container(pid_t pid);
 int detect_hw_access_in_container(pid_t pid);
 int is_mountpoint(const char *path);
-int is_binfmt_misc_supported(void);
 
 /* ---------------------------------------------------------------------------
  * cgroup.c
