@@ -61,21 +61,35 @@ This screen provides deep introspection into the running environment:
 - **Distribution Info**: Shows the Pretty Name, Version, Hostname, and **IP Address (IPv4)**.
 - **Available Users**: Lists detected users in the rootfs.
 - **Copy Login**: Choose a user from the dropdown and tap this to copy a command like `su -c 'droidspaces enter [user]'`. 
+- **Terminal**: Open an interactive Terminal Emulator inside from the container, natively on the Droidspaces app !
 - **Systemd Menu**: If the container uses systemd, a "Manage" button appears. Tapping it opens a list of all systemd services, allowing you to Start, Stop, or Restart individual services (e.g., SSH, Nginx, or a VNC server) directly from the app.
 
 ---
 
-## Entering the Container's Shell
+## Accessing the Container Shell
 
-**Droidspaces does not have a built-in terminal emulator.** This ensures maximum performance and allows you to use your preferred terminal setup.
+Droidspaces provides two primary ways to interact with your running Linux containers. Whether you want a quick check from within the app or a full-featured session in your favorite terminal, we've got you covered.
 
-To enter a container shell:
-1. Ensure the container is **RUNNING**.
-2. Go to the **Panel** tab and open the container's details.
-3. Choose your desired user (e.g., `root`) from the dropdown.
-4. Tap **Copy Login**.
-5. Open your favorite terminal emulator (like **Termux**) or use an **ADB shell** (Make sure to give them root access).
-6. Paste and run the command.
+### Method 1: Built-in Terminal (v5.7.0+)
+
+This is the most convenient way to quickly run commands without leaving the Droidspaces app.
+
+1.  Ensure the container is **RUNNING**.
+2.  Navigate to the **Panel** tab and tap the container to open its **Details**.
+3.  Find the **Terminal** card and tap **Open**.
+4.  Select the **User** you wish to log in as (e.g., `root` or your default user).
+5.  An interactive terminal will launch directly within the app.
+
+### Method 2: External Terminal (Copy Login)
+
+For power users who prefer **Termux**, **ADB**, or other terminal emulators, Droidspaces allows you to "attach" external sessions to the container.
+
+1.  Ensure the container is **RUNNING**.
+2.  Open the container **Details** in the **Panel** tab.
+3.  Select your desired user from the dropdown menu.
+4.  Tap **Copy Login**. This copies a command like `su -c 'droidspaces --name=[name enter [user]'` to your clipboard.
+5.  Open your preferred terminal (e.g., Termux) and **Paste** the command.
+6.  **Run** the command (ensure your terminal has root permissions granted from your root manager).
 
 ---
 
