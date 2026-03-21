@@ -374,22 +374,75 @@ void ds_dns_proxy_start(struct ds_config *cfg, pid_t container_pid) {
   pthread_mutex_init(&g_proxy.dns_mutex, NULL);
 
   /* Probe initial upstream DNS.
-   * Try each declared upstream interface in priority order and use the
-   * first that yields real DNS servers.  Wildcard patterns are skipped
-   * here (the route monitor's first reprobe will cover them). */
+   *
+   * On Android we first ask the kernel which interface is the active
+   * default internet network (via "ip rule show" - the same method the
+   * route monitor uses).  This resolves wildcard patterns correctly:
+   * a user who declares "rmnet*" would previously get no DNS on startup
+   * because all wildcard entries were skipped, falling through to the
+   * resolv.conf fallback which returns 1.1.1.1 instead of the real ISP
+   * DNS.  Using the ip rule result directly gives us the exact interface
+   * name regardless of what pattern the user wrote in the config.
+   *
+   * Probe order:
+   *   1. Android: ip rule → resolved iface name → dumpsys DNS
+   *   2. Android: literal entries in upstream_ifaces list (no wildcards)
+   *   3. systemd-resolved / /etc/resolv.conf fallback
+   *   4. compiled-in defaults (1.1.1.1 / 8.8.8.8) */
   char dns1[INET_ADDRSTRLEN] = {0}, dns2[INET_ADDRSTRLEN] = {0};
   int found = 0;
 
   if (is_android()) {
+    /* Step 1: use ip rule to find the actual default network interface.
+     * This works even when the user configured only wildcard patterns. */
+    char default_iface[IFNAMSIZ] = {0};
+    FILE *fp = popen("ip rule show 2>/dev/null", "r");
+    if (fp) {
+      char line[512];
+      while (fgets(line, sizeof(line), fp) && !found) {
+        if (!strstr(line, "fwmark 0x0/0xffff"))
+          continue;
+        if (!strstr(line, "iif lo"))
+          continue;
+        char *lookup = strstr(line, "lookup ");
+        if (!lookup)
+          continue;
+        lookup += 7;
+        size_t li = 0;
+        while (lookup[li] && lookup[li] != ' ' && lookup[li] != '\n' &&
+               lookup[li] != '\r' && li < (size_t)(IFNAMSIZ - 1))
+          li++;
+        if (li == 0)
+          continue;
+        memcpy(default_iface, lookup, li);
+        default_iface[li] = '\0';
+        if (strcmp(default_iface, "dummy0") == 0 ||
+            strcmp(default_iface, "lo") == 0 ||
+            strncmp(default_iface, "ds-", 3) == 0) {
+          default_iface[0] = '\0';
+          continue;
+        }
+        found = parse_dumpsys_dns(default_iface, dns1, dns2);
+        if (found)
+          ds_log("[DNS] Initial upstream DNS via ip rule iface '%s': "
+                 "%s / %s",
+                 default_iface, dns1, dns2[0] ? dns2 : "(none)");
+      }
+      pclose(fp);
+    }
+
+    /* Step 2: try literal entries from the upstream_ifaces config list */
     for (int i = 0; i < cfg->upstream_iface_count && !found; i++) {
       const char *iface = cfg->upstream_ifaces[i];
       if (strchr(iface, '*') || strchr(iface, '?'))
-        continue;
+        continue; /* skip wildcards - already handled above */
       found = parse_dumpsys_dns(iface, dns1, dns2);
     }
   }
+
+  /* Step 3 & 4: resolv.conf / compiled-in defaults */
   if (!found)
-    probe_upstream_dns(NULL, dns1, dns2); /* resolv.conf fallback */
+    probe_upstream_dns(NULL, dns1, dns2);
 
   g_proxy.dns1 = inet_addr(dns1);
   g_proxy.dns2 = inet_addr(dns2);

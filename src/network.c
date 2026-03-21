@@ -100,6 +100,67 @@ static int iface_matches_pattern(const char *pattern, const char *iface) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Android default network detection via kernel ip rules
+ *
+ * Android's netd inserts exactly one rule of the form:
+ *   "<prio>: from all fwmark 0x0/0xffff iif lo lookup <iface>"
+ * for the active default internet network. This rule is the kernel's
+ * ground truth - it's set atomically when the default network changes
+ * (wifi ↔ mobile data ↔ handoff).
+ *
+ * IMS/MMS-only interfaces (rmnet_data1, rmnet_data6 etc) NEVER appear
+ * in this rule - they use explicit fwmarks (0xd0064, 0xd0066 etc).
+ * Only the true internet interface that Qualcomm IPA/MTK CCCI has
+ * hardware reply sessions for will appear here.
+ *
+ * Returns 1 and fills iface_out (IFNAMSIZ) on success, 0 on failure.
+ * ---------------------------------------------------------------------------*/
+static int ds_net_get_android_default_iface_from_rules(char *iface_out) {
+  FILE *fp = popen("ip rule show 2>/dev/null", "r");
+  if (!fp)
+    return 0;
+
+  char line[512];
+  int found = 0;
+
+  while (fgets(line, sizeof(line), fp) && !found) {
+    /* Match lines containing both "fwmark 0x0/0xffff" and "iif lo" */
+    if (!strstr(line, "fwmark 0x0/0xffff"))
+      continue;
+    if (!strstr(line, "iif lo"))
+      continue;
+
+    char *lookup = strstr(line, "lookup ");
+    if (!lookup)
+      continue;
+    lookup += 7;
+
+    /* Copy interface name until whitespace/newline */
+    size_t i = 0;
+    while (lookup[i] && lookup[i] != ' ' && lookup[i] != '\n' &&
+           lookup[i] != '\r' && lookup[i] != '\t' && i < (size_t)(IFNAMSIZ - 1))
+      i++;
+    if (i == 0)
+      continue;
+
+    char iface[IFNAMSIZ];
+    memcpy(iface, lookup, i);
+    iface[i] = '\0';
+
+    /* Skip non-real interfaces */
+    if (strcmp(iface, "dummy0") == 0 || strcmp(iface, "lo") == 0 ||
+        strncmp(iface, "ds-", 3) == 0)
+      continue;
+
+    safe_strncpy(iface_out, iface, IFNAMSIZ);
+    found = 1;
+  }
+
+  pclose(fp);
+  return found;
+}
+
+/* ---------------------------------------------------------------------------
  * Public helper: populate a ds_net_handshake from a container init PID
  * ---------------------------------------------------------------------------*/
 
@@ -902,8 +963,59 @@ int detect_ipv6_in_container(pid_t pid) {
  * An empty string means "never matched yet". */
 static char g_last_wildcard_match[DS_MAX_UPSTREAM_IFACES][IFNAMSIZ];
 
+/* Last interface returned by the ip rule probe.  Suppresses the
+ * "[NET] Android default network:" log line on every 1.5s heartbeat -
+ * only log when the interface actually changes. */
+static char g_last_iprule_iface[IFNAMSIZ];
+
+/* Set to 1 when we've already warned about ip rule probe failure.
+ * Cleared when the probe succeeds again, so the next failure after
+ * a working period logs once more. */
+static int g_iprule_fail_warned;
+
 static int find_active_upstream(ds_nl_ctx_t *ctx, char *iface_out,
                                 int *table_out) {
+  /* On Android, use the kernel ip rule "fwmark 0x0/0xffff iif lo lookup
+   * <iface>" as the primary detection method.  This rule is set by netd
+   * for the active default internet network only - IMS/MMS-only interfaces
+   * (rmnet_data1, rmnet_data6 etc) never appear here.  This also ensures
+   * we pick the interface Qualcomm IPA / MTK CCCI has hardware reply
+   * sessions for, which is required for NAT'd forwarded traffic to work.
+   *
+   * This replaces the old priority-list-first approach which would pick
+   * the first RUNNING rmnet_data* with a default route - often an IMS
+   * interface that is RUNNING and has routes but whose IPA sessions only
+   * serve locally-originated Android traffic, not forwarded container
+   * packets. */
+  if (is_android()) {
+    char default_iface[IFNAMSIZ] = {0};
+    if (ds_net_get_android_default_iface_from_rules(default_iface) &&
+        default_iface[0] && iface_is_running(default_iface)) {
+      int tbl = 0;
+      if (ds_nl_get_iface_table(ctx, default_iface, &tbl) == 0) {
+        if (strcmp(g_last_iprule_iface, default_iface) != 0) {
+          ds_log("[NET] Android default network: %s (table %d) [ip rule]",
+                 default_iface, tbl);
+          safe_strncpy(g_last_iprule_iface, default_iface,
+                       sizeof(g_last_iprule_iface));
+        }
+        g_iprule_fail_warned = 0; /* reset so next failure logs once */
+        if (iface_out)
+          safe_strncpy(iface_out, default_iface, IFNAMSIZ);
+        if (table_out)
+          *table_out = tbl;
+        return 0;
+      }
+    }
+    if (!g_iprule_fail_warned) {
+      ds_warn("[NET] ip rule probe failed - falling back to priority list");
+      g_iprule_fail_warned = 1;
+    }
+    g_last_iprule_iface[0] = '\0';
+  }
+
+  /* Non-Android path (or Android fallback): scan the user-declared
+   * upstream interface list in priority order. */
   for (int i = 0; i < g_upstream_count; i++) {
     const char *pattern = g_upstream_ifaces[i];
 
