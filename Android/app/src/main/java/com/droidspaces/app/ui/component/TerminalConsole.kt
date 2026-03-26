@@ -113,33 +113,45 @@ fun TerminalConsole(
             }
     }
 
-    // Reset scroller when a new operation starts
-    LaunchedEffect(isProcessing) {
-        if (isProcessing) {
-            userScrolledUp = false
-            isAutoScrolling = false
-        }
-    }
+    // Use a single non-restarting collector for all scroll triggers to prevent
+    // "double-bouncing" (where snapsFlow and isProcessing-flip compete).
+    LaunchedEffect(Unit) {
+        // Track the last processing state to detect the start of a new operation
+        var wasProcessing = false
 
-    // logs.size handles new lines; maxValue handles layout settling after measurement.
-    LaunchedEffect(logs.size, verticalScrollState.maxValue) {
-        if (!userScrolledUp) {
-            // Wait for measurement to stabilize before animating
-            kotlinx.coroutines.delay(50)
-            isAutoScrolling = true
-            try {
-                verticalScrollState.animateScrollTo(
-                    value = verticalScrollState.maxValue,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                )
-            } finally {
-                // Ensure we reset auto-scrolling flag even if cancelled
-                isAutoScrolling = false
+        snapshotFlow { Triple(logs.size, verticalScrollState.maxValue, isProcessing) }
+            .collect { (_, maxValue, processing) ->
+                // Reset scroller state when a new operation starts
+                if (processing && !wasProcessing) {
+                    userScrolledUp = false
+                    isAutoScrolling = false
+                }
+                wasProcessing = processing
+
+                // Only auto-scroll if the user hasn't manually scrolled up
+                if (!userScrolledUp) {
+                    // Small delay to let the layout settle for the new line
+                    kotlinx.coroutines.delay(50)
+
+                    // Only animate if there's actually a distance to cover.
+                    // This prevents the "double bounce" where we trigger an animation
+                    // even if we are already at the target maxValue.
+                    if (verticalScrollState.value < maxValue) {
+                        isAutoScrolling = true
+                        try {
+                            verticalScrollState.animateScrollTo(
+                                value = maxValue,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                )
+                            )
+                        } finally {
+                            isAutoScrolling = false
+                        }
+                    }
+                }
             }
-        }
     }
 
     val defaultTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
