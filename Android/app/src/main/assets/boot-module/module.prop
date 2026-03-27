@@ -1,6 +1,6 @@
 id=droidspaces
-name=Droidspaces: Run-at-Boot
-version=v1
-versionCode=1000
+name=Droidspaces: Daemon & Init
+version=v5.9
+versionCode=5900
 author=ravindu644
-description=Automatically starts containers installed with Droidspaces when "Run at Boot" is enabled
+description=Automatically starts the Droidspaces daemon if "Daemon Mode" is enabled, and starts containers during boot if "Run-at-Boot" is active.
