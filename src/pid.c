@@ -42,14 +42,6 @@ int ensure_workspace(void) {
   mkdir(get_net_dir(), 0755);
   mkdir(get_logs_dir(), 0755);
 
-  /* Also ensure /data/local/Droidspaces/mounts on Android */
-  if (is_android()) {
-    char mounts_path[PATH_MAX];
-    snprintf(mounts_path, sizeof(mounts_path), "%s/mounts",
-             DS_WORKSPACE_ANDROID);
-    mkdir(mounts_path, 0755);
-  }
-
   return 0;
 }
 
