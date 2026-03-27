@@ -1,3 +1,5 @@
+;; UNTESTED - WILL CLEAN THIS MESS AND UPDATE ONCE I GOT SOME FREE TIME
+
 ;; Define Types
 (type droidspacesd)
 (typeattribute base_typeattr_31_0 droidspacesd)

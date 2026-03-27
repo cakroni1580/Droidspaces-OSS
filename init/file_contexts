@@ -1,2 +1,4 @@
+# UNTESTED - WILL CLEAN THIS MESS AND UPDATE ONCE I GOT SOME FREE TIME
+
 /data/local/Droidspaces/bin/droidspaces  u:object_r:droidspacesd_exec:s0
 /data/local/Droidspaces(/.*)?              u:object_r:droidspaces_data_file:s0
