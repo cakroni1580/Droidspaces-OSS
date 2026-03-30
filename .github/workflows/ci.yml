@@ -8,15 +8,15 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
     inputs:
-      tag_name:
-        description: 'Tag name for the release (e.g., v4.3.1)'
-        required: false
-        default: 'test'
       create_release:
         description: 'Create an Official GitHub Release?'
         required: true
         type: boolean
         default: false
+      tag_name:
+        description: 'Tag name (Only used if Release is checked)'
+        required: false
+        default: 'test'
 
 jobs:
   build:
@@ -93,9 +93,47 @@ jobs:
         TAG="${{ github.event.inputs.tag_name || 'test' }}"
         DATE=$(date +%Y-%m-%d)
         APK_NAME="Droidspaces-universal-${TAG}-${DATE}.apk"
+        TAR_NAME=$(ls droidspaces-v*-*.tar.gz)
         mkdir -p dist
         mv Android/app/build/outputs/apk/release/app-release.apk dist/${APK_NAME}
-        mv droidspaces-v*-*.tar.gz dist/
+        mv ${TAR_NAME} dist/
+        echo "APK_FILE=dist/${APK_NAME}" >> $GITHUB_ENV
+        echo "TAR_FILE=dist/${TAR_NAME}" >> $GITHUB_ENV
+
+    - name: Generate Telegram Message
+      if: github.event_name != 'pull_request'
+      run: |
+        EVENT_TYPE="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true' && 'Official Release' || 'Git Push' }}"
+        COMMIT_MSG=$(git log -1 --pretty=format:%B)
+        {
+          echo "TELEGRAM_MESSAGE<<EOF"
+          echo "**Droidspaces Build Successful**"
+          echo ""
+          echo "**Repository:** [${{ github.repository }}](https://github.com/${{ github.repository }})"
+          echo "**Author:** [${{ github.actor }}](https://github.com/${{ github.actor }})"
+          echo "**Event:** $EVENT_TYPE"
+          echo ""
+          echo "**Commit Message:**"
+          echo ""
+          echo "\`\`\`"
+          echo "$COMMIT_MSG"
+          echo "\`\`\`"
+          echo "EOF"
+        } >> "$GITHUB_ENV"
+
+    - name: Send Telegram Notification
+      if: github.event_name != 'pull_request'
+      uses: xz-dev/TelegramFileUploader@v1
+      with:
+        to-who: ${{ secrets.TELEGRAM_TO }}
+        message: ${{ env.TELEGRAM_MESSAGE }}
+        files: |
+          ${{ env.APK_FILE }}
+          ${{ env.TAR_FILE }}
+      env:
+        API_ID: ${{ secrets.API_ID }}
+        API_HASH: ${{ secrets.API_HASH }}
+        BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
 
     - name: Upload Final Artifacts (APK & Tarball)
       uses: actions/upload-artifact@v4
