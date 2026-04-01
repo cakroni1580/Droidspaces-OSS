@@ -456,13 +456,12 @@ void ds_cgroup_cleanup_container(const char *container_name);
 
 int scan_host_gpu_gids(gid_t *gids, int max_gids);
 void mirror_gpu_nodes(const char *dev_path);
-int setup_gpu_groups(gid_t *gpu_gids, int gid_count);
+int setup_gpu_groups(void);
 void stop_termux_if_running(void);
 int setup_unified_tmpfs(void);
 void cleanup_unified_tmpfs(void);
 int setup_x11_and_virgl_sockets(struct ds_config *cfg);
-int setup_hardware_access(struct ds_config *cfg, gid_t *gpu_gids,
-                          int gid_count);
+int setup_hardware_access(struct ds_config *cfg);
 
 /* ---------------------------------------------------------------------------
  * network.c

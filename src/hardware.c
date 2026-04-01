@@ -26,6 +26,20 @@
 #endif
 
 /*
+ * Unified GPU group bridge.
+ *
+ * Every hardware node mirrored into the container is chowned to this group.
+ * root is added to it in setup_gpu_groups() so GPU access works regardless
+ * of which host GID the node originally carried (GID 44 for video, GID 1006
+ * for render, etc.). Users can be added manually with usermod.
+ *
+ * GID 786 is well outside the standard Debian/Ubuntu range (0-999 system,
+ * 1000+ users) and has never been assigned to a named group in the FHS.
+ */
+#define DS_GPU_GROUP_NAME "droidspaces-gpu"
+#define DS_GPU_UNIFIED_GID 786
+
+/*
  * Shared GPU/hardware device lists.
  *
  * Both scan_host_gpu_gids() and mirror_gpu_nodes() iterate these tables.
@@ -521,8 +535,15 @@ static void mirror_gpu_node(const char *host_path, const char *dev_path) {
   /* Check current state of the target */
   struct stat tgt_st;
   if (lstat(tgt, &tgt_st) == 0) {
-    if (S_ISCHR(tgt_st.st_mode))
-      return; /* devtmpfs already has a proper node - nothing to do */
+    if (S_ISCHR(tgt_st.st_mode)) {
+      /* devtmpfs already has a proper node. Re-own it to the unified group
+       * so the container user can access it regardless of the host GID. */
+      if (chown(tgt, 0, DS_GPU_UNIFIED_GID) < 0)
+        ds_warn("[GPU] chown (pre-existing) %s → unified group: %s", tgt,
+                strerror(errno));
+      chmod(tgt, 0660);
+      return;
+    }
 
     /* devtmpfs created an empty directory placeholder instead of a node
      * (the /dev/kgsl-3d0 case seen in the screenshot).  Nuke it. */
@@ -545,7 +566,13 @@ static void mirror_gpu_node(const char *host_path, const char *dev_path) {
             strerror(errno));
     return;
   }
-  chmod(tgt, host_st.st_mode & 0666);
+
+  /* Force ownership to the unified GPU group so UID 1000 can access
+   * the node regardless of which GID the host assigned to it. */
+  if (chown(tgt, 0, DS_GPU_UNIFIED_GID) < 0)
+    ds_warn("[GPU] chown %s → unified group: %s", tgt, strerror(errno));
+  chmod(tgt, 0660);
+
   ds_log("[GPU] Mirrored missing node: %-30s (%d:%d)", tgt,
          (int)major(host_st.st_rdev), (int)minor(host_st.st_rdev));
 }
@@ -635,10 +662,7 @@ static int has_user(const char *users, const char *username) {
   return 0;
 }
 
-int setup_gpu_groups(gid_t *gpu_gids, int gid_count) {
-  if (gid_count <= 0)
-    return 0;
-
+int setup_gpu_groups(void) {
   /* Check if /etc/group exists - some minimal rootfs may not have it */
   if (access("/etc/group", F_OK) != 0) {
     ds_warn("No /etc/group found, skipping GPU group setup");
@@ -662,30 +686,17 @@ int setup_gpu_groups(gid_t *gpu_gids, int gid_count) {
     return -1;
   }
 
-  /* Track which GIDs we found in the file */
-  int *found_gids = calloc((size_t)gid_count, sizeof(int));
-  if (!found_gids) {
-    ds_warn("Memory allocation failed for GPU group tracking");
-    fclose(fin);
-    fclose(fout);
-    return -1;
-  }
-
   char line[2048];
   int modified_count = 0;
+  int unified_group_found = 0; /* set when DS_GPU_GROUP_NAME is seen */
 
   while (fgets(line, sizeof(line), fin)) {
-    /* Format: name:password:GID:user_list
-     * We need to find the GID (3rd field) */
-    char name[256];
-    int gid_val;
+    /* Format: name:password:GID:user_list */
     char *users_ptr = NULL;
 
-    /* Manual parsing to be safe and extract user list pointer */
     char line_copy[2048];
     safe_strncpy(line_copy, line, sizeof(line_copy));
 
-    /* Remove trailing newline for parsing */
     char *nl = strrchr(line_copy, '\n');
     if (nl)
       *nl = '\0';
@@ -709,42 +720,29 @@ int setup_gpu_groups(gid_t *gpu_gids, int gid_count) {
     }
 
     if (gid_str && users_ptr) {
-      gid_val = atoi(gid_str);
+      int gid_val = atoi(gid_str);
 
-      /* Check if this GID is one of our target GPU GIDs */
-      int gpu_idx = -1;
-      for (int i = 0; i < gid_count; i++) {
-        if (gpu_gids[i] == (gid_t)gid_val) {
-          gpu_idx = i;
-          break;
-        }
-      }
+      /* If the unified group already exists, ensure root is a member */
+      if (gid_val == DS_GPU_UNIFIED_GID) {
+        unified_group_found = 1;
 
-      if (gpu_idx != -1) {
-        found_gids[gpu_idx] = 1;
-
-        /* Check if 'root' is already in the user list */
         if (!has_user(users_ptr, "root")) {
-          /* Extract group name for logging */
-          p = line_copy;
-          int i = 0;
-          while (*p && *p != ':' && i < 255)
-            name[i++] = *p++;
-          name[i] = '\0';
-
-          /* Add root to the members list */
-          if (strlen(users_ptr) > 0)
-            fprintf(fout, "%.*s:%s,root\n", (int)(users_ptr - line_copy - 1),
-                    line_copy, users_ptr);
+          char new_members[2048];
+          safe_strncpy(new_members, users_ptr, sizeof(new_members));
+          if (strlen(new_members) > 0)
+            strncat(new_members, ",root",
+                    sizeof(new_members) - strlen(new_members) - 1);
           else
-            fprintf(fout, "%.*s:root\n", (int)(users_ptr - line_copy - 1),
-                    line_copy);
+            safe_strncpy(new_members, "root", sizeof(new_members));
 
-          ds_log("[GPU] Added root to existing group '%s' (GID %d)", name,
-                 gid_val);
+          fprintf(fout, "%.*s:%s\n", (int)(users_ptr - line_copy - 1),
+                  line_copy, new_members);
+          ds_log("[GPU] Updated " DS_GPU_GROUP_NAME " (GID %d) members: %s",
+                 DS_GPU_UNIFIED_GID, new_members);
           modified_count++;
-          continue; /* Skip the default fputs below */
+          continue;
         }
+        /* root already present - fall through to fputs */
       }
     }
 
@@ -752,19 +750,16 @@ int setup_gpu_groups(gid_t *gpu_gids, int gid_count) {
     fputs(line, fout);
   }
 
-  /* Append absolutely missing GPU groups */
-  for (int i = 0; i < gid_count; i++) {
-    if (!found_gids[i]) {
-      fprintf(fout, "gpu_%d:x:%d:root\n", (int)gpu_gids[i], (int)gpu_gids[i]);
-      ds_log("[GPU] Created new GPU group gpu_%d (GID %d)", (int)gpu_gids[i],
-             (int)gpu_gids[i]);
-      modified_count++;
-    }
+  /* Create the unified group if it wasn't already in the file */
+  if (!unified_group_found) {
+    fprintf(fout, DS_GPU_GROUP_NAME ":x:%d:root\n", DS_GPU_UNIFIED_GID);
+    ds_log("[GPU] Created unified group " DS_GPU_GROUP_NAME " (GID %d)",
+           DS_GPU_UNIFIED_GID);
+    modified_count++;
   }
 
   fclose(fin);
   fclose(fout);
-  free(found_gids);
 
   /* Atomic replacement */
   if (modified_count > 0) {
@@ -956,11 +951,10 @@ int setup_x11_and_virgl_sockets(struct ds_config *cfg) {
  * prevent the container from booting.
  *
  */
-int setup_hardware_access(struct ds_config *cfg, gid_t *gpu_gids,
-                          int gid_count) {
+int setup_hardware_access(struct ds_config *cfg) {
   /* 1. Create GPU groups inside the container */
   if (cfg->hw_access)
-    setup_gpu_groups(gpu_gids, gid_count);
+    setup_gpu_groups();
 
   /* 2. Mount X11 socket for GUI applications (always attempt on Linux, check
    * flag on Android) */

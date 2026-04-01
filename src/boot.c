@@ -247,18 +247,12 @@ int internal_boot(struct ds_config *cfg) {
     return -1;
   }
 
-  /* 9. Scan host GPU device GIDs (BEFORE pivot_root - need host /dev) */
-  gid_t gpu_gids[DS_MAX_GPU_GROUPS];
-  int gpu_gid_count = 0;
+  /* 9. Log hardware access mode (BEFORE pivot_root) */
   if (!cfg->reboot_cycle) {
-    if (cfg->hw_access) {
+    if (cfg->hw_access)
       ds_log("Setting up hardware access...");
-      gpu_gid_count = scan_host_gpu_gids(gpu_gids, DS_MAX_GPU_GROUPS);
-    } else {
+    else
       ds_log("Hardware access disabled: using isolated tmpfs...");
-    }
-  } else if (cfg->hw_access) {
-    gpu_gid_count = scan_host_gpu_gids(gpu_gids, DS_MAX_GPU_GROUPS);
   }
 
   /* 10. Mount virtual filesystems (proc, sys) */
@@ -434,7 +428,7 @@ int internal_boot(struct ds_config *cfg) {
   fix_networking_rootfs(cfg);
 
   /* 20. Setup GPU groups and X11 socket (AFTER pivot_root) */
-  setup_hardware_access(cfg, gpu_gids, gpu_gid_count);
+  setup_hardware_access(cfg);
 
   /* Log bind mounts and boot (after hw-access logs for clean ordering) */
   if (!cfg->reboot_cycle) {
