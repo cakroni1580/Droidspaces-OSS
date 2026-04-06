@@ -876,6 +876,8 @@ int main(int argc, char **argv) {
 
   if (optind >= argc) {
     ds_error(C_BOLD "Missing command" C_RESET);
+    ds_log("Run '" C_BOLD "%s help" C_RESET "' for usage information.",
+           cfg.prog_name);
     ret = 1;
     goto cleanup;
   }
@@ -1077,6 +1079,8 @@ int main(int argc, char **argv) {
   }
 
   ds_error("Unknown command: '%s'", cmd);
+  ds_log("Run '" C_BOLD "%s help" C_RESET "' for usage information.",
+         cfg.prog_name);
   ret = 1;
 
 cleanup:
