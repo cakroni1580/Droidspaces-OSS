@@ -719,19 +719,6 @@ int start_rootfs(struct ds_config *cfg) {
         _exit(EXIT_FAILURE);
       }
 
-      /* Intermediate: redirect stdio to /dev/null immediately.
-       * It only exists to wait for init and has no business talking to the
-       * user's terminal or holding pipes open. */
-      if (!cfg->foreground) {
-        int devnull = open("/dev/null", O_RDWR);
-        if (devnull >= 0) {
-          dup2(devnull, 0);
-          dup2(devnull, 1);
-          dup2(devnull, 2);
-          close(devnull);
-        }
-      }
-
       pid_t init_pid = fork();
       if (init_pid < 0)
         _exit(EXIT_FAILURE);
@@ -747,6 +734,28 @@ int start_rootfs(struct ds_config *cfg) {
         }
         close(sync_pipe[1]);
         _exit(internal_boot(cfg));
+      }
+
+      /* Intermediate: redirect stdio to /dev/null NOW (after forking init).
+       * It only exists to wait for init and has no business talking to the
+       * user's terminal or holding pipes open.
+       *
+       * BUG FIX: this redirect was previously placed BEFORE the fork(), which
+       * caused init_pid to inherit /dev/null for fd 1 and fd 2. Every
+       * ds_log() call inside internal_boot() writes to stdout, so all boot
+       * logs were silently swallowed by /dev/null - visible only in the log
+       * file (which uses direct file I/O, not stdout). Moving the redirect
+       * here means only the intermediate itself goes silent; internal_boot()
+       * retains the original terminal fds until it redirects to /dev/console
+       * at its own step 24. */
+      if (!cfg->foreground) {
+        int devnull = open("/dev/null", O_RDWR);
+        if (devnull >= 0) {
+          dup2(devnull, 0);
+          dup2(devnull, 1);
+          dup2(devnull, 2);
+          close(devnull);
+        }
       }
 
       /* Send init PID to monitor so it can target /proc/<pid>/ns/net */
@@ -1701,7 +1710,7 @@ int show_info(struct ds_config *cfg, int trust_cfg_pid) {
   /* Host info */
   const char *host = is_android() ? "Android" : "Linux";
   const char *arch = get_architecture();
-  printf("\n" C_GREEN "Host:" C_RESET " %s %s\n", host, arch);
+  printf(C_GREEN "Host:" C_RESET " %s %s\n", host, arch);
 
   /* Case 1: No container name specified */
   if (cfg->container_name[0] == '\0') {

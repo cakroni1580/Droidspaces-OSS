@@ -252,7 +252,7 @@ int internal_boot(struct ds_config *cfg) {
     if (cfg->hw_access)
       ds_log("Setting up hardware access...");
     else if (cfg->gpu_mode)
-      ds_log("GPU mode enabled: mirroring GPU nodes into isolated tmpfs...");
+      ds_log("Setting up GPU-only access...");
     else
       ds_log("Hardware access disabled: using isolated tmpfs...");
   }
