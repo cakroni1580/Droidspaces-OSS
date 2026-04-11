@@ -87,10 +87,6 @@ static int check_pivot_root(void) {
 
 static int check_loop(void) { return access("/dev/loop-control", F_OK) == 0; }
 
-static int check_cgroup_devices(void) {
-  return grep_file("/proc/cgroups", "devices");
-}
-
 static int check_seccomp(void) {
   /* Probe for SECCOMP_MODE_FILTER support */
   return (prctl(PR_GET_SECCOMP, 0, 0, 0, 0) >= 0 || errno == EINVAL);
@@ -165,11 +161,9 @@ static int check_kernel_version_supported(void) {
  * Minimal check for 'start' (used internaly)
  * ---------------------------------------------------------------------------*/
 
-int check_requirements(void) {
-  return check_requirements_hw(0, 0);
-}
+int check_requirements(void) { return check_requirements_hw(0); }
 
-int check_requirements_hw(int hw_access, int force_cgroupv1) {
+int check_requirements_hw(int hw_access) {
   int missing = 0;
 
   if (!check_root()) {
@@ -211,13 +205,6 @@ int check_requirements_hw(int hw_access, int force_cgroupv1) {
     ds_error("pivot_root syscall is not supported on the current filesystem");
     ds_log("Droidspaces requires a rootfs that supports pivot_root (not "
            "ramfs).");
-    missing++;
-  }
-
-  /* cgroup 'devices' controller is v1-only; not needed on cgroupv2 */
-  if (force_cgroupv1 && !check_cgroup_devices()) {
-    ds_error("Legacy cgroup v1 mode requires the 'devices' controller "
-             "but it is missing from this kernel.");
     missing++;
   }
 
@@ -327,7 +314,6 @@ int check_requirements_detailed(void) {
   print_ds_check("IPC namespace", "Inter-process communication isolation",
                  has_ipc_ns, "MUST");
 
-
   int has_pivot = check_pivot_root();
   if (!has_pivot)
     missing_must++;
@@ -385,14 +371,10 @@ int check_requirements_detailed(void) {
                  check_ns(CLONE_NEWCGROUP, "cgroup"), "OPT");
 
   int has_devtmpfs = grep_file("/proc/filesystems", "devtmpfs");
-  print_ds_check("devtmpfs support",
-                 "Required for hardware access mode; tmpfs fallback used otherwise",
-                 has_devtmpfs, "OPT");
-
-  int has_cg_dev = check_cgroup_devices();
-  print_ds_check("cgroup devices support",
-                 "Required for legacy cgroup v1 mode; not needed on cgroupv2",
-                 has_cg_dev, "OPT");
+  print_ds_check(
+      "devtmpfs support",
+      "Required for hardware access mode; tmpfs fallback used otherwise",
+      has_devtmpfs, "OPT");
 
   /* OPTIONAL */
   check_append("\n" C_BOLD "[OPTIONAL]" C_RESET

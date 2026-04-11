@@ -104,8 +104,8 @@ int domount(const char *src, const char *tgt, const char *fstype,
 }
 
 /* Like domount but logs failures at [DEBUG] level - used for best-effort
- * mounts where failure is expected on some devices (e.g. cgroup bind-mounts
- * on ROMs with non-standard controller paths). */
+ * mounts where failure is expected on some environments (e.g. cgroup
+ * bind-mounts on ROMs with non-standard controller paths). */
 int domount_silent(const char *src, const char *tgt, const char *fstype,
                    unsigned long flags, const char *data) {
   if (mount(src, tgt, fstype, flags, data) < 0) {
