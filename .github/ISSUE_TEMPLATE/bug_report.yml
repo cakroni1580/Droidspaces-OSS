@@ -66,6 +66,16 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: networking-mode
+    attributes:
+      label: Networking Mode
+      options:
+        - NAT
+        - Host
+    validations:
+      required: true
+
   - type: textarea
     id: bug-description
     attributes:
