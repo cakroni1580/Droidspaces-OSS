@@ -4,6 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import kotlinx.coroutines.delay
 import com.droidspaces.app.util.AnimationUtils
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -104,12 +106,15 @@ fun RootCheckScreen(
                 .padding(innerPadding)
                 .padding(24.dp),
             contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-                modifier = Modifier.fillMaxWidth()
             ) {
+                val scrollState = rememberScrollState()
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                ) {
                     // Title - fades in first
                     Text(
                         text = context.getString(R.string.root_check_title),

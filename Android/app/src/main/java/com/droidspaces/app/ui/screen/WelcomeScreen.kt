@@ -4,8 +4,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import kotlinx.coroutines.delay
 import com.droidspaces.app.util.AnimationUtils
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Storage
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.res.painterResource
+import com.droidspaces.app.R
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,8 +23,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
-import com.droidspaces.app.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,17 +78,20 @@ fun WelcomeScreen(
                 .padding(24.dp),
             contentAlignment = Alignment.Center
             ) {
+                val scrollState = rememberScrollState()
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(32.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    verticalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterVertically),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
                 ) {
                     // Icon - fades in first
                     Icon(
-                        imageVector = Icons.Default.Storage,
+                        painter = painterResource(id = R.drawable.ic_tux),
                         contentDescription = null,
                         modifier = Modifier
-                            .size(80.dp)
+                            .size(150.dp)
                             .alpha(iconAlpha),
                         tint = MaterialTheme.colorScheme.primary
                     )
