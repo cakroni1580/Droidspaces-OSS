@@ -8,8 +8,8 @@ body:
     attributes:
       value: |
         ## ⚠️ STRICT ENFORCEMENT NOTICE
-        **If you do not provide a link to your kernel source, this issue will be closed instantly without a reply.**
-        We do not support "Frankenstein" kernels held together by duct tape, CRC nukes, or broken ABIs.
+        Duct-taped GKI kernels (CRC nukes, broken ABIs) are strictly unsupported.
+        *Non-GKI kernels (< 5.x) have an excuse for legacy oddities, but source code is still needed to provide support.*
 
   - type: input
     id: kernel-version
