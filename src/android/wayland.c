@@ -46,8 +46,9 @@ int ds_setup_wayland_socket(struct ds_config *cfg) {
   setenv("KWIN_COMPOSE", "Q", 1);
   setenv("KWIN_OPENGL_INTERFACE", "egl", 1);
   setenv("LIBGL_ALWAYS_SOFTWARE", "0", 1);
+  setenv("WLR_BACKENDS", "wayland", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
 
-  ds_log("[Wayland] environment configured:");
   ds_log("[Wayland]   XDG_RUNTIME_DIR=/run/droidspaces");
   ds_log("[Wayland]   WAYLAND_DISPLAY=wayland-1");
 
