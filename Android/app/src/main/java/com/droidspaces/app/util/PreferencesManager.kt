@@ -3,6 +3,10 @@ package com.droidspaces.app.util
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * Ultra-optimized PreferencesManager with zero-allocation hot paths.
@@ -136,7 +140,7 @@ class PreferencesManager private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_DAEMON_MODE_ENABLED, false)
         set(value) {
             prefs.edit().putBoolean(KEY_DAEMON_MODE_ENABLED, value).apply()
-            syncDaemonMode(value)
+            DaemonModeRepository.writeToDisk(value)
         }
 
     var isSymlinkEnabled: Boolean
@@ -152,32 +156,35 @@ class PreferencesManager private constructor(context: Context) {
         }
 
     /**
-     * Sync daemon mode preference to the root-protected file on disk.
-     * writes 1 if enabled, 0 if disabled.
+     * Reactive stream of the daemon-mode preference — emits the current value and
+     * every later change (including writes from [syncDaemonModeFromDisk] /
+     * DaemonModeRepository), so the UI can collect it with
+     * collectAsStateWithLifecycle() instead of a hand-rolled change listener.
      */
-    private fun syncDaemonMode(enabled: Boolean) {
-        val value = if (enabled) "1" else "0"
-        val path = Constants.DAEMON_MODE_FILE
-        // Use non-blocking shell command to write the file
-        com.topjohnwu.superuser.Shell.cmd("echo '$value' > '$path'").submit()
-    }
+    val daemonModeFlow: Flow<Boolean> = booleanPrefFlow(KEY_DAEMON_MODE_ENABLED, false)
+
+    /** Reactive stream of the symlink-enabled preference. */
+    val symlinkEnabledFlow: Flow<Boolean> = booleanPrefFlow(KEY_SYMLINK_ENABLED, false)
+
+    private fun booleanPrefFlow(key: String, default: Boolean): Flow<Boolean> = callbackFlow {
+        trySend(prefs.getBoolean(key, default))
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == key || changedKey == null) trySend(prefs.getBoolean(key, default))
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
 
     /**
      * Sync daemon mode preference from the root-protected file on disk.
      * Updates SharedPreferences if the file exists and differs.
      */
     fun syncDaemonModeFromDisk() {
-        val path = Constants.DAEMON_MODE_FILE
-        // Use blocking shell command to read the file state accurately
-        val result = com.topjohnwu.superuser.Shell.cmd("cat '$path' 2>/dev/null").exec()
-        if (result.isSuccess && result.out.isNotEmpty()) {
-            val diskValue = result.out[0].trim()
-            val enabled = diskValue == "1"
-            if (isDaemonModeEnabled != enabled) {
-                // Update SharedPreferences ONLY (avoiding recursive syncDaemonMode call)
-                // This will trigger the OnSharedPreferenceChangeListener in the UI
-                prefs.edit().putBoolean(KEY_DAEMON_MODE_ENABLED, enabled).apply()
-            }
+        val enabled = DaemonModeRepository.readFromDisk() ?: return
+        if (isDaemonModeEnabled != enabled) {
+            // Update SharedPreferences ONLY (avoiding a recursive setter/disk write).
+            // This triggers the OnSharedPreferenceChangeListener in the UI.
+            prefs.edit().putBoolean(KEY_DAEMON_MODE_ENABLED, enabled).apply()
         }
     }
 
@@ -287,6 +294,8 @@ class PreferencesManager private constructor(context: Context) {
     }
 
     fun addCustomRepo(name: String, url: String) {
+        // Only HTTPS repos — the rootfs manifest/payload must not be MITM-able (V13).
+        if (!url.startsWith("https://", ignoreCase = true)) return
         val current = getCustomRepos().toMutableList()
         if (current.any { it.second == url }) return
         current.add(name to url)

@@ -214,12 +214,7 @@ private fun AddPortForwardDialog(
                         isError = hostError != null || widthError != null || overlapError != null,
                         supportingText = { Text(hostError ?: widthError ?: overlapError ?: "") },
                         shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                            focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-                        )
+                        colors = DsTextFieldDefaults.surfaceColors()
                     )
 
                     OutlinedTextField(
@@ -232,12 +227,7 @@ private fun AddPortForwardDialog(
                         isError = containerError != null || widthError != null || overlapError != null,
                         supportingText = { Text(containerError ?: widthError ?: overlapError ?: context.getString(R.string.optional_symmetric_hint)) },
                         shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                            focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-                        )
+                        colors = DsTextFieldDefaults.surfaceColors()
                     )
 
                     DsDropdown(
@@ -249,41 +239,14 @@ private fun AddPortForwardDialog(
                     )
                 }
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Surface(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(onClick = onDismiss),
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-                        tonalElevation = 0.dp
-                    ) {
-                        Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                            Text(context.getString(R.string.cancel), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                    Surface(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(
-                            enabled = isFormValid,
-                            onClick = {
-                                if (isFormValid) {
-                                    onConfirm(PortForward(hostPort.trim(), if (containerPort.isBlank()) null else containerPort.trim(), proto))
-                                }
-                            }
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (isFormValid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                        tonalElevation = 0.dp
-                    ) {
-                        Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                context.getString(R.string.add),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isFormValid) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                            )
-                        }
-                    }
-                }
+                DialogFooterRow(
+                    dismissLabel = context.getString(R.string.cancel),
+                    confirmLabel = context.getString(R.string.add),
+                    onDismiss = onDismiss,
+                    onConfirm = { onConfirm(PortForward(hostPort.trim(), if (containerPort.isBlank()) null else containerPort.trim(), proto)) },
+                    confirmEnabled = isFormValid,
+                    cancelBorderAlpha = 0.35f
+                )
             }
         }
     }

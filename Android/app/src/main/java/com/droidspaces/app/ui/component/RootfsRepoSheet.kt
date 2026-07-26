@@ -367,26 +367,7 @@ private fun RootfsAssetCard(
                 }
 
                 if (displayLabel.isNotEmpty()) {
-                    Surface(
-                        color = statusColor.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.2f))
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Surface(modifier = Modifier.size(6.dp), shape = CircleShape, color = statusColor) {}
-                            Text(
-                                text = displayLabel,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 0.5.sp,
-                                color = statusColor
-                            )
-                        }
-                    }
+                    StatusPill(label = displayLabel, color = statusColor)
                 }
             }
 
@@ -668,12 +649,7 @@ private fun RepoManagerDialog(
     var urlError  by remember { mutableStateOf("") }
 
     val fieldShape  = RoundedCornerShape(14.dp)
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        unfocusedBorderColor    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        focusedBorderColor      = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-        unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-        focusedContainerColor   = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-    )
+    val fieldColors = DsTextFieldDefaults.surfaceColors()
 
     fun tryAdd() {
         val n = newName.trim(); val u = newUrl.trim()
@@ -847,32 +823,18 @@ private fun RepoManagerDialog(
                 Spacer(Modifier.height(16.dp))
 
                 // Single footer row: Close / Save
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Surface(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(onClick = onDismiss),
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-                    ) {
-                        Box(Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                            Text(context.getString(R.string.cancel), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                    Surface(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable {
-                            val currentUrls = repos.map { it.second }.toSet()
-                            val toRemove = originalUrls.filter { it !in currentUrls }
-                            val toAdd    = repos.filter { it.second !in originalUrls }
-                            onSave(toAdd, toRemove)
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    ) {
-                        Box(Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                            Text(context.getString(R.string.ok), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimary)
-                        }
-                    }
-                }
+                DialogFooterRow(
+                    dismissLabel = context.getString(R.string.cancel),
+                    confirmLabel = context.getString(R.string.ok),
+                    onDismiss = onDismiss,
+                    onConfirm = {
+                        val currentUrls = repos.map { it.second }.toSet()
+                        val toRemove = originalUrls.filter { it !in currentUrls }
+                        val toAdd = repos.filter { it.second !in originalUrls }
+                        onSave(toAdd, toRemove)
+                    },
+                    cancelBorderAlpha = 0.35f
+                )
             }
         }
     }

@@ -28,6 +28,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import com.droidspaces.app.util.ContainerCommandBuilder
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
@@ -127,7 +128,7 @@ fun FilePickerDialog(
             }
             if (targetDir != currentPath && targetDir.isNotEmpty()) {
                 val exists = withContext(Dispatchers.IO) {
-                    val result = Shell.cmd("[ -d \"$targetDir\" ] && echo yes").exec()
+                    val result = Shell.cmd("[ -d ${ContainerCommandBuilder.quote(targetDir)} ] && echo yes").exec()
                     result.isSuccess && result.out.firstOrNull() == "yes"
                 }
                 if (exists) {
@@ -216,12 +217,7 @@ fun FilePickerDialog(
                             fontFamily = JetBrainsMono
                         ),
                         shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                            focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-                        )
+                        colors = DsTextFieldDefaults.surfaceColors()
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -297,32 +293,13 @@ fun FilePickerDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Surface(
-                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(onClick = onDismiss),
-                            shape = RoundedCornerShape(14.dp),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                            tonalElevation = 0.dp
-                        ) {
-                            Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                                Text(context.getString(R.string.cancel), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        Surface(
-                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(onClick = {
-                                clearFocus()
-                                onConfirm(currentPath)
-                            }),
-                            shape = RoundedCornerShape(14.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            tonalElevation = 0.dp
-                        ) {
-                            Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                                Text(context.getString(R.string.select_folder), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
-                            }
-                        }
-                    }
+                    DialogFooterRow(
+                        dismissLabel = context.getString(R.string.cancel),
+                        confirmLabel = context.getString(R.string.select_folder),
+                        onDismiss = onDismiss,
+                        onConfirm = { clearFocus(); onConfirm(currentPath) },
+                        textFontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -373,7 +350,7 @@ private fun FileItemRow(
 }
 
 private suspend fun fetchItems(path: String, showFiles: Boolean): List<FileItem> = withContext(Dispatchers.IO) {
-    val result = Shell.cmd("ls -F \"$path\" 2>/dev/null").exec()
+    val result = Shell.cmd("ls -F ${ContainerCommandBuilder.quote(path)} 2>/dev/null").exec()
     if (!result.isSuccess) return@withContext emptyList()
 
     result.out.mapNotNull { line ->

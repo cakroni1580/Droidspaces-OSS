@@ -30,17 +30,19 @@ import com.droidspaces.app.util.ValidationUtils
  * opens a dialog for the optional interface / LAN-name / bridge overrides. All
  * validation errors come from [errors]; the caller blocks Save/Next on `errors.isValid`.
  */
+/** Grouped gateway-mode overrides (replaces 4 separate value/onChange param pairs). */
+data class GatewayConfig(
+    val container: String = "",
+    val net: String = "",
+    val iface: String = "",
+    val bridge: String = "",
+)
+
 @Composable
 fun GatewaySettingsSection(
     visible: Boolean,
-    gatewayContainer: String,
-    onGatewayContainerChange: (String) -> Unit,
-    gatewayNet: String,
-    onGatewayNetChange: (String) -> Unit,
-    gatewayIface: String,
-    onGatewayIfaceChange: (String) -> Unit,
-    gatewayBridge: String,
-    onGatewayBridgeChange: (String) -> Unit,
+    config: GatewayConfig,
+    onConfigChange: (GatewayConfig) -> Unit,
     selfName: String,
     installedContainers: List<ContainerInfo>,
     errors: GatewayErrors
@@ -75,10 +77,10 @@ fun GatewaySettingsSection(
             val noCandidates = candidates.isEmpty()
             DsDropdown(
                 label = context.getString(R.string.gateway_container),
-                selected = gatewayContainer,
+                selected = config.container,
                 options = candidates,
                 displayName = { it },
-                onSelect = onGatewayContainerChange,
+                onSelect = { onConfigChange(config.copy(container = it)) },
                 leadingIcon = Icons.Default.Router,
                 isError = errors.container != null,
                 supportingText = if (noCandidates)
@@ -111,15 +113,13 @@ fun GatewaySettingsSection(
     if (showDialog) {
         GatewayConfigureDialog(
             selfName = selfName,
-            gatewayContainer = gatewayContainer,
+            gatewayContainer = config.container,
             installed = installedContainers,
-            initialNet = gatewayNet,
-            initialIface = gatewayIface,
-            initialBridge = gatewayBridge,
+            initialNet = config.net,
+            initialIface = config.iface,
+            initialBridge = config.bridge,
             onConfirm = { net, iface, bridge ->
-                onGatewayNetChange(net)
-                onGatewayIfaceChange(iface)
-                onGatewayBridgeChange(bridge)
+                onConfigChange(config.copy(net = net, iface = iface, bridge = bridge))
                 showDialog = false
             },
             onDismiss = { showDialog = false }
@@ -204,40 +204,13 @@ private fun GatewayConfigureDialog(
                     error = errs.bridge
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Surface(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(onClick = onDismiss),
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                        tonalElevation = 0.dp
-                    ) {
-                        Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                            Text(context.getString(R.string.cancel), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                    Surface(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(
-                            enabled = advancedValid,
-                            onClick = { onConfirm(net, iface, bridge) }
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (advancedValid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                        tonalElevation = 0.dp
-                    ) {
-                        Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                context.getString(R.string.ok),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (advancedValid) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                            )
-                        }
-                    }
-                }
+                DialogFooterRow(
+                    dismissLabel = context.getString(R.string.cancel),
+                    confirmLabel = context.getString(R.string.ok),
+                    onDismiss = onDismiss,
+                    onConfirm = { onConfirm(net, iface, bridge) },
+                    confirmEnabled = advancedValid
+                )
             }
         }
     }
@@ -267,12 +240,7 @@ private fun ExplainedField(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            )
+            colors = DsTextFieldDefaults.colors()
         )
     }
 }
