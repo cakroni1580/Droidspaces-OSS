@@ -514,7 +514,7 @@ fun ContainerConfigForm(
         )
 
         ToggleCard(
-            icon = Icons.AutoMirrored.Filled.VolumeUp,
+            icon = Icons.Default.Devices,
             title = context.getString(R.string.enable_wayland),
             description = context.getString(R.string.enable_wayland_description),
             checked = state.enableWayland,
