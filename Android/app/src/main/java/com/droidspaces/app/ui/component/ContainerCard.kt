@@ -38,25 +38,44 @@ import com.droidspaces.app.util.ContainerStatus
 import com.droidspaces.app.util.Constants
 import com.droidspaces.app.util.IconUtils
 
+/**
+ * Per-item callbacks for [ContainerCard], grouped so the call site passes one
+ * stable object instead of 11 separate lambdas.
+ */
+data class ContainerCardActions(
+    val onStart: () -> Unit = {},
+    val onStop: () -> Unit = {},
+    val onRestart: () -> Unit = {},
+    val onEdit: () -> Unit = {},
+    val onEnter: () -> Unit = {},
+    val onUninstall: () -> Unit = {},
+    val onMigrate: () -> Unit = {},
+    val onResize: () -> Unit = {},
+    val onExport: () -> Unit = {},
+    val onToggleExpand: () -> Unit = {},
+    val onShowLogs: () -> Unit = {},
+)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ContainerCard(
     container: ContainerInfo,
-    onStart: () -> Unit = {},
-    onStop: () -> Unit = {},
-    onRestart: () -> Unit = {},
-    onEdit: () -> Unit = {},
-    onEnter: () -> Unit = {},
-    onUninstall: () -> Unit = {},
-    onMigrate: () -> Unit = {},
-    onResize: () -> Unit = {},
-    onExport: () -> Unit = {},
+    actions: ContainerCardActions = ContainerCardActions(),
     isOperationRunning: Boolean = false,
     isExpanded: Boolean = false,
-    onToggleExpand: () -> Unit = {},
-    onShowLogs: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val onStart = actions.onStart
+    val onStop = actions.onStop
+    val onRestart = actions.onRestart
+    val onEdit = actions.onEdit
+    val onEnter = actions.onEnter
+    val onUninstall = actions.onUninstall
+    val onMigrate = actions.onMigrate
+    val onResize = actions.onResize
+    val onExport = actions.onExport
+    val onToggleExpand = actions.onToggleExpand
+    val onShowLogs = actions.onShowLogs
     val context = LocalContext.current
     val cardShape = RoundedCornerShape(20.dp)
 
@@ -127,26 +146,7 @@ fun ContainerCard(
                         ContainerStatus.STOPPED -> context.getString(R.string.status_stopped) to MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     }
 
-                    Surface(
-                        color = statusColor.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.2f))
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Surface(modifier = Modifier.size(6.dp), shape = CircleShape, color = statusColor) {}
-                            Text(
-                                text = statusText.uppercase(),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 0.5.sp,
-                                color = statusColor
-                            )
-                        }
-                    }
+                    StatusPill(label = statusText.uppercase(), color = statusColor)
                 }
             }
             
@@ -173,24 +173,27 @@ fun ContainerCard(
                 }
             }
 
-            // Options Row
-            val options = mutableListOf<String>()
-            if (container.disableIPv6) options.add(context.getString(R.string.ipv6_option))
-            if (container.enableAndroidStorage) options.add(context.getString(R.string.storage_option))
-            if (container.enableHwAccess) options.add(context.getString(R.string.hw_option))
-            if (container.enableGpuMode || container.enableHwAccess) options.add(context.getString(R.string.gpu_option))
-            if (container.enableTermuxX11) options.add(context.getString(R.string.x11_option))
-            if (container.enableVirgl) options.add(context.getString(R.string.virgl_option))
-            if (container.enablePulseaudio) options.add(context.getString(R.string.pulseaudio_option))
-            if (container.enableWayland && Constants.isArm64) options.add(context.getString(R.string.wayland_option))
-            if (container.selinuxPermissive) options.add(context.getString(R.string.selinux_permissive_option))
-            if (container.allowUserns) options.add(context.getString(R.string.userns_option))
-            if (container.volatileMode) options.add(context.getString(R.string.volatile_option))
-            if (container.forceCgroupv1) options.add(context.getString(R.string.cgroup_v1_option))
-            if (container.blockNestedNs) options.add(context.getString(R.string.deadlock_shield_option))
-            if (container.privileged.isNotEmpty()) options.add(context.getString(R.string.privileged_option))
-            if (container.customInit.isNotEmpty()) options.add(context.getString(R.string.custom_init_option))
-            if (container.runAtBoot) options.add(context.getString(R.string.run_at_boot))
+            // Options Row — depends only on stable container fields, so build once per container.
+            val options = remember(container) {
+                buildList {
+                    if (container.disableIPv6) add(context.getString(R.string.ipv6_option))
+                    if (container.enableAndroidStorage) add(context.getString(R.string.storage_option))
+                    if (container.enableHwAccess) add(context.getString(R.string.hw_option))
+                    if (container.enableGpuMode || container.enableHwAccess) add(context.getString(R.string.gpu_option))
+                    if (container.enableTermuxX11) add(context.getString(R.string.x11_option))
+                    if (container.enableVirgl) add(context.getString(R.string.virgl_option))
+                    if (container.enablePulseaudio) add(context.getString(R.string.pulseaudio_option))
+                    if (container.enableWayland && Constants.isArm64) options.add(context.getString(R.string.wayland_option))
+                    if (container.selinuxPermissive) add(context.getString(R.string.selinux_permissive_option))
+                    if (container.allowUserns) add(context.getString(R.string.userns_option))
+                    if (container.volatileMode) add(context.getString(R.string.volatile_option))
+                    if (container.forceCgroupv1) add(context.getString(R.string.cgroup_v1_option))
+                    if (container.blockNestedNs) add(context.getString(R.string.deadlock_shield_option))
+                    if (container.privileged.isNotEmpty()) add(context.getString(R.string.privileged_option))
+                    if (container.customInit.isNotEmpty()) add(context.getString(R.string.custom_init_option))
+                    if (container.runAtBoot) add(context.getString(R.string.run_at_boot))
+                }
+            }
             if (options.isNotEmpty()) {
                 Text(context.getString(R.string.options_label, options.joinToString(", ")), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
             }

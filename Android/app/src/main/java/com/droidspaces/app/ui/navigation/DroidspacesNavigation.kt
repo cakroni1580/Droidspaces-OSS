@@ -110,6 +110,22 @@ sealed class Screen(val route: String) {
     data object WaylandDisplay : Screen("wayland_display")
 }
 
+/**
+ * Resolve the install-wizard [ContainerInstallationViewModel] scoped to the first
+ * wizard screen's back-stack entry (so all wizard steps share one instance),
+ * falling back to the current entry if that route isn't on the stack.
+ */
+@Composable
+private fun wizardScopedViewModel(
+    navController: NavHostController,
+    backStackEntry: NavBackStackEntry
+): ContainerInstallationViewModel = viewModel(
+    remember(backStackEntry) {
+        runCatching { navController.getBackStackEntry(Screen.ContainerName.route) }
+            .getOrElse { backStackEntry }
+    }
+)
+
 @Composable
 fun DroidspacesNavigation(
     navController: NavHostController = rememberNavController(),
@@ -342,47 +358,14 @@ fun DroidspacesNavigation(
             enterTransition = defaultEnterTransition,
             exitTransition = defaultExitTransition
         ) { backStackEntry ->
-            val viewModel: ContainerInstallationViewModel = viewModel(
-                remember(backStackEntry) {
-                    runCatching { navController.getBackStackEntry(Screen.ContainerName.route) }
-                        .getOrElse { backStackEntry }
-                }
-            )
+            val viewModel = wizardScopedViewModel(navController, backStackEntry)
 
             ContainerConfigScreen(
-                initialNetMode = viewModel.netMode,
-                initialDisableIPv6 = viewModel.disableIPv6,
-                initialEnableAndroidStorage = viewModel.enableAndroidStorage,
-                initialEnableHwAccess = viewModel.enableHwAccess,
-                initialEnableGpuMode = viewModel.enableGpuMode,
-                initialEnableTermuxX11 = viewModel.enableTermuxX11,
-                initialTx11ExtraFlags = viewModel.tx11ExtraFlags,
-                initialEnableVirgl = viewModel.enableVirgl,
-                initialVirglExtraFlags = viewModel.virglExtraFlags,
-                initialEnablePulseaudio = viewModel.enablePulseaudio,
-                initialEnableWayland = viewModel.enableWayland,
-                initialSelinuxPermissive = viewModel.selinuxPermissive,
-                initialAllowUserns = viewModel.allowUserns,
-                initialVolatileMode = viewModel.volatileMode,
-                initialBindMounts = viewModel.bindMounts,
-                initialDnsServers = viewModel.dnsServers,
-                initialRunAtBoot = viewModel.runAtBoot,
-                initialCustomInit = viewModel.customInit,
-                initialStaticNatIp = viewModel.staticNatIp,
-                initialForceCgroupv1 = viewModel.forceCgroupv1,
-                initialBlockNestedNs = viewModel.blockNestedNs,
-                initialPrivileged = viewModel.privileged,
-                initialEnvFileContent = viewModel.envFileContent ?: "",
-                initialUpstreamInterfaces = viewModel.upstreamInterfaces,
-                initialPortForwards = viewModel.portForwards,
-                initialGatewayContainer = viewModel.gatewayContainer,
-                initialGatewayNet = viewModel.gatewayNet,
-                initialGatewayIface = viewModel.gatewayIface,
-                initialGatewayBridge = viewModel.gatewayBridge,
+                initialState = viewModel.configState,
                 containerName = viewModel.containerName,
                 installedContainers = sharedContainerViewModel.containerList,
-                onNext = { netMode, disableIPv6, enableAndroidStorage, enableHwAccess, enableGpuMode, enableTermuxX11, tx11ExtraFlags, enableVirgl, virglExtraFlags, enablePulseaudio, enableWayland, selinuxPermissive, allowUserns, volatileMode, bindMounts, dnsServers, runAtBoot, customInit, staticNatIp, forceCgroupv1, blockNestedNs, privileged, envFileContent, upstreamInterfaces, portForwards, gatewayContainer, gatewayNet, gatewayIface, gatewayBridge ->
-                    viewModel.setConfig(netMode, disableIPv6, enableAndroidStorage, enableHwAccess, enableGpuMode, enableTermuxX11, tx11ExtraFlags, enableVirgl, virglExtraFlags, enablePulseaudio, enableWayland, selinuxPermissive, allowUserns, volatileMode, bindMounts, dnsServers, runAtBoot, customInit, staticNatIp, envFileContent, upstreamInterfaces, portForwards, forceCgroupv1, blockNestedNs, privileged, gatewayContainer, gatewayNet, gatewayIface, gatewayBridge)
+                onNext = { state ->
+                    viewModel.setConfig(state)
                     navController.navigate(Screen.SparseImageConfig.route)
                 },
                 onBack = {
@@ -396,12 +379,7 @@ fun DroidspacesNavigation(
             enterTransition = defaultEnterTransition,
             exitTransition = defaultExitTransition
         ) { backStackEntry ->
-            val viewModel: ContainerInstallationViewModel = viewModel(
-                remember(backStackEntry) {
-                    runCatching { navController.getBackStackEntry(Screen.ContainerName.route) }
-                        .getOrElse { backStackEntry }
-                }
-            )
+            val viewModel = wizardScopedViewModel(navController, backStackEntry)
 
             SparseImageConfigScreen(
                 initialUseSparseImage = viewModel.useSparseImage,
@@ -421,12 +399,7 @@ fun DroidspacesNavigation(
             enterTransition = defaultEnterTransition,
             exitTransition = defaultExitTransition
         ) { backStackEntry ->
-            val viewModel: ContainerInstallationViewModel = viewModel(
-                remember(backStackEntry) {
-                    runCatching { navController.getBackStackEntry(Screen.ContainerName.route) }
-                        .getOrElse { backStackEntry }
-                }
-            )
+            val viewModel = wizardScopedViewModel(navController, backStackEntry)
             val config = viewModel.buildConfig()
             val tarballUri = viewModel.tarballUri
             val ctx = LocalContext.current
@@ -472,12 +445,7 @@ fun DroidspacesNavigation(
             enterTransition = defaultEnterTransition,
             exitTransition = defaultExitTransition
         ) { backStackEntry ->
-            val viewModel: ContainerInstallationViewModel = viewModel(
-                remember(backStackEntry) {
-                    runCatching { navController.getBackStackEntry(Screen.ContainerName.route) }
-                        .getOrElse { backStackEntry }
-                }
-            )
+            val viewModel = wizardScopedViewModel(navController, backStackEntry)
             val config = viewModel.buildConfig()
             val tarballUri = viewModel.tarballUri
 

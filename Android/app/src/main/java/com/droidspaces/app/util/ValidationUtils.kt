@@ -46,6 +46,15 @@ object ValidationUtils {
     }
 
     /**
+     * The character-safety half of [validateContainerName], WITHOUT the length
+     * limit. Used to drop a container whose on-disk config name carries shell
+     * metacharacters before it can reach a root command — while still loading
+     * over-length-but-safe legacy names. See VULN V10.
+     */
+    fun isSafeContainerName(name: String): Boolean =
+        name.isNotEmpty() && name.matches(Regex("^[a-zA-Z0-9_\\s.-]+$"))
+
+    /**
      * Validates hostname: only numbers, letters (lowercase and uppercase), and dashes allowed.
      * Empty is allowed (will use container name as default).
      */
@@ -69,6 +78,35 @@ object ValidationUtils {
         return name.replace(Regex("[\\s_.]+"), "-")
             .replace(Regex("[^a-zA-Z0-9-]"), "")
             .trim('-')
+    }
+
+    /** Count non-comment `key=value` lines in an env-file body. */
+    fun countEnvVars(content: String?): Int {
+        if (content.isNullOrBlank()) return 0
+        return content.lines()
+            .map { it.trim() }
+            .count { it.isNotEmpty() && !it.startsWith("#") && it.contains("=") }
+    }
+
+    /**
+     * Reject line breaks / control characters in the single-line container-config
+     * values. Each is written as a `key=value` line into the root-owned
+     * container.config parsed by the privileged backend, so a newline would inject
+     * an extra trusted key. `envFileContent` is intentionally excluded — it is
+     * legitimately multi-line and written to a separate `.env` file. See VULN V11.
+     */
+    fun validateConfigValues(config: ContainerInfo): ValidationResult {
+        fun hasControl(v: String) = v.any { it.isISOControl() }
+        val invalid = listOf(
+            config.dnsServers, config.staticNatIp, config.customInit,
+            config.tx11ExtraFlags, config.virglExtraFlags, config.privileged,
+            config.gatewayContainer, config.gatewayNet, config.gatewayIface, config.gatewayBridge
+        ).any { hasControl(it) }
+        return if (invalid) {
+            ValidationResult.Error("Configuration values must not contain line breaks")
+        } else {
+            ValidationResult.Success
+        }
     }
 
     // ---- Gateway networking mode --------------------------------------------

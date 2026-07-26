@@ -29,7 +29,7 @@ data class ContainerInfo(
     val name: String,
     val hostname: String,
     val rootfsPath: String,
-    val netMode: String = "nat",
+    val netMode: String = Constants.DEFAULT_NET_MODE,
     val disableIPv6: Boolean = false,
     val enableAndroidStorage: Boolean = false,
     val enableHwAccess: Boolean = false,
@@ -239,7 +239,7 @@ object ContainerManager {
     private fun loadContainerConfig(configPath: String, defaultName: String): ContainerInfo? {
         try {
             // Read config file using shell (quoted for safety)
-            val readResult = Shell.cmd("cat \"$configPath\" 2>/dev/null").exec()
+            val readResult = Shell.cmd("cat ${ContainerCommandBuilder.quote(configPath)} 2>/dev/null").exec()
 
             if (!readResult.isSuccess || readResult.out.isEmpty()) {
                 return null
@@ -275,6 +275,12 @@ object ContainerManager {
 
             // Build ContainerInfo from config
             val containerName = configMap["name"] ?: defaultName
+            // Drop a container whose on-disk name carries shell metacharacters before
+            // it can reach a root command (VULN V10). Over-length-but-safe names still load.
+            if (!ValidationUtils.isSafeContainerName(containerName)) {
+                android.util.Log.w("ContainerManager", "Skipping container with unsafe name in config")
+                return null
+            }
             val useSparseImage = configMap["use_sparse_image"] == "1"
             val sparseImageSizeGB = configMap["sparse_image_size_gb"]?.toIntOrNull()
 
@@ -314,7 +320,7 @@ object ContainerManager {
                 } else {
                     getRootfsPath(containerName)
                 },
-                netMode = configMap["net_mode"] ?: "host",
+                netMode = configMap["net_mode"] ?: Constants.DEFAULT_NET_MODE,
                 disableIPv6 = configMap["disable_ipv6"] == "1",
                 enableAndroidStorage = configMap["enable_android_storage"] == "1",
                 enableHwAccess = configMap["enable_hw_access"] == "1",
@@ -359,7 +365,7 @@ object ContainerManager {
      */
     private fun loadEnvFileContent(containerName: String): String? {
         val envFilePath = "${getContainerDirectory(containerName)}/.env"
-        val readResult = Shell.cmd("cat \"$envFilePath\" 2>/dev/null").exec()
+        val readResult = Shell.cmd("cat ${ContainerCommandBuilder.quote(envFilePath)} 2>/dev/null").exec()
         return if (readResult.isSuccess && readResult.out.isNotEmpty()) {
             readResult.out.joinToString("\n")
         } else {
@@ -462,6 +468,10 @@ object ContainerManager {
         newConfig: ContainerInfo
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            // Reject control chars in single-line config values (VULN V11).
+            ValidationUtils.validateConfigValues(newConfig).errorMessage?.let {
+                return@withContext Result.failure(Exception(it))
+            }
             val sanitizedName = sanitizeContainerName(containerName)
             val configPath = "$CONTAINERS_BASE_PATH/$sanitizedName/${Constants.CONTAINER_CONFIG_FILE}"
 
@@ -470,7 +480,7 @@ object ContainerManager {
             val configToWrite = if (newConfig.uuid.isNotEmpty()) {
                 newConfig
             } else {
-                val existingContent = Shell.cmd("cat \"$configPath\" 2>/dev/null").exec()
+                val existingContent = Shell.cmd("cat ${ContainerCommandBuilder.quote(configPath)} 2>/dev/null").exec()
                     .out.joinToString("\n")
                 val existingUuid = existingContent.lines()
                     .firstOrNull { it.startsWith("uuid=") }
@@ -482,12 +492,12 @@ object ContainerManager {
             // Handle .env file
             val envFilePath = "${getContainerDirectory(containerName)}/.env"
             if (newConfig.envFileContent.isNullOrBlank()) {
-                Shell.cmd("rm -f \"$envFilePath\"").exec()
+                Shell.cmd("rm -f ${ContainerCommandBuilder.quote(envFilePath)}").exec()
             } else {
                 val tempEnvFile = File("${context.cacheDir}/.env_${sanitizedName}")
                 tempEnvFile.writeText(newConfig.envFileContent + "\n")
-                Shell.cmd("cp \"${tempEnvFile.absolutePath}\" \"$envFilePath\"").exec()
-                Shell.cmd("chmod 644 \"$envFilePath\"").exec()
+                Shell.cmd("cp ${ContainerCommandBuilder.quote(tempEnvFile.absolutePath)} ${ContainerCommandBuilder.quote(envFilePath)}").exec()
+                Shell.cmd("chmod 644 ${ContainerCommandBuilder.quote(envFilePath)}").exec()
                 tempEnvFile.delete()
             }
 
@@ -498,7 +508,7 @@ object ContainerManager {
 
             // Copy temp config to final location using shell (root required)
             // Quote paths to handle spaces and special characters
-            val copyResult = Shell.cmd("cp \"${tempConfigFile.absolutePath}\" \"$configPath\" 2>&1").exec()
+            val copyResult = Shell.cmd("cp ${ContainerCommandBuilder.quote(tempConfigFile.absolutePath)} ${ContainerCommandBuilder.quote(configPath)} 2>&1").exec()
             if (!copyResult.isSuccess) {
                 // Check both stdout and stderr for error messages
                 val errorOutput = (copyResult.out + copyResult.err).joinToString("\n").trim()
@@ -508,7 +518,7 @@ object ContainerManager {
             }
 
             // Set proper permissions
-            val chmodResult = Shell.cmd("chmod 644 \"$configPath\" 2>&1").exec()
+            val chmodResult = Shell.cmd("chmod 644 ${ContainerCommandBuilder.quote(configPath)} 2>&1").exec()
             if (!chmodResult.isSuccess) {
                 // Non-fatal, but log warning
             }
@@ -593,7 +603,7 @@ object ContainerManager {
             logger.i("Container path: $containerPath")
 
             // Use rm -rf to recursively delete the entire container directory
-            val deleteCommand = "rm -rf \"$containerPath\" 2>&1"
+            val deleteCommand = "rm -rf ${ContainerCommandBuilder.quote(containerPath)} 2>&1"
             logger.i("Executing: $deleteCommand")
 
             val deleteResult = Shell.cmd(deleteCommand).exec()
@@ -624,7 +634,7 @@ object ContainerManager {
             // Verify deletion
             logger.i("")
             logger.i("Verifying deletion...")
-            val verifyResult = Shell.cmd("test -d \"$containerPath\" && echo 'exists' || echo 'deleted' 2>&1").exec()
+            val verifyResult = Shell.cmd("test -d ${ContainerCommandBuilder.quote(containerPath)} && echo 'exists' || echo 'deleted' 2>&1").exec()
             if (verifyResult.out.any { it.contains("exists") }) {
                 logger.e("Warning: Container directory still exists after deletion attempt!")
                 return@withContext Result.failure(Exception("Container directory still exists after deletion"))

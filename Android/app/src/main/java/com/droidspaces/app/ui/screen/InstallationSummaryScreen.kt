@@ -1,4 +1,6 @@
 package com.droidspaces.app.ui.screen
+
+import com.droidspaces.app.ui.component.PrimaryActionBottomBar
 import androidx.compose.ui.graphics.Color
 
 import androidx.compose.foundation.BorderStroke
@@ -35,8 +37,6 @@ fun InstallationSummaryScreen(
     onInstall: () -> Unit,
     onBack: () -> Unit
 ) {
-    val btnShape = RoundedCornerShape(20.dp)
-
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -50,56 +50,12 @@ fun InstallationSummaryScreen(
             )
         },
         bottomBar = {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.98f),
-                tonalElevation = 0.dp
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                        thickness = 1.dp
-                    )
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp)
-                            .navigationBarsPadding()
-                            .clip(btnShape)
-                            .clickable(
-                                onClick = onInstall,
-                                indication = rememberRipple(bounded = true),
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                            ),
-                        shape = btnShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        tonalElevation = 0.dp
-                    ) {
-                        Box(
-                            modifier = Modifier.padding(vertical = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.InstallMobile,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
-                                Text(
-                                    stringResource(R.string.install_container),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            PrimaryActionBottomBar(
+                label = stringResource(R.string.install_container),
+                icon = Icons.Default.InstallMobile,
+                onClick = onInstall,
+                barColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.98f)
+            )
         }
     ) { innerPadding ->
         Column(
@@ -179,14 +135,7 @@ fun InstallationSummaryScreen(
                     if (config.blockNestedNs) SummaryItem(stringResource(R.string.manual_deadlock_shield), stringResource(R.string.enabled_legend), Icons.Default.GppBad)
                     if (config.privileged.isNotEmpty()) SummaryItem(stringResource(R.string.privileged_mode), config.privileged, Icons.Default.GppMaybe)
 
-                    fun countEnvVars(content: String?): Int {
-                        if (content.isNullOrBlank()) return 0
-                        return content.lines()
-                            .map { it.trim() }
-                            .count { it.isNotEmpty() && !it.startsWith("#") && it.contains("=") }
-                    }
-
-                    val envCount = countEnvVars(config.envFileContent)
+                    val envCount = com.droidspaces.app.util.ValidationUtils.countEnvVars(config.envFileContent)
                     if (envCount > 0) {
                         SummaryItem(stringResource(R.string.environment_variables), stringResource(R.string.environment_variables_configured, envCount), Icons.Default.Code)
                     }
@@ -231,10 +180,32 @@ fun InstallationSummaryScreen(
 }
 
 @Composable
+private fun SummaryItem(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector) =
+    SummaryItem(label, value) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+        )
+    }
+
+@Composable
+private fun SummaryItem(label: String, value: String, icon: androidx.compose.ui.graphics.painter.Painter) =
+    SummaryItem(label, value) {
+        Icon(
+            painter = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+        )
+    }
+
+@Composable
 private fun SummaryItem(
     label: String,
     value: String,
-    icon: Any
+    icon: @Composable () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -243,24 +214,7 @@ private fun SummaryItem(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        when (icon) {
-            is androidx.compose.ui.graphics.vector.ImageVector -> {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                )
-            }
-            is androidx.compose.ui.graphics.painter.Painter -> {
-                Icon(
-                    painter = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                )
-            }
-        }
+        icon()
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp)

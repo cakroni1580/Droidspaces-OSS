@@ -37,6 +37,12 @@ object ContainerInstaller {
         var createdPaths = mutableListOf<String>()
 
         try {
+            // Reject control chars in single-line config values (VULN V11).
+            ValidationUtils.validateConfigValues(config).errorMessage?.let {
+                logger.e(it)
+                return@withContext Result.failure(Exception(it))
+            }
+
             // Step 1: Check storage space
             logger.i("Checking available storage space...")
             val freeGB = StorageChecker.getFreeSpaceGB()
@@ -268,17 +274,19 @@ object ContainerInstaller {
                 }
             }
         } catch (e: Exception) {
-            // Don't block installation if the validator itself can't be loaded.
-            logger.w("Warning: Failed to load rootfs validator, skipping check: ${e.message}")
-            return
+            // Fail CLOSED: if the validator itself can't be loaded, do not install an
+            // unverified rootfs — it is later run as root. See FINDINGS_APP_VULN V12.
+            logger.e("Failed to load rootfs validator: ${e.message}")
+            throw Exception("Could not verify rootfs: validator unavailable (${e.message})")
         }
 
         try {
             // Make script executable
             val chmodResult = Shell.cmd("chmod 755 \"${scriptFile.absolutePath}\" 2>&1").exec()
             if (!chmodResult.isSuccess) {
-                logger.w("Warning: Failed to make validator executable, skipping check")
-                return
+                // Fail CLOSED — see FINDINGS_APP_VULN V12.
+                logger.e("Failed to make rootfs validator executable")
+                throw Exception("Could not verify rootfs: validator not executable")
             }
 
             val result = Shell.cmd(
@@ -375,7 +383,7 @@ object ContainerInstaller {
     private suspend fun cleanup(paths: List<String>, logger: ContainerLogger) {
         paths.reversed().forEach { path ->
             try {
-                val result = Shell.cmd("rm -rf $path 2>&1").exec()
+                val result = Shell.cmd("rm -rf ${ContainerCommandBuilder.quote(path)} 2>&1").exec()
                 if (result.isSuccess) {
                     logger.d("Cleaned up: $path")
                 } else {
