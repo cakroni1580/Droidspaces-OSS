@@ -131,6 +131,8 @@ void ds_env_save(const char *path, struct ds_config *cfg) {
     fprintf(f, "export KWIN_COMPOSE='Q'\n");
     fprintf(f, "export KWIN_OPENGL_INTERFACE='egl'\n");
     fprintf(f, "export LIBGL_ALWAYS_SOFTWARE='0'\n");
+    fprintf(f, "export WLR_BACKENDS='wayland'\n");
+    fprintf(f, "export WLR_RENDERER='pixman'\n");
   }
 
   fclose(f);
