@@ -348,8 +348,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
     // Terminal emulator (ported from LXC-Manager / termux-app)
-    implementation("com.github.termux.termux-app:terminal-view:0.118.1")
-    implementation("com.github.termux.termux-app:terminal-emulator:0.118.1")
+    // 0.118.3 consumes unsupported CSI private-parameter sequences (ESC [ = / ESC [ <)
+    // instead of leaking them to the screen — fish 4.x probes with ESC[=5u.
+    implementation("com.github.termux.termux-app:terminal-view:0.118.3")
+    implementation("com.github.termux.termux-app:terminal-emulator:0.118.3")
 
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")

@@ -400,17 +400,11 @@ int check_requirements_detailed(void) {
   print_ds_check("Veth pair support",
                  "Required for --net=nat; no fallback exists if absent",
                  check_veth_support(), "OPT");
-
-  /* HARDENING */
-  check_append("\n" C_BOLD "[HARDENING]" C_RESET
-               "\nThese checks are not required for Droidspaces to work, "
-               "but are recommended for hardened kernels:\n\n");
-
-  int has_user_ns = access("/proc/self/ns/user", F_OK) == 0;
-  print_ds_check("CONFIG_USER_NS disabled",
-                 "Kernel exposes user namespace support, which Droidspaces "
-                 "does not require and hardened kernels should disable",
-                 !has_user_ns, "OPT");
+  print_ds_check("User namespace",
+                 "CONFIG_USER_NS; enable per container with --allow-userns. "
+                 "Needed by Docker on some kernels, by sandboxed apps "
+                 "(Flatpak, Bubblewrap, browsers) and by desktop environments",
+                 access("/proc/self/ns/user", F_OK) == 0, "OPT");
 
   /* FINAL SUMMARY */
   check_append("\n" C_BOLD "Summary:" C_RESET "\n\n");

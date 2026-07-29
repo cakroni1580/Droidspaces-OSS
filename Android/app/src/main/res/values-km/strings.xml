@@ -88,7 +88,7 @@
     <string name="feat_containers_title">កុងតឺន័រ Linux ពិតប្រាកដ</string>
     <string name="feat_hardware_desc">បើកសិទ្ធិឱ្យកុងតឺន័ររបស់អ្នក ចូលប្រើប្រាស់ Hardware របស់ម៉ាស៊ីនផ្ទាល់ (GPU, សេនស័រ, USB, ឧបករណ៍ Block) ដោយផ្ទាល់។</string>
     <string name="uninstall_container_menu">លុបកុងតឺន័រចេញ</string>
-    <string name="feat_init_title">ប្រើប្រាស់ systemd / OpenRC ជា PID 1</string>
+    <string name="feat_init_title">ប្រើប្រាស់ systemd / OpenWrt procd / OpenRC ជា PID 1</string>
     <string name="feat_privileged_title">កុងតឺន័រដែលមានសិទ្ធិពេញលេញ</string>
     <string name="tap_to_fix_system">ចុចដើម្បីជួសជុលការកំណត់រចនាសម្ព័ន្ធប្រព័ន្ធ</string>
     <string name="feat_init_desc">គាំទ្រប្រព័ន្ធ Init ពេញលេញ (Full init system support)។ ការគ្រប់គ្រងសេវាកម្មពិតប្រាកដ មិនមែនជាបរិស្ថានធ្វើត្រាប់តាម (Simulated environment) នោះទេ។</string>
@@ -111,7 +111,7 @@
     <string name="feat_autoboot_title">ចាប់ផ្ដើមដំណើរការដោយស្វ័យប្រវត្តិនៅពេលបើកម៉ាស៊ីន</string>
     <string name="install">តម្លើង</string>
     <string name="hostname_label">ឈ្មោះម៉ាស៊ីន: %1$s</string>
-    <string name="symlink_integration_description">បង្កើត Symlink នៅត្រង់ /system/bin ដើម្បីចូលប្រើប្រាស់បញ្ជា (Command) droidspaces នៅក្នុង Android Root Shell។\n\nការព្រមាន៖ ការបើកមុខងារនេះនឹងបង្កឱ្យមានបញ្ហាគាំងបើកឧបករណ៍មិនឡើង (Bootloop) ប្រសិនបើប្រព័ន្ធ Mount របស់អ្នកជាប្រភេទ OverlayFS Meta Modules។ សូមប្រើប្រាស់ជម្រើសនេះ តែក្នុងករណីដែលអ្នកកំពុងប្រើប្រាស់ប្រព័ន្ធ Mount ផ្អែកលើ Magic Mount តែប៉ុណ្ណោះ (តម្រូវឱ្យចាប់ផ្តើមឧបករណ៍ឡើងវិញ)។</string>
+    <string name="symlink_integration_description">បង្កើត Symlink នៅត្រង់ /system/bin ដើម្បីចូលប្រើប្រាស់បញ្ជា (Command) droidspaces នៅក្នុង Android Root Shell។ការព្រមាន៖ ការបើកមុខងារនេះនឹងបង្កឱ្យមានបញ្ហាគាំងបើកឧបករណ៍មិនឡើង (Bootloop) ប្រសិនបើប្រព័ន្ធ Mount របស់អ្នកជាប្រភេទ OverlayFS Meta Modules។ សូមប្រើប្រាស់ជម្រើសនេះ តែក្នុងករណីដែលអ្នកកំពុងប្រើប្រាស់ប្រព័ន្ធ Mount ផ្អែកលើ Magic Mount តែប៉ុណ្ណោះ (តម្រូវឱ្យចាប់ផ្តើមឧបករណ៍ឡើងវិញ)។</string>
     <string name="feat_unkillable_title">រចនាឡើងមិនអាចបំផ្លាញបាន</string>
     <string name="kernel_requirements_nongki">តម្រូវការខឺណែលមិនមែន GKI (&lt;=4.19)</string>
     <string name="kernel_requirements_gki">តម្រូវការខឺណែល GKI (&gt;=5.4)</string>
@@ -296,8 +296,8 @@
     <string name="openrc_services">សេវាកម្ម OpenRC</string>
     <string name="openrc">OpenRC</string>
     <string name="init_system">ប្រព័ន្ធ Init</string>
-    <string name="init_system_not_available">មិនអាចប្រើប្រព័ន្ធ Systemd/OpenRC បានទេ</string>
-    <string name="init_system_not_available_desc">កុងតឺន័រនេះមិនមាន systemd ឬ OpenRC ដែលបានដំឡើងទេ</string>
+    <string name="init_system_not_available">ប្រព័ន្ធ Systemd / OpenWrt / OpenRC មិនមានទេ</string>
+    <string name="init_system_not_available_desc">ខនតឺន័រនេះមិនមានដំឡើង systemd, OpenWrt/procd ឬ OpenRC ទេ</string>
     <string name="fetching_services">កំពុងទាញយកសេវាកម្ម...</string>
     <string name="search_services">ស្វែងរកសេវាកម្ម...</string>
     <string name="enabled_legend">បានបើកដំណើរការ</string>
@@ -403,7 +403,7 @@
     <string name="help_card_url" translatable="false">https://github.com/ravindu644/Droidspaces-OSS/blob/main/Documentation/Installation-Android.md</string>
     <string name="privileged_mode">របៀប Privileged</string>
     <string name="privileged_mode_description">កំណត់រចនាសម្ព័ន្ធបន្ធូរបន្ថយសន្តិសុខតាមកម្រិតលម្អិត សម្រាប់ការធ្វើនិម្មិតកម្មត្រួតគ្នា (Nested Virtualization) ឬការចូលប្រើប្រាស់ Hardware កម្រិតខ្ពស់។</string>
-    <string name="privileged_nomask_desc">"បិទ Jail Masks ដើម្បីអនុញ្ញាតឱ្យមានសិទ្ធិកែប្រែ (Write Access) ទៅលើ /proc និង /sys។ សម្គាល់៖ /sys នៅតែរក្សាស្ថានភាពសម្រាប់តែអានប៉ុណ្ណោះ (Read-only) លុះត្រាតែមុខងារចូលប្រើប្រាស់ Hardware  ត្រូវបានបើកដំណើរការផងដែរ។"</string>
+    <string name="privileged_nomask_desc">បិទ Jail Masks ដើម្បីអនុញ្ញាតឱ្យមានសិទ្ធិកែប្រែ (Write Access) ទៅលើ /proc និង /sys។ សម្គាល់៖ /sys នៅតែរក្សាស្ថានភាពសម្រាប់តែអានប៉ុណ្ណោះ (Read-only) លុះត្រាតែមុខងារចូលប្រើប្រាស់ Hardware ត្រូវបានបើកដំណើរការផងដែរ។</string>
     <string name="privileged_nocaps_desc">មិនលុបបំបាត់សមត្ថភាព Linux ណាមួយឡើយ (ទទួលបានអំណាច root ពេញលេញ)។</string>
     <string name="privileged_noseccomp_desc">បិទការច្រោះ Seccomp Syscall។ មុខងារនេះនឹងបើកដំណើរការលក្ខណៈពិសេសកម្រិតខ្ពស់របស់ Kernel ដូចជា Unprivileged User Namespaces ដែលជាលក្ខខណ្ឌតម្រូវដាច់ខាតសម្រាប់ Nested Sandboxing (Bubblewrap, Flatpak) ហើយវាក៏អនុញ្ញាតឱ្យផ្ទុក Out-of-tree Kernel Modules ផងដែរ។</string>
     <string name="privileged_shared_desc">បើកដំណើរការការបញ្ជូនទិន្នន័យម៉ោន (Mount Propagation) បែប MS_SHARED ទៅកាន់ម៉ាស៊ីនផ្ទាល់ (Host)។</string>
@@ -414,7 +414,7 @@
     <string name="privileged_confirm_instruction">វាយពាក្យ \"I WON\'T REPORT ANY BUGS\" ឱ្យបានត្រឹមត្រូវជាអក្សរធំ ដើម្បីបញ្ជាក់៖</string>
     <string name="i_understand_caps">I WON\'T REPORT ANY BUGS</string>
     <string name="reboot_recommended">ណែនាំឱ្យចាប់ផ្តើមឧបករណ៍ឡើងវិញ (Reboot) ដើម្បីអនុវត្តច្បាប់ SELinux និងចាប់ផ្តើមដំណើរការ Daemon រៀងរាល់ពេលបើកឧបករណ៍។</string>
-    <string name="hw_access_disclaimer">ចាប់ផ្តើមពី Droidspaces v6.1.0 ទៅ udevd មានសិទ្ធិចូលប្រើប្រាស់ពិតប្រាកដទៅលើ Subsystems របស់ USB, Block, Input, TTY, និង Network។ កុងតឺន័រ (Container) របស់អ្នកអាចកាន់កាប់ Hardware ដែល Android កំពុងប្រើប្រាស់នាពេលបច្ចុប្បន្នបាន។\n\nប្រសិនបើក្តារចុច (Keyboard) កាត SD ឬឧបករណ៍ USB របស់អ្នកឈប់ដំណើរការនៅក្នុង Android បន្ទាប់ពីបើកដំណើរការកុងតឺន័រ — នោះមិនមែនជាបញ្ហាបច្ចេកទេស (Bug) ឡើយ។ គឺកុងតឺន័របានយកវាទៅប្រើ។ អ្នកបានស្នើសុំសិទ្ធិចូលប្រើប្រាស់ Hardware ពេញលេញដោយខ្លួនឯង។\n\nសូមកុំរាយការណ៍ពីបញ្ហាដែលបង្កឡើងដោយការជម្លោះ Hardware (Hardware Conflicts) ឬ Kernel Panics អំឡុងពេលកំពុងប្រើប្រាស់របៀប (Mode) នេះ។</string>
+    <string name="hw_access_disclaimer">ចាប់ផ្តើមពី Droidspaces v6.1.0 ទៅ udevd មានសិទ្ធិចូលប្រើប្រាស់ពិតប្រាកដទៅលើ Subsystems របស់ USB, Block, Input, TTY, និង Network។ កុងតឺន័រ (Container) របស់អ្នកអាចកាន់កាប់ Hardware ដែល Android កំពុងប្រើប្រាស់នាពេលបច្ចុប្បន្នបាន។\n\nប្រសិនបើក្តារចុច (Keyboard) កាត SD ឬឧបករណ៍ USB របស់អ្នកឈប់ដំណើរការនៅក្នុង Android បន្ទាប់ពីបើកដំណើរការកុងតឺន័រ — នោះមិនមែនជាបញ្ហាបច្ចេកទេស (Bug) ឡើយ។ គឺកុងតឺន័របានយកវាទៅប្រើ។ អ្នកបានស្នើសុំសិទ្ធិចូលប្រើប្រាស់ Hardware ពេញលេញដោយខ្លួនឯង។\n\nសូមកុំរាយការណ៍ពីបញ្ហាដែលបង្កឡើងដោយការជម្លោះ Hardware ឬ Kernel Panics អំឡុងពេលកំពុងប្រើប្រាស់របៀប (Mode) នេះ។</string>
     <string name="read_only">មិនអាចកែបាន</string>
     <string name="repo_not_found_in_repo">រកមិនឃើញទិន្នន័យ %1$s</string>
     <string name="repo_title">ឃ្លាំងផ្ទុក Rootfs</string>
@@ -465,4 +465,51 @@
     <string name="enable_virgl_description">បើកដំណើរការមុខងារបង្កើនល្បឿនផ្នែករឹង 3D តាមរយៈ VirGL</string>
     <string name="virgl_extra_flags_label">ប៉ារ៉ាម៉ែត្របន្ថែមសម្រាប់ VirGL</string>
     <string name="virgl_extra_flags_placeholder">ឧទាហរណ៍៖ --multi-clients --angle-vulkan</string>
+    <string name="accent_color">ពណ៌សម្គាល់</string>
+    <string name="type_container_name_to_confirm">វាយបញ្ចូលឈ្មោះកុងតែន័រឱ្យបានត្រឹមត្រូវដើម្បីបញ្ជាក់៖</string>
+    <string name="userns_option">User Namespaces</string>
+    <string name="disk_usage">ការប្រើប្រាស់ថាស</string>
+    <string name="disk_usage_used_of_total">បានប្រើប្រាស់ %1$s / \\%2$s</string>
+    <string name="disk_usage_calculating">កំពុងគណនា…</string>
+    <string name="allow_userns">អនុញ្ញាត User Namespaces</string>
+    <string name="allow_userns_description">អនុញ្ញាតឱ្យប្រើប្រាស់ unprivileged user namespaces ដែល Flatpak/bwrap/Firefox ត្រូវការ។ ប៉ុន្តែ អ្នកប្រហែលជាប្រឈមនឹងការវាយប្រហារមួយចំនួនដូចជា Fragnesia ប្រសិនបើមិនទាន់បានអាប់ដេត kernel (patched kernel) ទេ</string>
+    <string name="allow_userns_description_not_supported">មិនគាំទ្រទេ​. CONFIG_USER_NS មិនត្រូវបានបើកដំណើរការនៅក្នុង kernel ទេ.</string>
+    <string name="auto_boot_priority">អាទិភាពចាប់ផ្ដើមស្វ័យប្រវត្តិ</string>
+    <string name="auto_boot_priority_description">លំដាប់នៃការចាប់ផ្តើមខនតឺន័រដំណើរការពេលចាប់ផ្ដើមប្រព័ន្ធ</string>
+    <string name="auto_boot_priority_hint">អូសដើម្បីប្ដូរលំដាប់។ ខនតឺន័រចាប់ផ្ដើមពីលើចុះក្រោម - សូមដាក់ច្រកទ្វារ (ឧ. OpenWRT) មុនគេ ដើម្បីវាចាប់ផ្ដើមមុនខនតឺន័រដែលត្រូវតភ្ជាប់ឆ្លងកាត់វា។</string>
+    <string name="auto_boot_priority_empty">គ្មានខនតឺន័រណាមួយត្រូវបានបើកដំណើរការពេលចាប់ផ្ដើមប្រព័ន្ធទេ។</string>
+    <string name="reorder_handle">អូសដើម្បីប្ដូរលំដាប់</string>
+    <string name="network_mode_gateway">ច្រកទ្វារ (រ៉ោតទ័រនិម្មិត)</string>
+    <string name="network_mode_gateway_short">ច្រកទ្វារ (Gateway)</string>
+    <string name="gateway_settings">ការកំណត់ច្រកទ្វារ</string>
+    <string name="gateway_settings_description">បញ្ជូនបណ្តាញរបស់ខនតឺន័រនេះឆ្លងកាត់ខនតឺន័រផ្សេងទៀតដែលធ្វើជាតួអង្គរ៉ោតទ័រ (ឧ. OpenWRT)។ ខនតឺន័រច្រកទ្វារនោះត្រូវតែដំណើរការមុន។</string>
+    <string name="gateway_container">ខនតឺន័រច្រកទ្វារ</string>
+    <string name="gateway_net">ឈ្មោះបណ្តាញ LAN</string>
+    <string name="gateway_net_hint">បណ្តាញ lan</string>
+    <string name="gateway_iface">ចំណុចប្រទាក់ក្នុងច្រកទ្វារ (Interface in Gateway)</string>
+    <string name="gateway_iface_hint">eth1</string>
+    <string name="gateway_bridge">ស្ពានតភ្ជាប់ប្រព័ន្ធគោល (Host Bridge)</string>
+    <string name="gateway_bridge_hint">ds-lan</string>
+    <string name="gateway_configure">កំណត់រចនាសម្ព័ន្ធច្រកទ្វារ</string>
+    <string name="gateway_configure_title">កំណត់រចនាសម្ព័ន្ធច្រកទ្វារ</string>
+    <string name="gateway_configure_intro">ការកំណត់ទាំងនេះគ្រប់គ្រងពីរបៀបដែលខនតឺន័រនេះភ្ជាប់ទៅនឹងបណ្តាញ LAN និម្មិតរបស់ច្រកទ្វារ។ តម្លៃលំនាំដើមគឺសាកសមសម្រាប់បណ្តាញ LAN តែមួយនៅពីក្រោយច្រកទ្វារតែមួយ - សូមផ្លាស់ប្តូរវាលុះត្រាតែអ្នកដំណើរការបណ្តាញ LAN ច្រើន ឬមានច្រកទ្វារច្រើនជាងមួយ។</string>
+    <string name="gateway_iface_explain">ឈ្មោះចំណុចប្រទាក់ដែលការតភ្ជាប់នេះបង្ហាញ ខាងក្នុង ខនតឺន័រច្រកទ្វារ (ឧ. eth1 ក្នុង OpenWRT)។ វាត្រូវតែត្រូវគ្នាទៅនឹងចំណុចប្រទាក់ដែលច្រកទ្វាររបស់អ្នកត្រូវបានកំណត់ឱ្យផ្ដល់សេវា DHCP។ សេនហ្កាម (Segment) នីមួយៗនៅលើច្រកទ្វារតែមួយ ត្រូវការឈ្មោះផ្ទាល់ខ្លួនដែលមិនត្រួតស៊ីគ្នា។ លំនាំដើម៖ eth1។</string>
+    <string name="gateway_net_explain">ស្លាកសម្រាប់បណ្តាញ LAN នេះ។ ខនតឺន័រដែលប្រើប្រាស់ច្រកទ្វារ និងឈ្មោះបណ្តាញ LAN ដូចគ្នា នឹងចូលរួមក្នុងស្វ៊ីចនិម្មិត (virtual switch) តែមួយ និងអាចមើលឃើញគ្នាទៅវិញទៅមក។ សូមប្រើប្រាស់ឈ្មោះផ្សេងដើម្បីបង្កើតបណ្តាញដាច់ដោយឡែកទីពីរ។ លំនាំដើម៖ lan។</string>
+    <string name="gateway_bridge_explain">ឈ្មោះរបស់ស្ពាននិម្មិត (virtual switch) ដែលបានបង្កើតនៅលើប្រព័ន្ធប្រតិបត្តិការ Android គោល។ សូមទុកវាឱ្យនៅទว่างដើម្បីដាក់ឈ្មោះដោយស្វ័យប្រវត្តិផ្អែកលើឈ្មោះ LAN (ds-)។ កំណត់វាលុះត្រាតែអ្នកត្រូវការឈ្មោះស្ពានពិតប្រាកដប៉ុណ្ណោះ។ អតិបរមា ១៥ តួអក្សរ។</string>
+    <string name="error_gateway_required">ជ្រើសរើសខនតឺន័រច្រកទ្វារ (Select a gateway container)</string>
+    <string name="error_gateway_self">ខនតឺន័រមិនអាចធ្វើជាច្រកទ្វារខ្លួនឯងបានទេ</string>
+    <string name="error_gateway_not_installed">ខនតឺន័រច្រកទ្វារនេះមិនទាន់ត្រូវបានដំឡើងទេ</string>
+    <string name="error_no_gateway_candidates">ដំឡើងខនតឺន័រផ្សេងទៀតដើម្បីធ្វើជាច្រកទ្វារ</string>
+    <string name="error_gateway_name_chars">ប្រើប្រាស់តែអក្សរ លេខ(_) ឬសញ្ញា hyphen (-) ប៉ុណ្ណោះ</string>
+    <string name="error_iface_too_long">វែងពេក - អតិបរមា ១៥ តួអក្សរ</string>
+    <string name="error_gateway_bridge_taken">ស្ពានត្រូវបានប្រើប្រាស់រួចហើយដោយ \'%1$s\'។ សូមប្រើឈ្មោះបណ្តាញ LAN ផ្សេង។</string>
+    <string name="error_gateway_iface_taken">ចំណុចប្រទាក់ត្រូវបានប្រើប្រាស់រួចហើយដោយបណ្តាញផ្សេង (\'%1$s\')។ សូមប្រើចំណុចប្រទាក់ផ្សេង។</string>
+    <string name="openwrt_services">សេវាកម្មOpenWrt</string>
+    <string name="openwrt">OpenWrt</string>
+    <string name="procd_detected">បានរកឃើញ OpenWrt/procd</string>
+    <string name="procd_services_placeholder_desc">ការគ្រប់គ្រងសេវាកម្មសម្រាប់ %1$s នឹងត្រូវបន្ថែមនៅក្នុងកំណែបច្ចុប្បន្នភាពបន្ទាប់។</string>
+    <string name="unknown_legend">មិនស្គាល់</string>
+    <string name="reload_service">ផ្ទុកសេវាកម្មឡើងវិញ (Reload service)</string>
+    <string name="no_unknown_services">គ្មានសេវាកម្មដែលមានស្ថានភាពមិនស្គាល់ទេ</string>
+    <string name="debugging_section">ការបំបាត់កំហុស (Debugging)</string>
 </resources>

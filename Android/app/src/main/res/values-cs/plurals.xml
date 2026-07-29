@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="container_count">
+        <item quantity="one">%d kontejner</item>
+        <item quantity="few">%d kontejnery</item>
+        <item quantity="many">%d kontejnerů</item>
+        <item quantity="other">%d kontejnerů</item>
+    </plurals>
+    <plurals name="commit_count">
+        <item quantity="one">%d commit</item>
+        <item quantity="few">%d commity</item>
+        <item quantity="many">%d commitů</item>
+        <item quantity="other">%d commitů</item>
+    </plurals>
+    <plurals name="notification_sessions_running">
+        <item quantity="one">Je spuštěna %d relace</item>
+        <item quantity="few">Jsou spuštěny %d relace</item>
+        <item quantity="many">Je spuštěno %d relací</item>
+        <item quantity="other">Je spuštěno %d relací</item>
+    </plurals>
+</resources>
