@@ -119,12 +119,21 @@ static void gtk_surface_set_dbus_properties(
 
     (void)client;
     (void)resource;
-    (void)application_id;
-    (void)app_menu_path;
-    (void)menubar_path;
-    (void)window_object_path;
-    (void)application_object_path;
-    (void)unique_bus_name;
+
+    LOGI(
+        "gtk_surface.set_dbus_properties "
+        "app_id='%s' "
+        "app_menu='%s' "
+        "menubar='%s' "
+        "window='%s' "
+        "application='%s' "
+        "bus='%s'",
+        application_id ? application_id : "(null)",
+        app_menu_path ? app_menu_path : "(null)",
+        menubar_path ? menubar_path : "(null)",
+        window_object_path ? window_object_path : "(null)",
+        application_object_path ? application_object_path : "(null)",
+        unique_bus_name ? unique_bus_name : "(null)");
 }
 
 static void gtk_surface_set_modal(
