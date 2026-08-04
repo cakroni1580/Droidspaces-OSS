@@ -46,19 +46,20 @@ add_library(wayland-compositor SHARED
 
     # Our JNI bridge (com.droidspaces.app.wayland.WaylandManager + WaylandSurface)
     ds_wayland_bridge.c
+    gtk-shell.c
+    surface.c
+    compositor.c
+    xdg_shell.c
 
     # Compositor core — identical set to Android.mk, minus jni_bridge.c
     # renderer.c is included here because WaylandSurface uses EGL rendering
     #ime_keyboard.c
     ${COMPOSITOR_SRC}/keyboard_input.c
-    ${COMPOSITOR_SRC}/compositor.c
     ${COMPOSITOR_SRC}/renderer.c
     ${COMPOSITOR_SRC}/buffer.c
     ${COMPOSITOR_SRC}/linux_dmabuf.c
-    ${COMPOSITOR_SRC}/surface.c
     ${COMPOSITOR_SRC}/subcompositor.c
     ${COMPOSITOR_SRC}/android_wlegl.c
-    ${COMPOSITOR_SRC}/xdg_shell.c
     ${COMPOSITOR_SRC}/output.c
     ${COMPOSITOR_SRC}/seat.c
     ${COMPOSITOR_SRC}/pointer_input.c
@@ -74,6 +75,7 @@ add_library(wayland-compositor SHARED
     ${COMPOSITOR_SRC}/keycode_map.c
 
     # Generated protocol stubs — exact set from Android.mk
+    src/protocol/gtk-shell-protocol.c
     ${PROTOCOL_SRC}/xdg-shell-server-protocol.c
     ${PROTOCOL_SRC}/single-pixel-buffer-v1-server-protocol.c
     ${PROTOCOL_SRC}/viewporter-server-protocol.c
@@ -93,6 +95,7 @@ target_include_directories(wayland-compositor PRIVATE
     ${COMPOSITOR_SRC}
     ${PROTOCOL_SRC}
     ${WAYLAND_INCLUDE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/protocol
 )
 
 # memfd_create syscall numbers for every ABI we might encounter.
