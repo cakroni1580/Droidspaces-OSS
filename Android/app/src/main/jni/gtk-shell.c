@@ -374,6 +374,16 @@ void gtk_surface_send_configure(
 
     wl_array_init(&states);
     wl_array_init(&edges);
+
+    uint32_t *state_id;
+
+    state_id = wl_array_add(&states, sizeof(*state_id));
+    if (state_id)
+        *state_id = GTK_SURFACE1_STATE_FULLSCREEN;
+
+    state_id = wl_array_add(&states, sizeof(*state_id));
+    if (state_id)
+        *state_id = GTK_SURFACE1_STATE_ACTIVE;
         
     gtk_surface1_send_configure(
             state->resource,
