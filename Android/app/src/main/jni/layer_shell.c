@@ -591,12 +591,6 @@ static void layer_shell_get_layer_surface(
      * its first buffer until configure has been sent.
      */
     send_layer_surface_configure(surf);
-    LOGI(
-        "layer configure surf=%p size=%ux%u serial=%u",
-         (void *)surf,
-         width,
-         height,
-         serial);
 }
 
 static void layer_surface_calculate_size(
@@ -805,7 +799,7 @@ void layer_surface_notify_output_change(
 
 
     /*
-      NOTE...!!!
+     * NOTE...!!!
      * Tidak ada render traversal di layer-shell.c.
      *
      * Rendering seluruh compositor_surface dilakukan
@@ -816,8 +810,9 @@ void layer_surface_notify_output_change(
      *   - surf->z_order
      *   - configure geometry
      *   - keyboard focus
-     *wl_list_for_each() masih perlu perbaikan mengikuti notes.
+     * wl_list_for_each() masih perlu perbaikan mengikuti notes.
      */
+    
     wl_list_for_each(
             surf,
             &srv->surfaces,
@@ -827,8 +822,7 @@ void layer_surface_notify_output_change(
         if (!surf->layer_surface)
             continue;
 
-        send_layer_surface_configure(
-                surf);
+        send_layer_surface_configure(surf);
     }
 
     
