@@ -77,7 +77,15 @@ struct layer_surface_state {
     char namespace_name[128];
 };
 
+static bool layer_surface_wants_keyboard(
+        struct compositor_surface *surf)
+{
+    if (!surf || !surf->layer_surface)
+        return false;
 
+    return surf->layer_surface->keyboard_interactive !=
+        ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE;
+}
 /* ------------------------------------------------------------------------- */
 /* layer_surface resource                                                    */
 /* ------------------------------------------------------------------------- */
@@ -90,11 +98,21 @@ static void layer_surface_resource_destroy(
 
     if (!surf)
         return;
+    /*
+     * Remove keyboard focus if this layer owned it.
+     */
+    if (surf->srv &&
+        surf->srv->keyboard_focus == surf) {
+
+        keyboard_focus_update(
+                surf->srv,
+                NULL);
+    }
 
     surf->layer_surface_res = NULL;
     free(surf->layer_surface);
-   surf->layer_surface = NULL;
-   surf->role = SURFACE_ROLE_NONE;
+    surf->layer_surface = NULL;
+    surf->role = SURFACE_ROLE_NONE;
 }
 
 
@@ -203,26 +221,42 @@ static void layer_surface_set_keyboard_interactivity(
         uint32_t mode)
 {
     (void)client;
-    (void)resource;
-    (void)mode;
+
     struct compositor_surface *surf =
             wl_resource_get_user_data(resource);
 
     if (!surf || !surf->layer_surface)
-            return;
+        return;
 
-    if (mode >
-            ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND) {
+
+    switch (mode) {
+
+    case ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE:
+    case ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE:
+    case ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND:
+
+        surf->layer_surface->keyboard_interactive = mode;
+        break;
+
+    default:
+
         wl_resource_post_error(
                 resource,
                 ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_KEYBOARD_INTERACTIVITY,
                 "invalid keyboard interactivity");
+
         return;
     }
 
-    surf->layer_surface->keyboard_interactive = mode;
-}
 
+    /*
+     * Jangan langsung focus di sini.
+     *
+     * Sama seperti Phoc:
+     * request client hanya mengubah state.
+     * Focus diberikan ketika surface sudah mapped.
+     */
+}
 static void layer_surface_get_popup(
         struct wl_client *client,
         struct wl_resource *resource,
