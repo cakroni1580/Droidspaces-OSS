@@ -137,14 +137,15 @@ static void layer_surface_resource_destroy(
 
 
     /*
-     * Detach resource dulu.
+     * CONTEXT:
+     * Resource layer-shell sudah dihancurkan.
+     * Surface tidak lagi memiliki layer role.
+     *
+     * Geometry lama tidak boleh dianggap sebagai geometry
+     * aktif jika surface nanti dipakai kembali oleh role lain.
      */
     surf->layer_surface_res = NULL;
 
-
-    /*
-     * Free layer state hanya sekali.
-     */
     if (surf->layer_surface) {
 
         free(surf->layer_surface);
@@ -152,6 +153,15 @@ static void layer_surface_resource_destroy(
         surf->layer_surface = NULL;
     }
 
+    /*
+     * Reset WM geometry yang sebelumnya diberikan
+     * oleh layer-shell.
+     *
+     * Ini mencegah posisi layer lama terbawa ketika
+     * compositor_surface lifecycle masih diproses.
+     */
+    surf->wm_x = 0;
+    surf->wm_y = 0;
 
     surf->role = SURFACE_ROLE_NONE;
 }
@@ -268,24 +278,47 @@ static void layer_surface_set_keyboard_interactivity(
     if (!surf || !surf->layer_surface)
         return;
 
+    /*
+     * CONTEXT:
+     * keyboard_interactivity adalah state request dari client.
+     *
+     * Jangan langsung mengubah keyboard focus di sini.
+     *
+     * Layer surface belum tentu:
+     *   - menerima configure
+     *   - ack configure
+     *   - memiliki buffer
+     *   - sudah mapped
+     *
+     * Focus aktual dilakukan setelah commit buffer di
+     * surface_commit(), sehingga focus hanya diberikan
+     * kepada layer surface yang benar-benar aktif.
+     */
     surf->layer_surface->keyboard_interactive = mode;
 
     /*
-     * Phoc style:
+     * Jika interactivity dimatikan pada surface yang sedang
+     * menjadi keyboard focus, lepaskan focus sekarang.
      *
-     * Layer surface dengan keyboard interactivity
-     * langsung menjadi keyboard target.
-     *
-     * Tidak membuat pending focus state.
-     * Focus diupdate melalui seat keyboard.
+     * Jangan memilih surface pengganti di sini.
+     * keyboard_focus_update() hanya diberi NULL; policy
+     * pemilihan target tetap berada di layer/seat focus logic.
      */
-    if (mode != 0 && surf->srv) {
+    if (mode == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE &&
+        surf->srv &&
+        surf->srv->keyboard_focus == surf) {
 
         keyboard_focus_update(
                 surf->srv,
-                surf);
+                NULL);
     }
+
+    LOGI(
+        "layer keyboard interactivity surf=%p mode=%u",
+        (void *)surf,
+        mode);
 }
+
 static void layer_surface_get_popup(
         struct wl_client *client,
         struct wl_resource *resource,
@@ -310,23 +343,36 @@ static void layer_surface_ack_configure(
         return;
 
     /*
-     * Ikuti pola xdg-shell/Phoc:
-     * ack hanya diterima untuk configure terakhir.
+     * CONTEXT:
+     * Hanya configure terbaru yang valid.
+     *
+     * Configure lama dapat masih berada di client event queue.
+     * Jangan membuka gate buffer berdasarkan serial lama.
      */
-    if (serial != surf->layer_surface->last_configure_serial)
+    if (serial != surf->layer_surface->last_configure_serial) {
+        LOGI(
+            "layer stale ack ignored surf=%p serial=%u expected=%u",
+            (void *)surf,
+            serial,
+            surf->layer_surface->last_configure_serial);
         return;
+    }
 
     surf->layer_surface->acked_serial = serial;
     surf->layer_surface->configured = true;
+
     /*
-     * Setelah ack configure,
-     * client boleh commit buffer.
+     * Client sekarang sudah meng-ack geometry terbaru.
+     *
+     * surface_commit() berikutnya boleh mempromosikan
+     * pending_buffer menjadi current_buffer.
      */
     surf->layer_surface->first_buffer_allowed = true;
+
     LOGI(
-         "layer ack surf=%p serial=%u",
-         (void *)surf,
-         serial);
+        "layer configure acked surf=%p serial=%u",
+        (void *)surf,
+        serial);
 }
 
 static void layer_surface_set_layer(
