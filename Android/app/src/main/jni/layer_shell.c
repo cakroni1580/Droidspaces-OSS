@@ -600,12 +600,22 @@ static void layer_surface_calculate_size(
 
 
 
-    if (horizontal)
+    if (horizontal) {
+
         *width = ow;
-    else if (ls->requested_width)
+
+    } else if (ls->requested_width) {
+
         *width = ls->requested_width;
-    else
+
+    } else {
+
+        /*
+         * Surface tanpa width request:
+         * gunakan output.
+         */
         *width = ow;
+    }
 
 
 
@@ -643,6 +653,32 @@ static void layer_surface_calculate_size(
         *height > (uint32_t)margin_h) {
 
         *height -= margin_h;
+    }
+    /*
+     * Exclusive zone.
+     *
+     * Hanya berlaku untuk layer TOP/BOTTOM.
+     */
+    if (ls->exclusive_zone > 0) {
+
+        if (ls->anchor &
+            ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) {
+
+            if (*height >
+                (uint32_t)ls->exclusive_zone)
+                *height =
+                    ls->exclusive_zone;
+        }
+
+
+        if (ls->anchor &
+            ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) {
+
+            if (*height >
+                (uint32_t)ls->exclusive_zone)
+                *height =
+                    ls->exclusive_zone;
+        }
     }
 }
 
@@ -699,6 +735,43 @@ void send_layer_surface_configure(struct compositor_surface *surf)
             serial,
             width,
             height);
+}
+
+void layer_surface_notify_output_change(
+        struct wayland_server *srv)
+{
+    if (!srv)
+        return;
+
+
+    pthread_mutex_lock(
+            &srv->surfaces_mutex);
+
+
+    struct compositor_surface *surf;
+
+
+    wl_list_for_each(
+            surf,
+            &srv->surfaces,
+            link) {
+
+
+        if (!surf->layer_surface)
+            continue;
+
+
+        /*
+         * Recalculate configure
+         * berdasarkan output terbaru.
+         */
+        send_layer_surface_configure(
+                surf);
+    }
+
+
+    pthread_mutex_unlock(
+            &srv->surfaces_mutex);
 }
 
 
