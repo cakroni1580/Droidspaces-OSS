@@ -143,7 +143,13 @@ static void layer_surface_set_anchor(
 {
     (void)client;
     (void)resource;
-    (void)anchor;
+    (void)client;
+
+    struct compositor_surface *surf =
+            wl_resource_get_user_data(resource);
+
+    if (!surf || !surf->layer_surface)
+            return;
 
     surf->layer_surface->anchor = anchor;
 }
@@ -156,6 +162,11 @@ static void layer_surface_set_exclusive_zone(
     (void)client;
     (void)resource;
     (void)zone;
+    struct compositor_surface *surf =
+            wl_resource_get_user_data(resource);
+
+    if (!surf || !surf->layer_surface)
+            return;
 
     surf->layer_surface->exclusive_zone = zone;
 }
@@ -174,6 +185,11 @@ static void layer_surface_set_margin(
     (void)right;
     (void)bottom;
     (void)left;
+    struct compositor_surface *surf =
+            wl_resource_get_user_data(resource);
+
+    if (!surf || !surf->layer_surface)
+            return;
 
     surf->layer_surface->margin_top = top;
     surf->layer_surface->margin_right = right;
@@ -189,6 +205,11 @@ static void layer_surface_set_keyboard_interactivity(
     (void)client;
     (void)resource;
     (void)mode;
+    struct compositor_surface *surf =
+            wl_resource_get_user_data(resource);
+
+    if (!surf || !surf->layer_surface)
+            return;
 
     surf->layer_surface->keyboard_interactive = mode;
 }
@@ -212,6 +233,13 @@ static void layer_surface_ack_configure(
     (void)resource;
     (void)serial;
 
+/*
+ * Sama seperti xdg-shell:
+ * hanya configure terakhir yang boleh di-ack.
+ */
+if (serial != surf->layer_surface->last_configure_serial)
+    return;
+
     surf->layer_surface->acked_serial = serial;
 }
 
@@ -223,6 +251,12 @@ static void layer_surface_set_layer(
     (void)client;
     (void)resource;
     (void)layer;
+    struct compositor_surface *surf =
+            wl_resource_get_user_data(resource);
+
+    if (!surf || !surf->layer_surface)
+            return;
+    surf->layer_surface->layer = layer;
 }
 
 
@@ -361,6 +395,18 @@ static void layer_shell_get_layer_surface(
     }
 
     state->resource = layer_res;
+    
+    if (layer > ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SHELL_V1_ERROR_INVALID_LAYER,
+                "invalid layer %u",
+                layer);
+        free(state);
+        wl_resource_destroy(layer_res);
+        return;
+    }
+
     state->layer = layer;
 
     if (namespace) {
@@ -454,6 +500,13 @@ void send_layer_surface_configure(struct compositor_surface *surf)
      */
     uint32_t width = surf->srv->output_width;
     uint32_t height = surf->srv->output_height;
+    uint32_t serial =
+        wl_display_next_serial(surf->srv->display);
+
+    surf->layer_surface->last_configure_serial =
+            serial;
+
+    surf->layer_surface->configured = true;
 
     zwlr_layer_surface_v1_send_configure(
             surf->layer_surface_res,
