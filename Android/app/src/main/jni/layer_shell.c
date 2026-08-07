@@ -810,7 +810,7 @@ void layer_surface_notify_output_change(
      *   - surf->z_order
      *   - configure geometry
      *   - keyboard focus
-     * wl_list_for_each() masih perlu perbaikan mengikuti notes.
+     *  Ini bukan render traversal.
      */
     
     wl_list_for_each(
