@@ -204,32 +204,150 @@ static void layer_shell_destroy(
     wl_resource_destroy(resource);
 }
 
+/*
+ * Stage 2
+ * --------
+ *
+ * Create zwlr_layer_surface_v1 and attach it to compositor_surface.
+ *
+ * Design follows xdg_shell.c:
+ *
+ *  - one Wayland role per wl_surface
+ *  - compositor_surface owns protocol state
+ *  - initial configure is compositor driven
+ *
+ * Trierarch host policy:
+ *
+ *  - output argument is currently ignored
+ *    (single logical output)
+ *
+ *  - namespace is stored for future shell policy
+ *
+ *  - actual layout/configure handled later by
+ *    send_layer_surface_configure()
+ */
 static void layer_shell_get_layer_surface(
         struct wl_client *client,
         struct wl_resource *resource,
         uint32_t id,
-        struct wl_resource *surface,
+        struct wl_resource *surface_res,
         struct wl_resource *output,
         uint32_t layer,
         const char *namespace)
 {
-    (void)client;
-    (void)resource;
-    (void)id;
-    (void)surface;
     (void)output;
-    (void)layer;
-    (void)namespace;
+
+    struct wayland_server *srv =
+            wl_resource_get_user_data(resource);
+
+    struct compositor_surface *surf =
+            wl_resource_get_user_data(surface_res);
+
+    if (!srv || !surf || surf->srv != srv) {
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SHELL_V1_ERROR_ROLE,
+                "invalid surface");
+        return;
+    }
 
     /*
-     * Stage 2:
-     *
-     * - obtain compositor_surface
-     * - validate role
-     * - create layer_surface resource
-     * - attach implementation
-     * - send initial configure
+     * Same rule as xdg-shell:
+     * one role per wl_surface.
      */
+    if (surf->role != SURFACE_ROLE_NONE) {
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SHELL_V1_ERROR_ROLE,
+                "surface already has role");
+        return;
+    }
+
+    if (surf->layer_surface) {
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SHELL_V1_ERROR_ROLE,
+                "layer_surface already exists");
+        return;
+    }
+
+    struct layer_surface_state *state =
+            calloc(1, sizeof(*state));
+
+    if (!state) {
+        wl_client_post_no_memory(client);
+        return;
+    }
+
+    struct wl_resource *layer_res =
+            wl_resource_create(
+                    client,
+                    &zwlr_layer_surface_v1_interface,
+                    wl_resource_get_version(resource),
+                    id);
+
+    if (!layer_res) {
+        free(state);
+        wl_client_post_no_memory(client);
+        return;
+    }
+
+    state->resource = layer_res;
+    state->layer = layer;
+
+    if (namespace) {
+        strncpy(state->namespace_name,
+                namespace,
+                sizeof(state->namespace_name) - 1);
+    }
+
+    surf->role = SURFACE_ROLE_LAYER;
+    surf->layer_surface = state;
+    surf->layer_surface_res = layer_res;
+
+    /*
+     * Layer surfaces live above normal windows by default.
+     * Later layout policy may adjust this depending on layer.
+     */
+    switch (layer) {
+
+    case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
+        surf->z_order = 0;
+        break;
+
+    case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
+        surf->z_order = 100;
+        break;
+
+    case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
+        surf->z_order = 5000;
+        break;
+
+    case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
+    default:
+        surf->z_order = 10000;
+        break;
+    }
+
+    wl_resource_set_implementation(
+            layer_res,
+            &layer_surface_impl,
+            surf,
+            layer_surface_resource_destroy);
+
+    LOGI(
+        "new layer_surface surf=%p layer=%u ns=%s",
+        (void *)surf,
+        layer,
+        namespace ? namespace : "");
+
+    /*
+     * Initial configure.
+     *
+     * Like xdg-shell, the client should not attach
+     * its first buffer until configure has been sent.
+     */
+    send_layer_surface_configure(surf);
 }
 
 
