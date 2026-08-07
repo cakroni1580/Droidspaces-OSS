@@ -1,8 +1,27 @@
 /*
  * wlr-layer-shell (zwlr_layer_shell_v1)
- * layershell.c berjalan di trierarch compositor jni sebagai compositor display host
- * buat agar agar mengikuti phoc alih alih wlroots.
- **/
+ * note contract:layershell.c berjalan di trierarch compositor jni sebagai compositor display host
+ * note contract:buat agar agar mengikuti phoc alih alih wlroots.
+ *
+ *
+ *
+ * Stage 1
+ * --------
+ * Skeleton only.
+ *
+ * Implemented:
+ *   - global bind
+ *   - layer shell global
+ *   - layer surface resource
+ *   - destroy callback
+ *
+ * Not implemented yet:
+ *   - configure
+ *   - layout
+ *   - popup
+ *   - keyboard focus
+ *   - exclusive zone
+ */
 
 #include "server_internal.h"
 #include "wlr-layer-shell-unstable-v1-server-protocol.h"
@@ -19,35 +38,27 @@
 #define LOGE(...) \
     __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-struct layer_surface_state {
 
-    uint32_t layer;
-
-    uint32_t anchor;
-
-    uint32_t exclusive_zone;
-
-    uint32_t keyboard_interactive;
-
-    int32_t desired_width;
-    int32_t desired_height;
-
-    int32_t margin_top;
-    int32_t margin_right;
-    int32_t margin_bottom;
-    int32_t margin_left;
-
-    char name_space[128];
-};
+/* ------------------------------------------------------------------------- */
+/* layer_surface resource                                                    */
+/* ------------------------------------------------------------------------- */
 
 static void layer_surface_resource_destroy(
         struct wl_resource *resource)
 {
-    struct layer_surface_state *state =
+    struct compositor_surface *surf =
             wl_resource_get_user_data(resource);
 
-    free(state);
+    if (!surf)
+        return;
+
+    surf->layer_surface_res = NULL;
 }
+
+
+/* ------------------------------------------------------------------------- */
+/* layer_surface requests                                                    */
+/* ------------------------------------------------------------------------- */
 
 static void layer_surface_destroy(
         struct wl_client *client,
@@ -65,15 +76,9 @@ static void layer_surface_set_size(
         uint32_t height)
 {
     (void)client;
-
-    struct layer_surface_state *state =
-            wl_resource_get_user_data(resource);
-
-    if (!state)
-        return;
-
-    state->desired_width = width;
-    state->desired_height = height;
+    (void)resource;
+    (void)width;
+    (void)height;
 }
 
 static void layer_surface_set_anchor(
@@ -82,12 +87,8 @@ static void layer_surface_set_anchor(
         uint32_t anchor)
 {
     (void)client;
-
-    struct layer_surface_state *state =
-            wl_resource_get_user_data(resource);
-
-    if (state)
-        state->anchor = anchor;
+    (void)resource;
+    (void)anchor;
 }
 
 static void layer_surface_set_exclusive_zone(
@@ -96,12 +97,8 @@ static void layer_surface_set_exclusive_zone(
         int32_t zone)
 {
     (void)client;
-
-    struct layer_surface_state *state =
-            wl_resource_get_user_data(resource);
-
-    if (state)
-        state->exclusive_zone = zone;
+    (void)resource;
+    (void)zone;
 }
 
 static void layer_surface_set_margin(
@@ -113,17 +110,11 @@ static void layer_surface_set_margin(
         int32_t left)
 {
     (void)client;
-
-    struct layer_surface_state *state =
-            wl_resource_get_user_data(resource);
-
-    if (!state)
-        return;
-
-    state->margin_top = top;
-    state->margin_right = right;
-    state->margin_bottom = bottom;
-    state->margin_left = left;
+    (void)resource;
+    (void)top;
+    (void)right;
+    (void)bottom;
+    (void)left;
 }
 
 static void layer_surface_set_keyboard_interactivity(
@@ -132,12 +123,8 @@ static void layer_surface_set_keyboard_interactivity(
         uint32_t mode)
 {
     (void)client;
-
-    struct layer_surface_state *state =
-            wl_resource_get_user_data(resource);
-
-    if (state)
-        state->keyboard_interactive = mode;
+    (void)resource;
+    (void)mode;
 }
 
 static void layer_surface_get_popup(
@@ -166,13 +153,14 @@ static void layer_surface_set_layer(
         uint32_t layer)
 {
     (void)client;
-
-    struct layer_surface_state *state =
-            wl_resource_get_user_data(resource);
-
-    if (state)
-        state->layer = layer;
+    (void)resource;
+    (void)layer;
 }
+
+
+/* ------------------------------------------------------------------------- */
+/* layer_surface interface                                                   */
+/* ------------------------------------------------------------------------- */
 
 static const struct zwlr_layer_surface_v1_interface
 layer_surface_impl = {
@@ -202,6 +190,11 @@ layer_surface_impl = {
         layer_surface_set_layer,
 };
 
+
+/* ------------------------------------------------------------------------- */
+/* layer_shell requests                                                      */
+/* ------------------------------------------------------------------------- */
+
 static void layer_shell_destroy(
         struct wl_client *client,
         struct wl_resource *resource)
@@ -220,49 +213,29 @@ static void layer_shell_get_layer_surface(
         uint32_t layer,
         const char *namespace)
 {
+    (void)client;
     (void)resource;
+    (void)id;
+    (void)surface;
     (void)output;
+    (void)layer;
+    (void)namespace;
 
-    struct layer_surface_state *state =
-            calloc(1, sizeof(*state));
-
-    if (!state) {
-        wl_client_post_no_memory(client);
-        return;
-    }
-
-    state->layer = layer;
-
-    if (namespace)
-        strncpy(state->name_space,
-                namespace,
-                sizeof(state->name_space) - 1);
-
-    struct wl_resource *layer_res =
-            wl_resource_create(
-                    client,
-                    &zwlr_layer_surface_v1_interface,
-                    1,
-                    id);
-
-    if (!layer_res) {
-        free(state);
-        wl_client_post_no_memory(client);
-        return;
-    }
-
-    wl_resource_set_implementation(
-            layer_res,
-            &layer_surface_impl,
-            state,
-            layer_surface_resource_destroy);
-
-    LOGI("new layer_surface=%p surface=%p layer=%u namespace=%s",
-            layer_res,
-            surface,
-            layer,
-            state->name_space);
+    /*
+     * Stage 2:
+     *
+     * - obtain compositor_surface
+     * - validate role
+     * - create layer_surface resource
+     * - attach implementation
+     * - send initial configure
+     */
 }
+
+
+/* ------------------------------------------------------------------------- */
+/* layer_shell interface                                                     */
+/* ------------------------------------------------------------------------- */
 
 static const struct zwlr_layer_shell_v1_interface
 layer_shell_impl = {
@@ -272,6 +245,11 @@ layer_shell_impl = {
     .get_layer_surface =
         layer_shell_get_layer_surface,
 };
+
+
+/* ------------------------------------------------------------------------- */
+/* global bind                                                               */
+/* ------------------------------------------------------------------------- */
 
 void layer_shell_bind(
         struct wl_client *client,
