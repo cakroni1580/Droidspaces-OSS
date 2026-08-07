@@ -41,7 +41,15 @@
 struct layer_surface_state {
 
     struct wl_resource *resource;
-
+    /*
+     * Client requested size.
+     *
+     * Bukan final size.
+     * Hanya dipakai compositor saat
+     * menghitung configure.
+     */
+    uint32_t requested_width;
+    uint32_t requested_height;
     /*
      * Current layer-shell state.
      *
@@ -134,14 +142,14 @@ static void layer_surface_set_size(
         return;
 
     /*
-     * Phoc-compatible:
-     * ukuran request client tidak disimpan.
-     * Nilai ini hanya menjadi hint dan akan
-     * diputuskan kembali ketika configure
-     * dikirim compositor.
+     * Phoc style:
+     *
+     * Simpan sebagai hint.
+     * Layout compositor tetap menentukan
+     * configure final.
      */
-   surf->layer_surface->width = width;
-   surf->layer_surface->height = height;
+    surf->layer_surface->requested_width = width;
+    surf->layer_surface->requested_height = height;
 }
 
 static void layer_surface_set_anchor(
@@ -160,6 +168,13 @@ static void layer_surface_set_anchor(
             return;
 
     surf->layer_surface->anchor = anchor;
+
+
+    /*
+     * State berubah.
+     * Kirim configure baru.
+     */
+    send_layer_surface_configure(surf);
 }
 
 static void layer_surface_set_exclusive_zone(
@@ -203,6 +218,12 @@ static void layer_surface_set_margin(
     surf->layer_surface->margin_right = right;
     surf->layer_surface->margin_bottom = bottom;
     surf->layer_surface->margin_left = left;
+
+
+    /*
+     * Recalculate layout.
+     */
+    send_layer_surface_configure(surf);
 }
 
 static void layer_surface_set_keyboard_interactivity(
@@ -524,6 +545,96 @@ static void layer_shell_get_layer_surface(
     send_layer_surface_configure(surf);
 }
 
+static void layer_surface_calculate_size(
+        struct compositor_surface *surf,
+        uint32_t *width,
+        uint32_t *height)
+{
+    struct layer_surface_state *ls =
+            surf->layer_surface;
+
+    uint32_t ow = surf->srv->output_width;
+    uint32_t oh = surf->srv->output_height;
+
+
+    /*
+     * Trierarch host policy:
+     *
+     * Layer fullscreen default.
+     *
+     * GTK panels / phosh shell:
+     * biasanya TOP/BOTTOM memakai
+     * anchor + exclusive zone.
+     */
+
+    if (!ls) {
+        *width = ow;
+        *height = oh;
+        return;
+    }
+
+
+    /*
+     * Full anchor:
+     *
+     * left + right + top + bottom
+     */
+    bool horizontal =
+        (ls->anchor &
+        ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) &&
+        (ls->anchor &
+        ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
+
+
+    bool vertical =
+        (ls->anchor &
+        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) &&
+        (ls->anchor &
+        ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM);
+
+
+
+    if (horizontal)
+        *width = ow;
+    else if (ls->requested_width)
+        *width = ls->requested_width;
+    else
+        *width = ow;
+
+
+
+    if (vertical)
+        *height = oh;
+    else if (ls->requested_height)
+        *height = ls->requested_height;
+    else
+        *height = oh;
+
+
+
+    /*
+     * margin mengurangi area configure
+     */
+    if (*width >
+        (uint32_t)(ls->margin_left +
+                   ls->margin_right)) {
+
+        *width -=
+            ls->margin_left +
+            ls->margin_right;
+    }
+
+
+    if (*height >
+        (uint32_t)(ls->margin_top +
+                   ls->margin_bottom)) {
+
+        *height -=
+            ls->margin_top +
+            ls->margin_bottom;
+    }
+}
+
 
 /* ------------------------------------------------------------------------- */
 /* layer_shell interface                                                     */
@@ -552,14 +663,15 @@ void send_layer_surface_configure(struct compositor_surface *surf)
         !surf->srv)
         return;
 
-    /*
-     * Phoc model:
-     * configure selalu berasal dari layout compositor,
-     * bukan dari state yang disimpan oleh request
-     * set_size().
-     */
-    uint32_t width = surf->srv->output_width;
-    uint32_t height = surf->srv->output_height;
+     uint32_t width = 0;
+     uint32_t height = 0;
+
+
+    layer_surface_calculate_size(
+            surf,
+            &width,
+            &height);
+    
     uint32_t serial =
         wl_display_next_serial(surf->srv->display);
 
