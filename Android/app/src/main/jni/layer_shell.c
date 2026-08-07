@@ -132,8 +132,8 @@ static void layer_surface_set_size(
      * diputuskan kembali ketika configure
      * dikirim compositor.
      */
-   (void)width;
-   (void)height;
+   surf->layer_surface->width = width;
+   surf->layer_surface->height = height;
 }
 
 static void layer_surface_set_anchor(
@@ -210,6 +210,15 @@ static void layer_surface_set_keyboard_interactivity(
 
     if (!surf || !surf->layer_surface)
             return;
+
+    if (mode >
+            ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND) {
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_KEYBOARD_INTERACTIVITY,
+                "invalid keyboard interactivity");
+        return;
+    }
 
     surf->layer_surface->keyboard_interactive = mode;
 }
