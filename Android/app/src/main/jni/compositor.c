@@ -25,6 +25,7 @@
 #include "linux-dmabuf-v1-server-protocol.h"
 #include "android-wlegl-server-protocol.h"
 #include "gtk-shell-server-protocol.h"
+#include "wlr-layer-shell-unstable-v1-server-protocol.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -160,6 +161,20 @@ static wayland_server_t *compositor_create_impl(const char *runtime_dir, const c
     wl_global_create(srv->display, &wp_presentation_interface, 2, srv, presentation_bind);
     wl_global_create(srv->display, &gtk_shell1_interface, 3, srv, gtk_shell_bind);
     LOGI("global advertised: gtk_shell1 v3");
+    /*
+     * wlr-layer-shell v1
+     *
+     * Advertise zwlr_layer_shell_v1 to Wayland clients.
+     * Layer surface creation is handled by layershell.c.
+     */
+    wl_global_create(
+            srv->display,
+            &zwlr_layer_shell_v1_interface,
+            4,
+            srv,
+            layer_shell_bind);
+
+    LOGI("global advertised: zwlr_layer_shell_v1 v4");
 
     g_client_created_listener.notify = client_created_notify;
     wl_display_add_client_created_listener(srv->display, &g_client_created_listener);
