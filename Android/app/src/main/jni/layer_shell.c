@@ -81,6 +81,11 @@ struct layer_surface_state {
     uint32_t acked_serial;
 
     bool configured;
+    /*
+     * True setelah client menerima
+     * configure dan boleh commit buffer.
+     */
+    bool first_buffer_allowed;
 
     char namespace_name[128];
 };
@@ -295,6 +300,15 @@ static void layer_surface_ack_configure(
 
     surf->layer_surface->acked_serial = serial;
     surf->layer_surface->configured = true;
+    /*
+     * Setelah ack configure,
+     * client boleh commit buffer.
+     */
+    surf->layer_surface->first_buffer_allowed = true;
+    LOGI(
+         "layer ack surf=%p serial=%u",
+         (void *)surf,
+         serial);
 }
 
 static void layer_surface_set_layer(
@@ -501,7 +515,9 @@ static void layer_shell_get_layer_surface(
                 namespace,
                 sizeof(state->namespace_name) - 1);
     }
-
+    
+    state->configured = false;
+    state->first_buffer_allowed = false;
     surf->role = SURFACE_ROLE_LAYER;
     surf->layer_surface = state;
     surf->layer_surface_res = layer_res;
@@ -549,6 +565,12 @@ static void layer_shell_get_layer_surface(
      * its first buffer until configure has been sent.
      */
     send_layer_surface_configure(surf);
+    LOGI(
+        "layer configure surf=%p size=%ux%u serial=%u",
+         (void *)surf,
+         width,
+         height,
+         serial);
 }
 
 static void layer_surface_calculate_size(
@@ -729,6 +751,11 @@ void send_layer_surface_configure(struct compositor_surface *surf)
      * Menunggu ack_configure().
      */
     surf->layer_surface->configured = false;
+    /*
+     * Tunggu ack_configure sebelum
+     * menerima buffer pertama.
+     */
+    surf->layer_surface->first_buffer_allowed = false;
 
     zwlr_layer_surface_v1_send_configure(
             surf->layer_surface_res,
