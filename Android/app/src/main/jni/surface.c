@@ -33,26 +33,10 @@ static void surface_resource_destroy(struct wl_resource *resource) {
         wl_resource_set_user_data(surf->subsurface_res, NULL);
         surf->subsurface_res = NULL;
     }
-    /*
-     * Layer-shell state ownership tetap berada di layer-shell.c.
-     *
-     * surface.c hanya memutus hubungan compositor_surface
-     * dengan resource layer-shell sebelum compositor_surface
-     * dibebaskan.
-     *
-     * Jangan free(surf->layer_surface) di sini.
-     * Cleanup state dilakukan oleh
-     * layer_surface_resource_destroy().
-     */
     if (surf->layer_surface_res) {
-        wl_resource_set_user_data(
-            surf->layer_surface_res,
-            NULL);
-
-        surf->layer_surface_res = NULL;
+        wl_resource_destroy(
+            surf->layer_surface_res);
     }
-
-    surf->layer_surface = NULL;
 
     /*
      * GTK shell role.
