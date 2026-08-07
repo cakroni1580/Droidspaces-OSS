@@ -34,36 +34,28 @@ static void surface_resource_destroy(struct wl_resource *resource) {
         surf->subsurface_res = NULL;
     }
     /*
-     * Layer shell role cleanup.
+     * Layer-shell state ownership tetap berada di layer-shell.c.
      *
-     * wl_surface adalah object utama.
-     * Jika wl_surface dihancurkan sebelum
-     * zwlr_layer_surface_v1 resource,
-     * detach role resource supaya
-     * layer_surface_resource_destroy()
-     * tidak memakai pointer invalid.
+     * surface.c hanya memutus hubungan compositor_surface
+     * dengan resource layer-shell sebelum compositor_surface
+     * dibebaskan.
+     *
+     * Jangan free(surf->layer_surface) di sini.
+     * Cleanup state dilakukan oleh
+     * layer_surface_resource_destroy().
      */
     if (surf->layer_surface_res) {
-
         wl_resource_set_user_data(
-                surf->layer_surface_res,
-                NULL);
+            surf->layer_surface_res,
+            NULL);
 
         surf->layer_surface_res = NULL;
     }
 
-    if (surf->layer_surface) {
-
-        free(surf->layer_surface);
-
-        surf->layer_surface = NULL;
-    }
-
-    surf->role = SURFACE_ROLE_NONE;
+    surf->layer_surface = NULL;
 
     /*
-     * Layer role is owned by layer_shell.c.
-     * Just detach the pointer here.
+     * GTK shell role.
      */
     surf->gtk_surface = NULL;
     
