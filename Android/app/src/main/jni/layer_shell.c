@@ -230,17 +230,22 @@ static void layer_surface_ack_configure(
         uint32_t serial)
 {
     (void)client;
-    (void)resource;
-    (void)serial;
 
-/*
- * Sama seperti xdg-shell:
- * hanya configure terakhir yang boleh di-ack.
- */
-if (serial != surf->layer_surface->last_configure_serial)
-    return;
+    struct compositor_surface *surf =
+            wl_resource_get_user_data(resource);
+
+    if (!surf || !surf->layer_surface)
+        return;
+
+    /*
+     * Ikuti pola xdg-shell/Phoc:
+     * ack hanya diterima untuk configure terakhir.
+     */
+    if (serial != surf->layer_surface->last_configure_serial)
+        return;
 
     surf->layer_surface->acked_serial = serial;
+    surf->layer_surface->configured = true;
 }
 
 static void layer_surface_set_layer(
@@ -256,7 +261,40 @@ static void layer_surface_set_layer(
 
     if (!surf || !surf->layer_surface)
             return;
+    if (layer > ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_SURFACE_STATE,
+                "invalid layer");
+        return;
+    }
+
     surf->layer_surface->layer = layer;
+
+    /*
+     * Sinkronkan z-order internal.
+     * Layout engine nantinya tetap boleh
+     * mengubah urutan akhir.
+     */
+    switch (layer) {
+
+    case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
+        surf->z_order = 0;
+        break;
+
+    case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
+        surf->z_order = 100;
+        break;
+
+    case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
+        surf->z_order = 5000;
+        break;
+
+    case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
+    default:
+        surf->z_order = 10000;
+        break;
+    }
 }
 
 
@@ -506,7 +544,10 @@ void send_layer_surface_configure(struct compositor_surface *surf)
     surf->layer_surface->last_configure_serial =
             serial;
 
-    surf->layer_surface->configured = true;
+    /*
+     * Menunggu ack_configure().
+     */
+    surf->layer_surface->configured = false;
 
     zwlr_layer_surface_v1_send_configure(
             surf->layer_surface_res,
