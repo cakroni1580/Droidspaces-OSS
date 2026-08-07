@@ -821,7 +821,7 @@ void layer_surface_notify_output_change(
     wl_list_for_each(
             surf,
             &srv->surfaces,
-            link) {*/
+            link) {
 
 
         if (!surf->layer_surface)
