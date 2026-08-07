@@ -76,16 +76,6 @@ struct layer_surface_state {
 
     char namespace_name[128];
 };
-
-static bool layer_surface_wants_keyboard(
-        struct compositor_surface *surf)
-{
-    if (!surf || !surf->layer_surface)
-        return false;
-
-    return surf->layer_surface->keyboard_interactive !=
-        ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE;
-}
 /* ------------------------------------------------------------------------- */
 /* layer_surface resource                                                    */
 /* ------------------------------------------------------------------------- */
