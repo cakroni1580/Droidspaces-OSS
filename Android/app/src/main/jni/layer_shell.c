@@ -202,7 +202,6 @@ static void layer_surface_set_anchor(
 {
     (void)client;
     (void)resource;
-    (void)client;
 
     struct compositor_surface *surf =
             wl_resource_get_user_data(resource);
