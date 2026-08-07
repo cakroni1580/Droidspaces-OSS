@@ -347,5 +347,17 @@ void layer_shell_bind(
         uint32_t version,
         uint32_t id);
 void send_layer_surface_configure(struct compositor_surface *surf);
+void surface_notify_preferred_buffer_scale_all(
+        struct wayland_server *srv);
+
+
+/*
+ * layer-shell geometry update.
+ *
+ * Dipanggil ketika output geometry berubah.
+ */
+void layer_surface_notify_output_change(
+        struct wayland_server *srv);
+
 
 #endif
