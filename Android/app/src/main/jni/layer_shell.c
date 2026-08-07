@@ -42,6 +42,15 @@ struct layer_surface_state {
 
     struct wl_resource *resource;
 
+    /*
+     * Current layer-shell state.
+     *
+     * Trierarch mengikuti model Phoc:
+     * tidak memiliki pending/desire state sendiri.
+     * Nilai request client langsung disimpan di sini,
+     * sedangkan ukuran configure selalu dihitung oleh
+     * compositor saat send_layer_surface_configure().
+     */
     uint32_t layer;
     uint32_t anchor;
 
@@ -49,14 +58,17 @@ struct layer_surface_state {
 
     int32_t exclusive_zone;
 
-    int32_t desired_width;
-    int32_t desired_height;
-
+    /*
+     * Margin dari client.
+     */
     int32_t margin_top;
     int32_t margin_right;
     int32_t margin_bottom;
     int32_t margin_left;
 
+    /*
+     * Configure tracking.
+     */
     uint32_t last_configure_serial;
     uint32_t acked_serial;
 
@@ -113,8 +125,15 @@ static void layer_surface_set_size(
     if (!surf || !surf->layer_surface)
         return;
 
-    surf->layer_surface->desired_width = width;
-    surf->layer_surface->desired_height = height;
+    /*
+     * Phoc-compatible:
+     * ukuran request client tidak disimpan.
+     * Nilai ini hanya menjadi hint dan akan
+     * diputuskan kembali ketika configure
+     * dikirim compositor.
+     */
+   (void)width;
+   (void)height;
 }
 
 static void layer_surface_set_anchor(
@@ -427,28 +446,14 @@ void send_layer_surface_configure(struct compositor_surface *surf)
         !surf->srv)
         return;
 
-    uint32_t width =
-        surf->layer_surface->desired_width;
-
-    uint32_t height =
-        surf->layer_surface->desired_height;
-
     /*
-     * Per protocol:
-     * width/height = 0 berarti compositor menentukan.
+     * Phoc model:
+     * configure selalu berasal dari layout compositor,
+     * bukan dari state yang disimpan oleh request
+     * set_size().
      */
-
-    if (width == 0)
-        width = surf->srv->output_width;
-
-    if (height == 0)
-        height = surf->srv->output_height;
-
-    uint32_t serial =
-        wl_display_next_serial(surf->srv->display);
-
-    surf->layer_surface->last_configure_serial =
-        serial;
+    uint32_t width = surf->srv->output_width;
+    uint32_t height = surf->srv->output_height;
 
     zwlr_layer_surface_v1_send_configure(
             surf->layer_surface_res,
