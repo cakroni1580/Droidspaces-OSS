@@ -94,11 +94,15 @@ static void layer_surface_resource_destroy(
     struct compositor_surface *surf =
             wl_resource_get_user_data(resource);
 
+
+    /*
+     * Resource sudah tidak punya owner surface.
+     * Tidak ada cleanup lagi.
+     */
     if (!surf)
         return;
-    /*
-     * Remove keyboard focus if this layer owned it.
-     */
+
+
     if (surf->srv &&
         surf->srv->keyboard_focus == surf) {
 
@@ -107,9 +111,24 @@ static void layer_surface_resource_destroy(
                 NULL);
     }
 
+
+    /*
+     * Detach resource dulu.
+     */
     surf->layer_surface_res = NULL;
-    free(surf->layer_surface);
-    surf->layer_surface = NULL;
+
+
+    /*
+     * Free layer state hanya sekali.
+     */
+    if (surf->layer_surface) {
+
+        free(surf->layer_surface);
+
+        surf->layer_surface = NULL;
+    }
+
+
     surf->role = SURFACE_ROLE_NONE;
 }
 
