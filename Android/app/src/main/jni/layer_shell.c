@@ -38,6 +38,25 @@
 #define LOGE(...) \
     __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+/*
+ * Trierarch render-list contract:
+ *
+ * layer-shell tidak memiliki render list sendiri.
+ * Semua compositor_surface tetap berada di srv->surfaces
+ * dan dirender oleh compositor_foreach_surface() di server.c.
+ *
+ * z_order hanya menentukan posisi surface tersebut
+ * ketika server.c melakukan qsort().
+ *
+ * Normal xdg surfaces menggunakan z_order mulai dari
+ * srv->next_z_order (nilai positif kecil), sehingga
+ * range layer-shell dibuat jauh di atas/bawah range normal.
+ */
+#define TRIERARCH_LAYER_Z_BACKGROUND   (-30000)
+#define TRIERARCH_LAYER_Z_BOTTOM       (-20000)
+#define TRIERARCH_LAYER_Z_TOP           (20000)
+#define TRIERARCH_LAYER_Z_OVERLAY      (30000)
+
 struct layer_surface_state {
 
     struct wl_resource *resource;
@@ -335,30 +354,30 @@ static void layer_surface_set_layer(
     surf->layer_surface->layer = layer;
 
     /*
-     * Sinkronkan z-order internal.
-     * Layout engine nantinya tetap boleh
-     * mengubah urutan akhir.
+     * Trierarch render-list contract:
+     *
+     * Jangan membuat list layer sendiri.
+     * compositor_foreach_surface() di server.c
+     * mengambil surface dari srv->surfaces lalu
+     * mengurutkannya berdasarkan surf->z_order.
      */
     switch (layer) {
 
     case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
-        surf->z_order = -10000;
+        surf->z_order = TRIERARCH_LAYER_Z_BACKGROUND;
         break;
-
 
     case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
-        surf->z_order = -5000;
+        surf->z_order = TRIERARCH_LAYER_Z_BOTTOM;
         break;
-
 
     case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
-        surf->z_order = 5000;
+        surf->z_order = TRIERARCH_LAYER_Z_TOP;
         break;
-
 
     case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
     default:
-        surf->z_order = 10000;
+        surf->z_order = TRIERARCH_LAYER_Z_OVERLAY;
         break;
     }
 }
@@ -526,29 +545,30 @@ static void layer_shell_get_layer_surface(
     surf->layer_surface_res = layer_res;
 
     /*
-     * Layer surfaces live above normal windows by default.
-     * Later layout policy may adjust this depending on layer.
+     * Trierarch render-list contract:
+     *
+     * Jangan membuat list layer sendiri.
+     * compositor_foreach_surface() di server.c
+     * mengambil surface dari srv->surfaces lalu
+     * mengurutkannya berdasarkan surf->z_order.
      */
     switch (layer) {
-        
-    case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
-        surf->z_order = -10000;
-        break;
 
+    case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
+        surf->z_order = TRIERARCH_LAYER_Z_BACKGROUND;
+        break;
 
     case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
-        surf->z_order = -5000;
+        surf->z_order = TRIERARCH_LAYER_Z_BOTTOM;
         break;
-
 
     case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
-        surf->z_order = 5000;
+        surf->z_order = TRIERARCH_LAYER_Z_TOP;
         break;
-
 
     case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
     default:
-        surf->z_order = 10000;
+        surf->z_order = TRIERARCH_LAYER_Z_OVERLAY;
         break;
     }
 
@@ -784,23 +804,34 @@ void layer_surface_notify_output_change(
     struct compositor_surface *surf;
 
 
+    /*
+      NOTE...!!!
+     * Tidak ada render traversal di layer-shell.c.
+     *
+     * Rendering seluruh compositor_surface dilakukan
+     * oleh compositor_foreach_surface() di server.c.
+     *
+     * Layer-shell hanya mengubah:
+     *   - surf->layer_surface
+     *   - surf->z_order
+     *   - configure geometry
+     *   - keyboard focus
+     *wl_list_for_each() masih perlu perbaikan mengikuti notes.
+     */
     wl_list_for_each(
             surf,
             &srv->surfaces,
-            link) {
+            link) {*/
 
 
         if (!surf->layer_surface)
             continue;
 
-
-        /*
-         * Recalculate configure
-         * berdasarkan output terbaru.
-         */
         send_layer_surface_configure(
                 surf);
     }
+
+    
 
 
     pthread_mutex_unlock(
