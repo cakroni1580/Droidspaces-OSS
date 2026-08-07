@@ -113,6 +113,8 @@ struct compositor_surface {
      * Diisi oleh gtk_shell_get_gtk_surface().
      */
     struct gtk_surface_state *gtk_surface;
+    struct layer_surface_state *layer_surface;
+    struct wl_resource *layer_surface_res;
 
 
     int32_t buffer_offset_x, buffer_offset_y;
@@ -339,5 +341,6 @@ void android_wlegl_bind(struct wl_client *client, void *data, uint32_t version, 
 void gtk_shell_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
 void gtk_surface_send_configure(
         struct compositor_surface *surf);
+void send_layer_surface_configure(struct compositor_surface *surf);
 
 #endif
