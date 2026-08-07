@@ -256,6 +256,23 @@ static void surface_commit(struct wl_client *client, struct wl_resource *resourc
     pthread_mutex_unlock(&surf->srv->surfaces_mutex);
 
     if (surf->current_buffer) {
+        /*
+         * Layer-shell keyboard focus.
+         *
+         * Phoc behavior:
+         * keyboard diberikan setelah surface
+         * mempunyai buffer aktif.
+         */
+        if (surf->layer_surface &&
+            surf->layer_surface->keyboard_interactive &&
+            surf->srv) {
+
+            keyboard_focus_update(
+                    surf->srv,
+                    surf);
+        }
+
+
         int32_t bw = buffer_ref_width(surf->current_buffer);
         int32_t bh = buffer_ref_height(surf->current_buffer);
         int32_t bs = surf->buffer_scale > 0 ? surf->buffer_scale : 1;
