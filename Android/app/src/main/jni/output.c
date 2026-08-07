@@ -109,6 +109,8 @@ void compositor_set_output_size(wayland_server_t *srv_opaque,
     wl_list_for_each(surf, &srv->surfaces, link) {
         if (surf->xdg_toplevel_res)
             send_toplevel_configure(surf);
+        if (surf->layer_surface_res)
+            send_layer_surface_configure(surf);
     }
     pthread_mutex_unlock(&srv->surfaces_mutex);
     /* Notify already-bound wl_output resources so Resolution takes effect without reconnecting. */
