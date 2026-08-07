@@ -102,18 +102,10 @@ static void layer_surface_resource_destroy(
 
         surf->layer_surface = NULL;
     }
-
     /*
-     * Reset WM geometry yang sebelumnya diberikan
-     * oleh layer-shell.
-     *
-     * Ini mencegah posisi layer lama terbawa ketika
-     * compositor_surface lifecycle masih diproses.
+     * layer_surface/layer_surface_res are cleared below.
+     * Trierarch has no generic surface role enum.
      */
-    surf->wm_x = 0;
-    surf->wm_y = 0;
-
-    surf->role = SURFACE_ROLE_NONE;
 }
 
 
@@ -472,22 +464,21 @@ static void layer_shell_get_layer_surface(
     }
 
     /*
-     * Same rule as xdg-shell:
-     * one role per wl_surface.
+     * One layer-surface role per wl_surface.
+     *
+     * Trierarch does not have a generic `surf->role` field.
+     * Existing protocol resources/state are the role markers.
+     *
+     * layer_surface itself prevents creating a second
+     * zwlr_layer_surface_v1 for the same wl_surface.
      */
-    if (surf->role != SURFACE_ROLE_NONE) {
-        wl_resource_post_error(
-                resource,
-                ZWLR_LAYER_SHELL_V1_ERROR_ROLE,
-                "surface already has role");
-        return;
-    }
+    if (surf->layer_surface ||
+        surf->layer_surface_res) {
 
-    if (surf->layer_surface) {
         wl_resource_post_error(
                 resource,
                 ZWLR_LAYER_SHELL_V1_ERROR_ROLE,
-                "layer_surface already exists");
+                "surface already has a layer-shell role");
         return;
     }
 
@@ -535,7 +526,6 @@ static void layer_shell_get_layer_surface(
     
     state->configured = false;
     state->first_buffer_allowed = false;
-    surf->role = SURFACE_ROLE_LAYER;
     surf->layer_surface = state;
     surf->layer_surface_res = layer_res;
 
