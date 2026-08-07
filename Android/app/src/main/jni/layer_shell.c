@@ -342,16 +342,19 @@ static void layer_surface_set_layer(
     switch (layer) {
 
     case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
-        surf->z_order = 0;
+        surf->z_order = -10000;
         break;
 
+
     case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
-        surf->z_order = 100;
+        surf->z_order = -5000;
         break;
+
 
     case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
         surf->z_order = 5000;
         break;
+
 
     case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
     default:
@@ -527,18 +530,21 @@ static void layer_shell_get_layer_surface(
      * Later layout policy may adjust this depending on layer.
      */
     switch (layer) {
-
+        
     case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
-        surf->z_order = 0;
+        surf->z_order = -10000;
         break;
+
 
     case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
-        surf->z_order = 100;
+        surf->z_order = -5000;
         break;
+
 
     case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
         surf->z_order = 5000;
         break;
+
 
     case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
     default:
