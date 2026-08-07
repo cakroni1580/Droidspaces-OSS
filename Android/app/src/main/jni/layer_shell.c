@@ -1,20 +1,8 @@
 /*
  * wlr-layer-shell (zwlr_layer_shell_v1)
- *
- * Stage 1
- * --------
- * - global bind
- * - layer_shell resource
- * - layer_surface resource
- * - request skeleton
- *
- * Belum:
- *   - configure
- *   - layout
- *   - exclusive zone
- *   - keyboard focus
- *   - popup
- */
+ * layershell.c berjalan di trierarch compositor jni sebagai compositor display host
+ * buat agar agar mengikuti phoc alih alih wlroots.
+ **/
 
 #include "server_internal.h"
 #include "wlr-layer-shell-unstable-v1-server-protocol.h"
