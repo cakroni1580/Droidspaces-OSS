@@ -151,6 +151,9 @@ void compositor_set_output_user_scale(wayland_server_t *srv_opaque, int32_t scal
     wl_list_for_each(surf, &srv->surfaces, link) {
         if (surf->xdg_toplevel_res)
             send_toplevel_configure(surf);
+            /*layer_shell.c*/
+            send_layer_surface_configure(surf);
+            
     }
     pthread_mutex_unlock(&srv->surfaces_mutex);
     output_notify_all(srv);
