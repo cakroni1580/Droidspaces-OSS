@@ -50,6 +50,7 @@ add_library(wayland-compositor SHARED
     surface.c
     compositor.c
     xdg_shell.c
+    layer_shell.c
 
     # Compositor core — identical set to Android.mk, minus jni_bridge.c
     # renderer.c is included here because WaylandSurface uses EGL rendering
