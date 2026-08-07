@@ -341,6 +341,11 @@ void android_wlegl_bind(struct wl_client *client, void *data, uint32_t version, 
 void gtk_shell_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
 void gtk_surface_send_configure(
         struct compositor_surface *surf);
+void layer_shell_bind(
+        struct wl_client *client,
+        void *data,
+        uint32_t version,
+        uint32_t id);
 void send_layer_surface_configure(struct compositor_surface *surf);
 
 #endif
