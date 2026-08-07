@@ -168,13 +168,6 @@ static void layer_surface_set_anchor(
             return;
 
     surf->layer_surface->anchor = anchor;
-
-
-    /*
-     * State berubah.
-     * Kirim configure baru.
-     */
-    send_layer_surface_configure(surf);
 }
 
 static void layer_surface_set_exclusive_zone(
@@ -218,12 +211,6 @@ static void layer_surface_set_margin(
     surf->layer_surface->margin_right = right;
     surf->layer_surface->margin_bottom = bottom;
     surf->layer_surface->margin_left = left;
-
-
-    /*
-     * Recalculate layout.
-     */
-    send_layer_surface_configure(surf);
 }
 
 static void layer_surface_set_keyboard_interactivity(
@@ -613,25 +600,30 @@ static void layer_surface_calculate_size(
 
 
     /*
-     * margin mengurangi area configure
+     * Margin client.
+     *
+     * Jangan cast negatif ke uint32_t
+     * karena akan overflow.
      */
-    if (*width >
-        (uint32_t)(ls->margin_left +
-                   ls->margin_right)) {
-
-        *width -=
+    int32_t margin_w =
             ls->margin_left +
             ls->margin_right;
+
+    if (margin_w > 0 &&
+        *width > (uint32_t)margin_w) {
+
+        *width -= margin_w;
     }
 
 
-    if (*height >
-        (uint32_t)(ls->margin_top +
-                   ls->margin_bottom)) {
-
-        *height -=
+    int32_t margin_h =
             ls->margin_top +
             ls->margin_bottom;
+
+    if (margin_h > 0 &&
+        *height > (uint32_t)margin_h) {
+
+        *height -= margin_h;
     }
 }
 
