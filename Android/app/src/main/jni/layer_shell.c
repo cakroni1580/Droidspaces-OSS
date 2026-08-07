@@ -592,6 +592,22 @@ static void layer_shell_get_layer_surface(
     send_layer_surface_configure(surf);
 }
 
+/*
+ * Calculate layer-shell geometry.
+ *
+ * Trierarch policy follows the same conceptual model as Phoc:
+ *
+ *   - requested size is a size hint;
+ *   - anchor determines whether an axis is stretched;
+ *   - margins reduce the available geometry;
+ *   - exclusive_zone reserves output space but does NOT become
+ *     the surface size itself;
+ *   - wm_x/wm_y contain the final output position used by
+ *     compositor_foreach_surface() in DIRECT mode.
+ *
+ * IMPORTANT:
+ * layer-shell does not have its own render list.
+ */
 static void layer_surface_calculate_size(
         struct compositor_surface *surf,
         uint32_t *width,
@@ -600,127 +616,180 @@ static void layer_surface_calculate_size(
     struct layer_surface_state *ls =
             surf->layer_surface;
 
-    uint32_t ow = surf->srv->output_width;
-    uint32_t oh = surf->srv->output_height;
+    struct wayland_server *srv =
+            surf->srv;
 
+    uint32_t ow =
+            srv->output_width > 0 ?
+            srv->output_width : 1;
 
-    /*
-     * Trierarch host policy:
-     *
-     * Layer fullscreen default.
-     *
-     * GTK panels / phosh shell:
-     * biasanya TOP/BOTTOM memakai
-     * anchor + exclusive zone.
-     */
+    uint32_t oh =
+            srv->output_height > 0 ?
+            srv->output_height : 1;
 
     if (!ls) {
         *width = ow;
         *height = oh;
+        surf->wm_x = 0;
+        surf->wm_y = 0;
         return;
     }
 
+    const bool left =
+        (ls->anchor &
+         ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) != 0;
+
+    const bool right =
+        (ls->anchor &
+         ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) != 0;
+
+    const bool top =
+        (ls->anchor &
+         ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) != 0;
+
+    const bool bottom =
+        (ls->anchor &
+         ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
+
+    const bool stretch_x = left && right;
+    const bool stretch_y = top && bottom;
 
     /*
-     * Full anchor:
+     * ------------------------------------------------------------------
+     * Width
+     * ------------------------------------------------------------------
      *
-     * left + right + top + bottom
+     * Both horizontal anchors:
+     *
+     *     output width - left margin - right margin
+     *
+     * Otherwise use the client's requested width.
+     *
+     * Trierarch host policy:
+     * if no width was requested, use the output width.
      */
-    bool horizontal =
-        (ls->anchor &
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) &&
-        (ls->anchor &
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
+    if (stretch_x) {
 
+        int64_t w =
+            (int64_t)ow -
+            ls->margin_left -
+            ls->margin_right;
 
-    bool vertical =
-        (ls->anchor &
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) &&
-        (ls->anchor &
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM);
+        *width = w > 0 ? (uint32_t)w : 1;
 
-
-
-    if (horizontal) {
-
-        *width = ow;
-
-    } else if (ls->requested_width) {
+    } else if (ls->requested_width > 0) {
 
         *width = ls->requested_width;
 
     } else {
 
-        /*
-         * Surface tanpa width request:
-         * gunakan output.
-         */
         *width = ow;
     }
 
-
-
-    if (vertical)
-        *height = oh;
-    else if (ls->requested_height)
-        *height = ls->requested_height;
-    else
-        *height = oh;
-
-
-
     /*
-     * Margin client.
-     *
-     * Jangan cast negatif ke uint32_t
-     * karena akan overflow.
+     * ------------------------------------------------------------------
+     * Height
+     * ------------------------------------------------------------------
      */
-    int32_t margin_w =
-            ls->margin_left +
-            ls->margin_right;
+    if (stretch_y) {
 
-    if (margin_w > 0 &&
-        *width > (uint32_t)margin_w) {
-
-        *width -= margin_w;
-    }
-
-
-    int32_t margin_h =
-            ls->margin_top +
+        int64_t h =
+            (int64_t)oh -
+            ls->margin_top -
             ls->margin_bottom;
 
-    if (margin_h > 0 &&
-        *height > (uint32_t)margin_h) {
+        *height = h > 0 ? (uint32_t)h : 1;
 
-        *height -= margin_h;
+    } else if (ls->requested_height > 0) {
+
+        *height = ls->requested_height;
+
+    } else {
+
+        *height = oh;
     }
+
     /*
-     * Exclusive zone.
+     * ------------------------------------------------------------------
+     * Position X
+     * ------------------------------------------------------------------
      *
-     * Hanya berlaku untuk layer TOP/BOTTOM.
+     * If both anchors are present, the surface fills the horizontal
+     * available area.
+     *
+     * If only LEFT is anchored:
+     *
+     *     x = left margin
+     *
+     * If only RIGHT is anchored:
+     *
+     *     x = output_width - width - right margin
+     *
+     * If neither is anchored:
+     *
+     *     center the requested surface.
      */
-    if (ls->exclusive_zone > 0) {
+    if (left) {
 
-        if (ls->anchor &
-            ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) {
+        surf->wm_x =
+            ls->margin_left;
 
-            if (*height >
-                (uint32_t)ls->exclusive_zone)
-                *height =
-                    ls->exclusive_zone;
-        }
+    } else if (right) {
 
+        surf->wm_x =
+            (int32_t)ow -
+            (int32_t)*width -
+            ls->margin_right;
 
-        if (ls->anchor &
-            ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) {
+    } else {
 
-            if (*height >
-                (uint32_t)ls->exclusive_zone)
-                *height =
-                    ls->exclusive_zone;
-        }
+        surf->wm_x =
+            ((int32_t)ow -
+             (int32_t)*width) / 2;
     }
+
+    /*
+     * ------------------------------------------------------------------
+     * Position Y
+     * ------------------------------------------------------------------
+     */
+    if (top) {
+
+        surf->wm_y =
+            ls->margin_top;
+
+    } else if (bottom) {
+
+        surf->wm_y =
+            (int32_t)oh -
+            (int32_t)*height -
+            ls->margin_bottom;
+
+    } else {
+
+        surf->wm_y =
+            ((int32_t)oh -
+             (int32_t)*height) / 2;
+    }
+
+    /*
+     * ------------------------------------------------------------------
+     * Exclusive zone
+     * ------------------------------------------------------------------
+     *
+     * DO NOT replace surface height with exclusive_zone.
+     *
+     * exclusive_zone means:
+     *
+     *     "reserve this amount of output space"
+     *
+     * It is therefore relevant to layout of other surfaces.
+     *
+     * The layer surface itself keeps its calculated width/height.
+     *
+     * For Trierarch's single-fullscreen-host model we keep the
+     * layer surface anchored at the requested edge.
+     */
 }
 
 
