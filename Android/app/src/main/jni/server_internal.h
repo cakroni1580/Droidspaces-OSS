@@ -97,6 +97,58 @@ struct pending_frame_cb {
     struct wl_listener resource_listener;
 };
 
+struct layer_surface_state {
+
+    struct wl_resource *resource;
+    /*
+     * Client requested size.
+     *
+     * Bukan final size.
+     * Hanya dipakai compositor saat
+     * menghitung configure.
+     */
+    uint32_t requested_width;
+    uint32_t requested_height;
+    /*
+     * Current layer-shell state.
+     *
+     * Trierarch mengikuti model Phoc:
+     * tidak memiliki pending/desire state sendiri.
+     * Nilai request client langsung disimpan di sini,
+     * sedangkan ukuran configure selalu dihitung oleh
+     * compositor saat send_layer_surface_configure().
+     */
+    uint32_t layer;
+    uint32_t anchor;
+
+    uint32_t keyboard_interactive;
+
+    int32_t exclusive_zone;
+
+    /*
+     * Margin dari client.
+     */
+    int32_t margin_top;
+    int32_t margin_right;
+    int32_t margin_bottom;
+    int32_t margin_left;
+
+    /*
+     * Configure tracking.
+     */
+    uint32_t last_configure_serial;
+    uint32_t acked_serial;
+
+    bool configured;
+    /*
+     * True setelah client menerima
+     * configure dan boleh commit buffer.
+     */
+    bool first_buffer_allowed;
+
+    char namespace_name[128];
+};
+
 struct compositor_surface {
     struct wl_list link;
     struct wl_resource *resource;
