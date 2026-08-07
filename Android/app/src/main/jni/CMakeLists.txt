@@ -77,6 +77,7 @@ add_library(wayland-compositor SHARED
 
     # Generated protocol stubs — exact set from Android.mk
     src/protocol/gtk-shell-protocol.c
+    src/protocol/wlr-layer-shell-unstable-v1-protocol.c
     ${PROTOCOL_SRC}/xdg-shell-server-protocol.c
     ${PROTOCOL_SRC}/single-pixel-buffer-v1-server-protocol.c
     ${PROTOCOL_SRC}/viewporter-server-protocol.c
