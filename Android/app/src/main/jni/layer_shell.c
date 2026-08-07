@@ -38,6 +38,33 @@
 #define LOGE(...) \
     __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+struct layer_surface_state {
+
+    struct wl_resource *resource;
+
+    uint32_t layer;
+    uint32_t anchor;
+
+    uint32_t keyboard_interactive;
+
+    int32_t exclusive_zone;
+
+    int32_t desired_width;
+    int32_t desired_height;
+
+    int32_t margin_top;
+    int32_t margin_right;
+    int32_t margin_bottom;
+    int32_t margin_left;
+
+    uint32_t last_configure_serial;
+    uint32_t acked_serial;
+
+    bool configured;
+
+    char namespace_name[128];
+};
+
 
 /* ------------------------------------------------------------------------- */
 /* layer_surface resource                                                    */
@@ -53,6 +80,9 @@ static void layer_surface_resource_destroy(
         return;
 
     surf->layer_surface_res = NULL;
+    free(surf->layer_surface);
+   surf->layer_surface = NULL;
+   surf->role = SURFACE_ROLE_NONE;
 }
 
 
@@ -76,9 +106,15 @@ static void layer_surface_set_size(
         uint32_t height)
 {
     (void)client;
-    (void)resource;
-    (void)width;
-    (void)height;
+
+    struct compositor_surface *surf =
+        wl_resource_get_user_data(resource);
+
+    if (!surf || !surf->layer_surface)
+        return;
+
+    surf->layer_surface->desired_width = width;
+    surf->layer_surface->desired_height = height;
 }
 
 static void layer_surface_set_anchor(
@@ -89,6 +125,8 @@ static void layer_surface_set_anchor(
     (void)client;
     (void)resource;
     (void)anchor;
+
+    surf->layer_surface->anchor = anchor;
 }
 
 static void layer_surface_set_exclusive_zone(
@@ -99,6 +137,8 @@ static void layer_surface_set_exclusive_zone(
     (void)client;
     (void)resource;
     (void)zone;
+
+    surf->layer_surface->exclusive_zone = zone;
 }
 
 static void layer_surface_set_margin(
@@ -115,6 +155,11 @@ static void layer_surface_set_margin(
     (void)right;
     (void)bottom;
     (void)left;
+
+    surf->layer_surface->margin_top = top;
+    surf->layer_surface->margin_right = right;
+    surf->layer_surface->margin_bottom = bottom;
+    surf->layer_surface->margin_left = left;
 }
 
 static void layer_surface_set_keyboard_interactivity(
@@ -125,6 +170,8 @@ static void layer_surface_set_keyboard_interactivity(
     (void)client;
     (void)resource;
     (void)mode;
+
+    surf->layer_surface->keyboard_interactive = mode;
 }
 
 static void layer_surface_get_popup(
@@ -145,6 +192,8 @@ static void layer_surface_ack_configure(
     (void)client;
     (void)resource;
     (void)serial;
+
+    surf->layer_surface->acked_serial = serial;
 }
 
 static void layer_surface_set_layer(
@@ -368,6 +417,46 @@ layer_shell_impl = {
 /* ------------------------------------------------------------------------- */
 /* global bind                                                               */
 /* ------------------------------------------------------------------------- */
+
+
+void send_layer_surface_configure(struct compositor_surface *surf)
+{
+    if (!surf ||
+        !surf->layer_surface ||
+        !surf->layer_surface_res ||
+        !surf->srv)
+        return;
+
+    uint32_t width =
+        surf->layer_surface->desired_width;
+
+    uint32_t height =
+        surf->layer_surface->desired_height;
+
+    /*
+     * Per protocol:
+     * width/height = 0 berarti compositor menentukan.
+     */
+
+    if (width == 0)
+        width = surf->srv->output_width;
+
+    if (height == 0)
+        height = surf->srv->output_height;
+
+    uint32_t serial =
+        wl_display_next_serial(surf->srv->display);
+
+    surf->layer_surface->last_configure_serial =
+        serial;
+
+    zwlr_layer_surface_v1_send_configure(
+            surf->layer_surface_res,
+            serial,
+            width,
+            height);
+}
+
 
 void layer_shell_bind(
         struct wl_client *client,
