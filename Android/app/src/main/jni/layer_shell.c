@@ -228,34 +228,23 @@ static void layer_surface_set_keyboard_interactivity(
     if (!surf || !surf->layer_surface)
         return;
 
-
-    switch (mode) {
-
-    case ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE:
-    case ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE:
-    case ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND:
-
-        surf->layer_surface->keyboard_interactive = mode;
-        break;
-
-    default:
-
-        wl_resource_post_error(
-                resource,
-                ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_KEYBOARD_INTERACTIVITY,
-                "invalid keyboard interactivity");
-
-        return;
-    }
-
+    surf->layer_surface->keyboard_interactive = mode;
 
     /*
-     * Jangan langsung focus di sini.
+     * Phoc style:
      *
-     * Sama seperti Phoc:
-     * request client hanya mengubah state.
-     * Focus diberikan ketika surface sudah mapped.
+     * Layer surface dengan keyboard interactivity
+     * langsung menjadi keyboard target.
+     *
+     * Tidak membuat pending focus state.
+     * Focus diupdate melalui seat keyboard.
      */
+    if (mode != 0 && surf->srv) {
+
+        keyboard_focus_update(
+                surf->srv,
+                surf);
+    }
 }
 static void layer_surface_get_popup(
         struct wl_client *client,
