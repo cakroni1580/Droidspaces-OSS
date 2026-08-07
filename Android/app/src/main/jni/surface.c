@@ -34,6 +34,34 @@ static void surface_resource_destroy(struct wl_resource *resource) {
         surf->subsurface_res = NULL;
     }
     /*
+     * Layer shell role cleanup.
+     *
+     * wl_surface adalah object utama.
+     * Jika wl_surface dihancurkan sebelum
+     * zwlr_layer_surface_v1 resource,
+     * detach role resource supaya
+     * layer_surface_resource_destroy()
+     * tidak memakai pointer invalid.
+     */
+    if (surf->layer_surface_res) {
+
+        wl_resource_set_user_data(
+                surf->layer_surface_res,
+                NULL);
+
+        surf->layer_surface_res = NULL;
+    }
+
+    if (surf->layer_surface) {
+
+        free(surf->layer_surface);
+
+        surf->layer_surface = NULL;
+    }
+
+    surf->role = SURFACE_ROLE_NONE;
+
+    /*
      * Layer role is owned by layer_shell.c.
      * Just detach the pointer here.
      */
@@ -401,6 +429,13 @@ static void compositor_create_surface(struct wl_client *client,
     surf->buffer_offset_x = surf->buffer_offset_y = 0;
     surf->buffer_scale = 1;
     surf->entered_output = false;
+    /*
+     * layer-shell defaults.
+     *
+     * Role akan diisi oleh zwlr_layer_shell_v1.
+     */
+    surf->layer_surface = NULL;
+    surf->layer_surface_res = NULL;
     /*
      * GTK shell defaults.
      *
