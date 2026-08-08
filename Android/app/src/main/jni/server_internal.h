@@ -110,6 +110,14 @@ struct layer_surface_state {
     uint32_t requested_width;
     uint32_t requested_height;
     /*
+     * CONTEXT:
+     * API completion.
+     *
+     * xdg_popup yang dibuat oleh client dapat diregister
+     * sebagai child dari layer surface.
+     */
+    struct wl_resource *popup_res;
+    /*
      * Current layer-shell state.
      *
      * Trierarch mengikuti model Phoc:
@@ -410,6 +418,16 @@ void surface_notify_preferred_buffer_scale_all(
  */
 void layer_surface_notify_output_change(
         struct wayland_server *srv);
+
+bool layer_surface_is_active(
+        struct compositor_surface *surf);
+bool layer_surface_wants_keyboard(
+        struct compositor_surface *surf);
+bool layer_surface_buffer_allowed(
+        struct compositor_surface *surf);
+
+bool layer_surface_configured(
+        struct compositor_surface *surf);
 
 
 #endif
