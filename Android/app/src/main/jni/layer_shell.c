@@ -95,9 +95,8 @@ static void layer_surface_resource_destroy(
     surf->layer_surface_res = NULL;
 
     if (surf->layer_surface) {
-
+        surf->layer_surface->popup_res = NULL;
         free(surf->layer_surface);
-
         surf->layer_surface = NULL;
     }
     /*
@@ -259,15 +258,7 @@ static void layer_surface_set_keyboard_interactivity(
         mode);
 }
 
-static void layer_surface_get_popup(
-        struct wl_client *client,
-        struct wl_resource *resource,
-        struct wl_resource *popup)
-{
-    (void)client;
-    (void)resource;
-    (void)popup;
-}
+Android/app/src/main/jni/xdg_shell.c
 
 static void layer_surface_ack_configure(
         struct wl_client *client,
@@ -794,7 +785,94 @@ layer_shell_impl = {
 /* ------------------------------------------------------------------------- */
 /* global bind                                                               */
 /* ------------------------------------------------------------------------- */
+/*
+ * CONTEXT:
+ * Public compositor-side API.
+ *
+ * Mengembalikan true hanya jika compositor_surface sedang
+ * memiliki layer-shell role aktif.
+ */
+bool layer_surface_is_active(
+        struct compositor_surface *surf)
+{
+    return surf &&
+           surf->layer_surface &&
+           surf->layer_surface_res;
+}
+/*
+ * CONTEXT:
+ * Read-only compositor API.
+ *
+ * Dipakai focus policy untuk mengetahui apakah layer
+ * meminta keyboard interaction.
+ */
+bool layer_surface_wants_keyboard(
+        struct compositor_surface *surf)
+{
+    if (!surf || !surf->layer_surface)
+        return false;
 
+    return surf->layer_surface->keyboard_interactive !=
+           ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE;
+}
+
+/*
+ * CONTEXT:
+ * Configure gate API.
+ *
+ * Buffer pertama layer-shell hanya boleh dipromosikan
+ * setelah configure terbaru di-ack.
+ */
+bool layer_surface_buffer_allowed(
+        struct compositor_surface *surf)
+{
+    if (!surf || !surf->layer_surface)
+        return false;
+
+    return surf->layer_surface->first_buffer_allowed;
+}
+
+bool layer_surface_configured(
+        struct compositor_surface *surf)
+{
+    if (!surf || !surf->layer_surface)
+        return false;
+
+    return surf->layer_surface->configured;
+}
+
+/*
+ * CONTEXT:
+ * Geometry API.
+ *
+ * Mengambil geometry hasil policy layer-shell yang sudah
+ * ada sekarang. Tidak melakukan recalculation tambahan.
+ */
+bool layer_surface_get_geometry(
+        struct compositor_surface *surf,
+        uint32_t *width,
+        uint32_t *height,
+        int32_t *x,
+        int32_t *y)
+{
+    if (!surf ||
+        !surf->layer_surface ||
+        !width ||
+        !height ||
+        !x ||
+        !y)
+        return false;
+
+    layer_surface_calculate_size(
+            surf,
+            width,
+            height);
+
+    *x = surf->wm_x;
+    *y = surf->wm_y;
+
+    return true;
+}
 
 void send_layer_surface_configure(struct compositor_surface *surf)
 {
