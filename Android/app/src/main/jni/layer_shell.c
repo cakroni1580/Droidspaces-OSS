@@ -6,8 +6,6 @@
  *
  *
  * Stage 1
- * --------
- * Skeleton only.
  *
  * Implemented:
  *   - global bind
