@@ -646,41 +646,30 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
     .set_startup_id  = gtk_shell_set_startup_id,
     .system_bell     = gtk_shell_system_bell,
     .notify_launch   = gtk_shell_notify_launch,
-};
+}
 
-/* --------------------------------------------------------------- */
-/* GTK surface configure                                             */
-/* --------------------------------------------------------------- */
-
-/*
- * --------------------------------------------------------------------
 /*
  * --------------------------------------------------------------------
  * GTK surface configure sender.
  *
- * Geometry tetap berasal dari compositor_surface/output.c.
+ * Dipanggil oleh output.c setelah compositor_surface geometry
+ * selesai diproses.
  *
- * IMPORTANT:
+ * Geometry tidak dihitung di gtk-shell.c.
  *
- * GTK shell tetap aktif dan terdaftar pada kedua WM mode:
+ * gtk-shell hanya menerjemahkan state compositor menjadi
+ * protocol GTK.
  *
- *     WM_MODE_DIRECT
- *     WM_MODE_NESTED
+ * WM_MODE_DIRECT:
  *
- * Tetapi GTK tiling state hanya berlaku pada WM_MODE_DIRECT.
+ *     compositor = WM authority
+ *     tiling + resize state boleh dipublikasikan
  *
- * Pada WM_MODE_NESTED:
+ * WM_MODE_NESTED:
  *
- *     - gtk-shell tetap terhubung ke wl_surface
- *     - gtk_surface tetap valid
- *     - configure tetap dapat dikirim
- *     - TILING tidak dipaksakan
- *     - GTK tidak ikut menjadi bagian dari compositor WM layout
- *
- * Ini sama dengan contract xdg-shell/layer-shell:
- *
- *     DIRECT -> compositor mengatur WM state
- *     NESTED -> host WM yang mengatur window
+ *     host WM = WM authority
+ *     gtk-shell tetap aktif
+ *     tetapi compositor tidak memaksakan tiling/resize state
  * --------------------------------------------------------------------
  */
 void send_gtk_surface_configure(
@@ -699,9 +688,7 @@ void send_gtk_surface_configure(
 
     /*
      * ------------------------------------------------------------
-     * Geometry tetap dibaca dari compositor_surface.
-     *
-     * gtk-shell tidak menghitung geometry sendiri.
+     * Geometry source of truth.
      * ------------------------------------------------------------
      */
     int32_t width = 0;
@@ -717,11 +704,7 @@ void send_gtk_surface_configure(
 
     /*
      * ------------------------------------------------------------
-     * GTK configure arrays.
-     *
-     * configure tetap dikirim pada DIRECT maupun NESTED.
-     *
-     * Yang berbeda hanya window-state tiling.
+     * GTK configure payload.
      * ------------------------------------------------------------
      */
     struct wl_array states;
@@ -732,52 +715,68 @@ void send_gtk_surface_configure(
 
     /*
      * ------------------------------------------------------------
-     * WM_MODE_DIRECT
+     * DIRECT
      * ------------------------------------------------------------
      *
-     * Pada DIRECT compositor adalah window-management authority.
-     *
-     * Karena itu GTK surface mengikuti tiling state compositor.
+     * Compositor menjadi WM authority.
      */
     if (surf->srv->wm_mode == WM_MODE_DIRECT) {
 
-        uint32_t *state_id =
-            wl_array_add(&states, sizeof(*state_id));
+        /*
+         * Tiling state berasal dari compositor_surface.
+         */
+        uint32_t gtk_state =
+            gtk_surface_get_tiling_state(surf);
 
-        if (state_id)
-            *state_id = GTK_SURFACE1_STATE_TILED;
+        if (gtk_state != 0) {
+
+            uint32_t *state_id =
+                wl_array_add(
+                    &states,
+                    sizeof(*state_id));
+
+            if (state_id)
+                *state_id = gtk_state;
+        }
+
+        /*
+         * Resize constraints juga berasal dari
+         * compositor_surface.
+         */
+        gtk_surface_build_edge_constraints(
+            surf,
+            &edges);
 
         LOGI(
-            "gtk configure: DIRECT "
-            "tiling enabled "
-            "surface=%p geometry=%dx%d",
+            "gtk configure DIRECT "
+            "surface=%p "
+            "geometry=%dx%d "
+            "tiling=%u "
+            "resize_edges=0x%x",
             (void *)surf,
             (int)width,
-            (int)height);
+            (int)height,
+            gtk_state,
+            compositor_surface_get_resize_edges(surf));
     }
 
     /*
      * ------------------------------------------------------------
-     * WM_MODE_NESTED
+     * NESTED
      * ------------------------------------------------------------
      *
-     * gtk-shell tetap aktif.
+     * GTK tetap menerima configure.
      *
-     * Namun compositor tidak mengklaim GTK window sebagai tiled
-     * window karena window-management authority berada di host WM.
-     *
-     * Jangan menambahkan:
-     *
-     *     GTK_SURFACE1_STATE_TILED
-     *
-     * pada mode ini.
+     * Tetapi tidak ada WM state yang dipaksakan compositor.
      */
     else {
 
         LOGI(
-            "gtk configure: NESTED "
-            "tiling ignored "
-            "surface=%p geometry=%dx%d",
+            "gtk configure NESTED "
+            "surface=%p "
+            "geometry=%dx%d "
+            "tiling=ignored "
+            "resize=ignored",
             (void *)surf,
             (int)width,
             (int)height);
@@ -785,22 +784,12 @@ void send_gtk_surface_configure(
 
     /*
      * ------------------------------------------------------------
-     * Tiled edges
+     * Send GTK protocol events.
      * ------------------------------------------------------------
      *
-     * Saat ini Trierarch belum memiliki edge-specific tiling.
+     * Configure GTK tidak menentukan geometry.
      *
-     * Array tetap kosong pada DIRECT maupun NESTED.
-     *
-     * Jika nanti compositor memiliki:
-     *
-     *     tile-left
-     *     tile-right
-     *     tile-top
-     *     tile-bottom
-     *
-     * mapping dilakukan di sini berdasarkan state compositor.
-     * ------------------------------------------------------------
+     * Geometry sudah diproses oleh compositor/output.c.
      */
     gtk_surface1_send_configure(
         state->resource,
@@ -815,35 +804,15 @@ void send_gtk_surface_configure(
 
     LOGI(
         "send_gtk_surface_configure "
-        "surface=%p mode=%s geometry=%dx%d",
+        "surface=%p "
+        "mode=%s "
+        "geometry=%dx%d",
         (void *)surf,
         surf->srv->wm_mode == WM_MODE_DIRECT
             ? "DIRECT"
             : "NESTED",
         (int)width,
         (int)height);
-}
-
-
-    
-
-void compositor_surface_set_resize_edges(
-        struct compositor_surface *surf,
-        uint32_t edges)
-{
-    if (!surf)
-        return;
-
-    surf->resize_edges = edges;
-}
-
-uint32_t compositor_surface_get_resize_edges(
-        struct compositor_surface *surf)
-{
-    if (!surf)
-        return COMPOSITOR_RESIZE_NONE;
-
-    return surf->resize_edges;
 }
 
 void compositor_surface_set_tiling(
@@ -864,6 +833,26 @@ compositor_surface_get_tiling(
         return COMPOSITOR_TILING_NONE;
 
     return surf->tiling_state;
+}
+
+
+void compositor_surface_set_resize_edges(
+        struct compositor_surface *surf,
+        uint32_t edges)
+{
+    if (!surf)
+        return;
+
+    surf->resize_edges = edges;
+}
+
+uint32_t compositor_surface_get_resize_edges(
+        struct compositor_surface *surf)
+{
+    if (!surf)
+        return COMPOSITOR_RESIZE_NONE;
+
+    return surf->resize_edges;
 }
 
 void gtk_shell_bind(
