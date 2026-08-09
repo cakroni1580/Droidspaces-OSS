@@ -52,7 +52,26 @@
  *      xdg-shell    gtk-shell
  *
  * ================================================================
+ *
+ *
+ * CONTEXT:
+ * GTK geometry mengikuti geometry final layer-shell.
+ *
+ * Jangan mengambil logical size langsung dari output.c,
+ * karena layer-shell sudah menerapkan:
+ *
+ *   - anchor
+ *   - margin
+ *   - requested size
+ *   - output geometry
+ *   - layer-shell positioning
  */
+extern bool layer_surface_get_geometry(
+        struct compositor_surface *surf,
+        uint32_t *width,
+        uint32_t *height,
+        int32_t *x,
+        int32_t *y);
 
 
 /*
@@ -837,51 +856,44 @@ void send_gtk_surface_configure(
 
     /*
      * ------------------------------------------------------------
-     * Geometry source of truth.
+     * Geometry source:
+     *
+     * GTK surface mengikuti geometry final layer-shell.
+     *
+     * layer-shell sudah menjadi authority untuk geometry surface.
+     * Jangan membaca logical size langsung dari output.c.
      * ------------------------------------------------------------
      */
-    int32_t width = 0;
-    int32_t height = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    int32_t x = 0;
+    int32_t y = 0;
 
-    /*
-     * ================================================================
-     * GTK geometry source
-     * ================================================================
-     *
-     * DIRECT + tiled:
-     *
-     *     layer-shell exclusive_zone
-     *              ↓
-     *       DIRECT work-area
-     *              ↓
-     *       GTK tiling geometry
-     *
-     * DIRECT + non-tiled:
-     *
-     *     normal compositor geometry
-     *
-     * NESTED:
-     *
-     *     normal compositor geometry
-     *     (tiling API tidak digunakan)
-     * ================================================================
-     */
     if (!gtk_shell_get_tiling_geometry(
-            surf,
-            &surf->wm_x,
-            &surf->wm_y,
-            (uint32_t *)&width,
-            (uint32_t *)&height)) {
+        surf,
+        &surf->wm_x,
+        &surf->wm_y,
+        (uint32_t *)&width,
+        (uint32_t *)&height)) {
 
-        compositor_surface_get_logical_size(
+    if (!layer_surface_get_geometry(
             surf,
             &width,
-            &height);
+            &height,
+            &x,
+            &y)) {
+
+        LOGE(
+            "gtk configure: "
+            "layer geometry unavailable surface=%p",
+            (void *)surf);
+
+        return;
     }
 
-    if (width <= 0 || height <= 0)
+    if (width == 0 || height == 0)
         return;
-
+    
     /*
      * ------------------------------------------------------------
      * GTK configure payload.
