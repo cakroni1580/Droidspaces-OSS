@@ -343,29 +343,39 @@ static void gtk_shell_get_gtk_surface(
         surface ? wl_resource_get_user_data(surface) : NULL;
 
     /*
-     * Surface harus valid dan berasal dari compositor ini.
+     * ------------------------------------------------------------
+     * Validate wl_surface.
+     *
+     * gtk-shell protocol ini tidak mendefinisikan
+     * GTK_SHELL1_ERROR_INVALID_SURFACE.
+     *
+     * Karena itu invalid surface cukup ditolak oleh compositor.
+     * ------------------------------------------------------------
      */
     if (!surf || !srv || surf->srv != srv) {
 
-        wl_resource_post_error(
-            resource,
-            GTK_SHELL1_ERROR_INVALID_SURFACE,
-            "invalid wl_surface");
+        LOGE(
+            "gtk_shell.get_gtk_surface: invalid wl_surface "
+            "surface=%p compositor_surface=%p srv=%p",
+            (void *)surface,
+            (void *)surf,
+            (void *)srv);
 
         return;
     }
 
     /*
+     * ------------------------------------------------------------
      * Satu wl_surface hanya boleh memiliki satu gtk_surface1.
-     *
-     * Jangan overwrite hubungan yang sudah ada.
+     * ------------------------------------------------------------
      */
     if (surf->gtk_surface) {
 
-        wl_resource_post_error(
-            resource,
-            GTK_SHELL1_ERROR_INVALID_SURFACE,
-            "surface already has gtk_surface");
+        LOGE(
+            "gtk_shell.get_gtk_surface: "
+            "surface already has gtk_surface "
+            "surface=%p",
+            (void *)surf);
 
         return;
     }
@@ -407,9 +417,6 @@ static void gtk_shell_get_gtk_surface(
     state->wl_surface = surface;
     state->surface = surf;
 
-    /*
-     * Listen lifecycle wl_surface.
-     */
     state->surface_destroy_listener.notify =
         gtk_surface_wl_surface_destroy;
 
