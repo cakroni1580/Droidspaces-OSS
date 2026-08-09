@@ -192,11 +192,11 @@ enum compositor_tiling_state {
     COMPOSITOR_TILING_LEFT,
 };
 
-#define COMPOSITOR_RESIZE_NONE   0u
+/*#define COMPOSITOR_RESIZE_NONE   0u
 #define COMPOSITOR_RESIZE_TOP    (1u << 0)
 #define COMPOSITOR_RESIZE_RIGHT  (1u << 1)
 #define COMPOSITOR_RESIZE_BOTTOM (1u << 2)
-#define COMPOSITOR_RESIZE_LEFT   (1u << 3)
+#define COMPOSITOR_RESIZE_LEFT   (1u << 3)*/
 
 
 enum compositor_resize_edges {
