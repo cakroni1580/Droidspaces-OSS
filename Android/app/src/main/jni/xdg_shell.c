@@ -252,7 +252,7 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
     struct compositor_surface *surf = wl_resource_get_user_data(r);
     if (!surf) return;
     if (compositor_surface_get_tiling(surf) !=
-            COMPOSITOR_TILING_MAXIMIZED) {
+            COMPOSITOR_TILING_ALL) {
 
         int32_t sw = 0, sh = 0;
         compositor_surface_get_logical_size(surf, &sw, &sh);
@@ -274,7 +274,7 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
 
         compositor_surface_set_tiling(
                 surf,
-                COMPOSITOR_TILING_MAXIMIZED);
+                COMPOSITOR_TILING_ALL);
     }
     send_toplevel_configure(surf);
 }
@@ -357,7 +357,7 @@ void send_toplevel_configure(struct compositor_surface *surf) {
 
             switch (tiling) {
 
-            case COMPOSITOR_TILING_MAXIMIZED:
+            case COMPOSITOR_TILING_ALL:
                 /*
                  * Full usable work-area.
                  */
