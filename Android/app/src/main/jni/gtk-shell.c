@@ -1021,6 +1021,7 @@ void compositor_surface_set_tiling(
         surf->xdg_surface_res) {
 
         send_toplevel_configure(surf);
+    }
 }
 
 enum compositor_tiling_state
