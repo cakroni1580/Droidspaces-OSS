@@ -318,8 +318,8 @@ void send_toplevel_configure(struct compositor_surface *surf) {
      * setelah xdg_surface.configure sehingga kedua protocol
      * selalu melihat state window yang sama.
      * ----------------------------------------------------------
-     */
-    gtk_surface_send_configure(surf);
+     *
+     * gtk_surface_send_configure(surf); */
 }
 
 static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resource *xdg_surface_res, uint32_t id) {
