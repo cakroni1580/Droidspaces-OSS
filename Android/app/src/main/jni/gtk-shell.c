@@ -195,12 +195,34 @@ static bool gtk_shell_get_work_area(
     return true;
 }
 
-
 /*
- * GTK tiling geometry.
+ * CONTEXT:
  *
- * Work-area berasal dari layer-shell.
- * Tiling state tetap berasal dari compositor_surface.
+ * GTK shell adalah tiling engine Trierarch.
+ *
+ * Layer-shell hanya menyediakan usable work-area melalui:
+ *
+ *     layer_shell_get_work_area()
+ *
+ * GTK shell kemudian membagi work-area tersebut sesuai
+ * compositor_tiling_state.
+ *
+ * Hasil fungsi ini adalah GEOMETRY XDG TOPLEVEL.
+ *
+ * Jadi:
+ *
+ *     layer-shell
+ *          ↓
+ *     exclusive-zone
+ *          ↓
+ *     work-area
+ *          ↓
+ *     GTK tiling engine
+ *          ↓
+ *     xdg-toplevel geometry
+ *
+ * WM_MODE_DIRECT/NESTED tidak lagi digunakan sebagai
+ * geometry gate di sini.
  */
 static bool gtk_shell_get_tiling_geometry(
         struct compositor_surface *surf,
@@ -217,50 +239,120 @@ static bool gtk_shell_get_tiling_geometry(
         !height)
         return false;
 
-    /*
-     * Tiling hanya digunakan pada DIRECT.
-     */
-    if (surf->srv->wm_mode != WM_MODE_DIRECT)
-        return false;
+    enum compositor_tiling_state tiling =
+        compositor_surface_get_tiling(surf);
 
-    uint32_t tiling =
-        gtk_surface_get_tiling_state(surf);
-
-    if (!tiling)
+    if (tiling == COMPOSITOR_TILING_NONE)
         return false;
 
     struct trierarch_work_area area;
 
+    /*
+     * CONTEXT:
+     *
+     * layer-shell adalah authority exclusive-zone.
+     *
+     * GTK shell TIDAK membaca exclusive_zone langsung.
+     * Ia hanya menggunakan hasil final work-area.
+     */
     if (!gtk_shell_get_work_area(
             surf,
             &area))
         return false;
 
     /*
-     * ------------------------------------------------------------
-     * Tiling geometry memakai DIRECT work-area.
+     * Default:
      *
-     * Untuk tahap ini state tiling tetap menjadi source of truth.
-     * API ini hanya menyediakan area yang sudah dikurangi
-     * exclusive-zone layer-shell.
-     * ------------------------------------------------------------
+     * COMPOSITOR_TILING_ALL
+     *
+     * menggunakan seluruh usable work-area.
      */
     *x = area.x;
     *y = area.y;
     *width = area.width;
     *height = area.height;
 
+    switch (tiling) {
+
+    case COMPOSITOR_TILING_ALL:
+        break;
+
+    case COMPOSITOR_TILING_LEFT:
+        /*
+         * +-------------------+-------------------+
+         * |       LEFT        |                   |
+         * |                   |                   |
+         * +-------------------+-------------------+
+         */
+        *width = area.width / 2;
+
+        break;
+
+    case COMPOSITOR_TILING_RIGHT:
+        /*
+         * +-------------------+-------------------+
+         * |                   |      RIGHT        |
+         * |                   |                   |
+         * +-------------------+-------------------+
+         */
+        *width = area.width -
+                 (area.width / 2);
+
+        *x = area.x +
+             (int32_t)(area.width / 2);
+
+        break;
+
+    case COMPOSITOR_TILING_TOP:
+        /*
+         * +--------------------------------------+
+         * |                 TOP                  |
+         * +--------------------------------------+
+         * |                                      |
+         */
+        *height = area.height / 2;
+
+        break;
+
+    case COMPOSITOR_TILING_BOTTOM:
+        /*
+         * +--------------------------------------+
+         * |                                      |
+         * +--------------------------------------+
+         * |               BOTTOM                 |
+         */
+        *height = area.height -
+                  (area.height / 2);
+
+        *y = area.y +
+             (int32_t)(area.height / 2);
+
+        break;
+
+    case COMPOSITOR_TILING_NONE:
+    default:
+        return false;
+    }
+
+    if (*width == 0 || *height == 0)
+        return false;
+
     LOGI(
-        "gtk tiling work-area "
+        "gtk tiling geometry "
         "surface=%p "
-        "tiling=0x%x "
-        "area=%ux%u+%d+%d",
+        "tiling=%d "
+        "workarea=%ux%u+%d+%d "
+        "geometry=%ux%u+%d+%d",
         (void *)surf,
         tiling,
         area.width,
         area.height,
         area.x,
-        area.y);
+        area.y,
+        *width,
+        *height,
+        *x,
+        *y);
 
     return true;
 }
@@ -818,30 +910,6 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
     .notify_launch   = gtk_shell_notify_launch,
 };
 
-/*
- * --------------------------------------------------------------------
- * GTK surface configure sender.
- *
- * Dipanggil oleh output.c setelah compositor_surface geometry
- * selesai diproses.
- *
- * Geometry tidak dihitung di gtk-shell.c.
- *
- * gtk-shell hanya menerjemahkan state compositor menjadi
- * protocol GTK.
- *
- * WM_MODE_DIRECT:
- *
- *     compositor = WM authority
- *     tiling + resize state boleh dipublikasikan
- *
- * WM_MODE_NESTED:
- *
- *     host WM = WM authority
- *     gtk-shell tetap aktif
- *     tetapi compositor tidak memaksakan tiling/resize state
- * --------------------------------------------------------------------
- */
 void send_gtk_surface_configure(
         struct compositor_surface *surf)
 {
@@ -856,158 +924,142 @@ void send_gtk_surface_configure(
     if (!state->resource)
         return;
 
-    /*
-     * ------------------------------------------------------------
-     * Geometry source:
-     *
-     * GTK surface mengikuti geometry final layer-shell.
-     *
-     * layer-shell sudah menjadi authority untuk geometry surface.
-     * Jangan membaca logical size langsung dari output.c.
-     * ------------------------------------------------------------
-     */
-    uint32_t width = 0;
-    uint32_t height = 0;
-    int32_t x = 0;
-    int32_t y = 0;
-
-    if (!gtk_shell_get_tiling_geometry(
-        surf,
-        &surf->wm_x,
-        &surf->wm_y,
-        (uint32_t *)&width,
-        (uint32_t *)&height)) {
-
-        if (!layer_surface_get_geometry(
-                surf,
-                &width,
-                &height,
-                &x,
-                &y)) {
-
-            LOGE(
-                "gtk configure: "
-                "layer geometry unavailable surface=%p",
-                (void *)surf);
-
-            return;
-        }
-    }       
-
-    if (width == 0 || height == 0)
-        return;
-    
-    /*
-     * ------------------------------------------------------------
-     * GTK configure payload.
-     * ------------------------------------------------------------
-     */
     struct wl_array states;
     struct wl_array edges;
 
     wl_array_init(&states);
     wl_array_init(&edges);
 
+    uint32_t gtk_state =
+        gtk_surface_get_tiling_state(surf);
+
     /*
-     * ------------------------------------------------------------
-     * DIRECT
-     * ------------------------------------------------------------
+     * CONTEXT:
      *
-     * Compositor menjadi WM authority.
+     * GTK shell hanya mempublikasikan state hasil
+     * tiling engine.
+     *
+     * Geometry TIDAK dikirim melalui gtk-shell.
+     *
+     * Geometry sudah menjadi geometry xdg-toplevel.
      */
-    if (surf->srv->wm_mode == WM_MODE_DIRECT) {
+    if (gtk_state != 0) {
 
-        /*
-         * Tiling state berasal dari compositor_surface.
-         */
-        uint32_t gtk_state =
-            gtk_surface_get_tiling_state(surf);
+        uint32_t *state_id =
+            wl_array_add(
+                &states,
+                sizeof(*state_id));
 
-        if (gtk_state != 0) {
-
-            uint32_t *state_id =
-                wl_array_add(
-                    &states,
-                    sizeof(*state_id));
-
-            if (state_id)
-                *state_id = gtk_state;
-        }
-
-        /*
-         * Resize constraints juga berasal dari
-         * compositor_surface.
-         */
-        gtk_surface_build_edge_constraints(
-            surf,
-            &edges);
-
-        LOGI(
-            "gtk configure DIRECT "
-            "surface=%p "
-            "geometry=%dx%d "
-            "tiling=%u "
-            "resize_edges=0x%x",
-            (void *)surf,
-            (int)width,
-            (int)height,
-            gtk_state,
-            compositor_surface_get_resize_edges(surf));
+        if (state_id)
+            *state_id = gtk_state;
     }
 
     /*
-     * ------------------------------------------------------------
-     * NESTED
-     * ------------------------------------------------------------
-     *
-     * GTK tetap menerima configure.
-     *
-     * Tetapi tidak ada WM state yang dipaksakan compositor.
+     * Resize constraints juga berasal dari compositor state.
      */
-    else {
-
-        LOGI(
-            "gtk configure NESTED "
-            "surface=%p "
-            "geometry=%dx%d "
-            "tiling=ignored "
-            "resize=ignored",
-            (void *)surf,
-            (int)width,
-            (int)height);
-    }
+    gtk_surface_build_edge_constraints(
+        surf,
+        &edges);
 
     /*
-     * ------------------------------------------------------------
-     * Send GTK protocol events.
-     * ------------------------------------------------------------
+     * GTK shell protocol configure.
      *
-     * Configure GTK tidak menentukan geometry.
+     * Ini hanya state metadata:
      *
-     * Geometry sudah diproses oleh compositor/output.c.
+     *     tiled
+     *     tiled-left
+     *     tiled-right
+     *     ...
      */
     gtk_surface1_send_configure(
         state->resource,
         &states);
 
-    gtk_surface1_send_configure_edges(
-        state->resource,
-        &edges);
+    /*
+     * configure_edges hanya tersedia mulai GTK shell v2.
+     */
+    if (wl_resource_get_version(state->resource) >= 2) {
+
+        gtk_surface1_send_configure_edges(
+            state->resource,
+            &edges);
+    }
 
     wl_array_release(&states);
     wl_array_release(&edges);
 
     LOGI(
-        "send_gtk_surface_configure "
+        "GTK configure "
         "surface=%p "
-        "mode=%s "
-        "geometry=%dx%d",
+        "tiling=%u "
+        "resize_edges=0x%x",
         (void *)surf,
-        surf->srv->wm_mode == WM_MODE_DIRECT
-            ? "DIRECT"
-            : "NESTED",
-        (int)width,
-        (int)height);
+        gtk_state,
+        compositor_surface_get_resize_edges(surf));
+}
+
+/*
+ * CONTEXT:
+ *
+ * GTK shell adalah tiling engine.
+ *
+ * Fungsi ini menerapkan hasil tiling ke compositor_surface.
+ *
+ * Layer-shell hanya menyediakan work-area.
+ *
+ * Setelah fungsi ini selesai:
+ *
+ *     surf->wm_x
+ *     surf->wm_y
+ *
+ * sudah menunjukkan posisi XDG surface hasil tiling.
+ *
+ * Width/height dikembalikan ke caller karena pada struktur
+ * compositor_surface saat ini geometry size belum ditunjukkan
+ * sebagai field yang dapat kita ubah di sini.
+ */
+bool gtk_shell_apply_tiling_geometry(
+        struct compositor_surface *surf,
+        uint32_t *width,
+        uint32_t *height)
+{
+    if (!surf ||
+        !surf->srv ||
+        !width ||
+        !height)
+        return false;
+
+    int32_t x = 0;
+    int32_t y = 0;
+
+    if (!gtk_shell_get_tiling_geometry(
+            surf,
+            &x,
+            &y,
+            width,
+            height))
+        return false;
+
+    /*
+     * CONTEXT:
+     *
+     * Position hasil tiling menjadi posisi window
+     * yang nantinya dipakai oleh xdg-shell/compositor.
+     */
+    surf->wm_x = x;
+    surf->wm_y = y;
+
+    LOGI(
+        "gtk apply tiling "
+        "surface=%p "
+        "geometry=%ux%u+%d+%d",
+        (void *)surf,
+        *width,
+        *height,
+        surf->wm_x,
+        surf->wm_y);
+
+    return true;
 }
 
 void compositor_surface_set_tiling(
