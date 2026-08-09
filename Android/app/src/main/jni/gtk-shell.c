@@ -1070,13 +1070,40 @@ void compositor_surface_set_tiling(
         return;
 
     surf->tiling_state = state;
+
+    LOGI(
+        "set tiling "
+        "surface=%p "
+        "state=%d",
+        (void *)surf,
+        state);
+
+    /*
+     * CONTEXT:
+     *
+     * Tidak lagi menggunakan WM_MODE_DIRECT sebagai gate.
+     *
+     * Tiling GTK berlaku pada XDG surface.
+     *
+     * Geometry akan dihitung dari:
+     *
+     *     layer-shell work-area
+     *             ↓
+     *         GTK tiling
+     *             ↓
+     *          XDG configure
+     */
     if (surf->srv &&
-        surf->srv->wm_mode == WM_MODE_DIRECT &&
         surf->xdg_toplevel_res &&
         surf->xdg_surface_res) {
 
         send_toplevel_configure(surf);
     }
+
+    /*
+     * Jika tidak ada XDG role, tidak ada geometry XDG
+     * yang perlu dikonfigurasi.
+     */
 }
 
 enum compositor_tiling_state
