@@ -346,13 +346,62 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         enum compositor_tiling_state tiling =
                compositor_surface_get_tiling(surf);
 
-        if (surf->srv->wm_mode == WM_MODE_DIRECT) {
+        if (tiling != COMPOSITOR_TILING_NONE) {
 
             gtk_shell_apply_tiling_geometry(
-            surf,
-            &width,
-            &height);
+                surf,
+                &tile_w,
+                &tile_h);
 
+            switch (tiling) {
+
+            case COMPOSITOR_TILING_ALL:
+                /*
+                 * Full usable work-area.
+                 */
+                w = area.width;
+                h = area.height;
+
+                surf->wm_x = area.x;
+                surf->wm_y = area.y;
+
+                {
+                   uint32_t *s_max =
+                        wl_array_add(&states, sizeof(uint32_t));
+
+                   if (s_max)
+                        *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+                }
+                break;
+
+            case COMPOSITOR_TILING_LEFT:
+                /*
+                * Left half of usable work-area.
+                */
+                w = area.width / 2;
+                h = area.height;
+
+                surf->wm_x = area.x;
+                surf->wm_y = area.y;
+                break;
+
+            case COMPOSITOR_TILING_RIGHT:
+                /*
+                 * Right half of usable work-area.
+                 */
+                w = area.width / 2;
+                h = area.height;
+
+                surf->wm_x =
+                    area.x + area.width / 2;
+
+                surf->wm_y = area.y;
+                break;
+
+             default:
+                break;
+             }
+        
         
         } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
             /* Compositor-driven resize: send requested size (best-effort). */
@@ -410,8 +459,8 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
 
             gtk_shell_apply_tiling_geometry(
                 surf,
-                &width,
-                &height);
+                &tile_w,
+                &tile_h);
 
             surf->wm_x =
                 area.x + surf->srv->cascade_x;
