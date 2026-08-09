@@ -187,24 +187,13 @@ static void layer_surface_set_exclusive_zone(
     /*
      * CONTEXT:
      *
-     * wlr-layer-shell semantics:
+     * Standard wlr-layer-shell:
      *
-     *   zone > 0
-     *       reserve area for other surfaces.
+     *   > 0  = reserve output space
+     *    0   = no exclusive reservation
+     *   -1   = do not move this surface for other exclusive surfaces
      *
-     *   zone == 0
-     *       no exclusive reservation.
-     *
-     *   zone == -1
-     *       surface must not be moved to accommodate
-     *       another exclusive surface.
-     *
-     * Phoc/Phosh dan Plasma Mobile sama-sama menggunakan
-     * semantics standard ini untuk panel/top-bar/home-bar/
-     * system surfaces.
-     *
-     * Nilai kurang dari -1 tidak memiliki semantics
-     * exclusive-zone dalam protocol.
+     * Values below -1 are invalid.
      */
     if (zone < -1) {
 
@@ -218,21 +207,31 @@ static void layer_surface_set_exclusive_zone(
     }
 
     /*
-     * CONTEXT:
+     * IMPORTANT:
      *
-     * exclusive_zone selalu merupakan state protocol layer-shell.
+     * Simpan request apa adanya.
      *
-     * WM_MODE tidak boleh mengubah arti request client.
-     * WM_MODE hanya menentukan apakah reservation tersebut
-     * dikonsumsi oleh layout compositor.
+     * Jangan mengubah zone berdasarkan WM_MODE.
+     * Jangan mengubah ukuran layer surface di sini.
+     *
+     * Reservation baru dikonsumsi oleh DIRECT work-area
+     * calculation.
      */
     surf->layer_surface->exclusive_zone = zone;
 
     LOGI(
-        "layer exclusive zone surf=%p zone=%d mode=%s",
+        "layer exclusive zone "
+        "surf=%p zone=%d anchor=0x%x "
+        "margin=%d,%d,%d,%d mode=%s",
         (void *)surf,
         zone,
-        surf->srv && surf->srv->wm_mode == WM_MODE_DIRECT
+        surf->layer_surface->anchor,
+        surf->layer_surface->margin_top,
+        surf->layer_surface->margin_right,
+        surf->layer_surface->margin_bottom,
+        surf->layer_surface->margin_left,
+        surf->srv &&
+        surf->srv->wm_mode == WM_MODE_DIRECT
             ? "DIRECT"
             : "NESTED");
 }
@@ -923,8 +922,60 @@ struct trierarch_work_area {
     uint32_t width;
     uint32_t height;
 };
-
-static void layer_shell_get_work_area(
+/*
+ * -------------------------------------------------------------------------
+ * Trierarch layer-shell work-area calculation
+ * -------------------------------------------------------------------------
+ *
+ * CONTEXT:
+ *
+ * Positive exclusive zone reserves output space for normal/direct
+ * surfaces.
+ *
+ * The reservation is measured from the anchored edge.
+ *
+ * Examples:
+ *
+ *     TOP + exclusive_zone=100
+ *
+ *         +-------------------------+
+ *         |       reserved 100      |
+ *         +-------------------------+
+ *         |                         |
+ *         |       usable area       |
+ *         |                         |
+ *         +-------------------------+
+ *
+ *     BOTTOM + exclusive_zone=80
+ *
+ *         +-------------------------+
+ *         |       usable area       |
+ *         |                         |
+ *         +-------------------------+
+ *         |       reserved 80       |
+ *         +-------------------------+
+ *
+ * Margin is included in the exclusive reservation.
+ *
+ * exclusive_zone:
+ *
+ *     > 0 : reserve space
+ *      0  : no reservation
+ *     -1  : no reservation
+ *
+ * A positive exclusive zone is meaningful only when the surface
+ * is anchored to an edge. A corner-only anchor or parallel-edge
+ * combination without a unique exclusive edge is ignored.
+ *
+ * WM_MODE_DIRECT:
+ *
+ *     exclusive zone modifies the direct output work area.
+ *
+ * WM_MODE_NESTED:
+ *
+ *     exclusive zone does not modify nested desktop geometry.
+ */
+void layer_shell_get_work_area(
         struct wayland_server *srv,
         struct compositor_surface *exclude,
         struct trierarch_work_area *area)
@@ -932,75 +983,42 @@ static void layer_shell_get_work_area(
     if (!srv || !area)
         return;
 
-    uint32_t ow =
+    const uint32_t ow =
         srv->output_width > 0 ?
         srv->output_width : 1;
 
-    uint32_t oh =
+    const uint32_t oh =
         srv->output_height > 0 ?
         srv->output_height : 1;
 
+    /*
+     * Default = complete output.
+     */
     area->x = 0;
     area->y = 0;
     area->width = ow;
     area->height = oh;
 
     /*
-     * ------------------------------------------------------------------
-     * CONTEXT:
-     * ------------------------------------------------------------------
+     * ---------------------------------------------------------------
+     * NESTED
+     * ---------------------------------------------------------------
      *
-     * Layer-shell exclusive zones hanya menjadi layout reservation
-     * untuk DIRECT output layout.
+     * Nested WM owns its own desktop/window geometry.
      *
-     * WM_MODE_DIRECT:
-     *
-     *     layer exclusive zone
-     *             ↓
-     *     direct work-area
-     *             ↓
-     *     xdg direct toplevel
-     *
-     * WM_MODE_NESTED:
-     *
-     *     xdg toplevel memiliki nested desktop/window geometry.
-     *
-     *     Layer-shell tetap dirender sebagai layer,
-     *     tetapi exclusive zone TIDAK boleh mengubah
-     *     geometry nested desktop.
-     *
-     * Ini penting karena send_toplevel_configure() pada
-     * WM_MODE_NESTED memang mengkonfigurasi xdg surface
-     * sebagai fullscreen terhadap output.
-     *
-     * Kalau exclusive zone diterapkan di sini pada NESTED,
-     * kita mendapatkan dua layout authority:
-     *
-     *     nested WM geometry
-     *              +
-     *     layer-shell work-area
-     *
-     * sehingga reservation dapat diterapkan dua kali
-     * atau membuat layer/xdg geometry overlap.
+     * Do NOT consume layer-shell exclusive zones here.
      */
     if (srv->wm_mode != WM_MODE_DIRECT) {
 
         LOGI(
-            "layer work-area: NESTED mode, "
-            "exclusive zones ignored "
-            "output=%ux%u",
+            "layer work-area: NESTED "
+            "exclusive ignored output=%ux%u",
             ow,
             oh);
 
         return;
     }
 
-    /*
-     * DIRECT mode:
-     *
-     * exclusive zones sekarang menjadi bagian dari
-     * output work-area.
-     */
     struct compositor_surface *surf;
 
     wl_list_for_each(
@@ -1012,79 +1030,191 @@ static void layer_shell_get_work_area(
             continue;
 
         struct layer_surface_state *ls =
-            surf->layer_surface;
+                surf->layer_surface;
 
         if (!ls)
             continue;
 
         /*
-         * Only positive values reserve space.
+         * Only positive exclusive zones reserve space.
          *
-         * 0  -> no reservation
-         * -1 -> no reservation
+         * 0  = no reservation
+         * -1 = no reservation
          */
         if (ls->exclusive_zone <= 0)
             continue;
+
+        /*
+         * -----------------------------------------------------------
+         * Decode anchors.
+         * -----------------------------------------------------------
+         */
+        const bool top =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) != 0;
+
+        const bool bottom =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
+
+        const bool left =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) != 0;
+
+        const bool right =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) != 0;
+
+        /*
+         * -----------------------------------------------------------
+         * A positive exclusive zone requires one unique edge.
+         *
+         * Valid:
+         *
+         *     TOP
+         *     TOP + LEFT + RIGHT
+         *
+         *     BOTTOM
+         *     BOTTOM + LEFT + RIGHT
+         *
+         *     LEFT
+         *     LEFT + TOP + BOTTOM
+         *
+         *     RIGHT
+         *     RIGHT + TOP + BOTTOM
+         *
+         * Invalid for exclusive reservation:
+         *
+         *     TOP + LEFT       -> corner
+         *     TOP + RIGHT      -> corner
+         *     LEFT + RIGHT     -> parallel edges
+         *     TOP + BOTTOM     -> parallel edges
+         *     all four edges
+         *
+         * These have no unique exclusive edge.
+         * -----------------------------------------------------------
+         */
+
+        const bool exclusive_top =
+            top && !bottom && (!left || right) &&
+            (left == right);
+
+        const bool exclusive_bottom =
+            bottom && !top && (!left || right) &&
+            (left == right);
+
+        const bool exclusive_left =
+            left && !right && (!top || bottom) &&
+            (top == bottom);
+
+        const bool exclusive_right =
+            right && !left && (!top || bottom) &&
+            (top == bottom);
+
+        /*
+         * The expressions above are intentionally replaced below
+         * with the explicit valid anchor patterns.
+         *
+         * This keeps the policy obvious and avoids accidentally
+         * treating a corner as an exclusive edge.
+         */
+
+        (void)exclusive_top;
+        (void)exclusive_bottom;
+        (void)exclusive_left;
+        (void)exclusive_right;
 
         int32_t zone =
             ls->exclusive_zone;
 
         /*
-         * -------------------------------------------------------------
+         * -----------------------------------------------------------
          * TOP
-         * -------------------------------------------------------------
+         *
+         * Valid:
+         *
+         *     TOP
+         *     TOP + LEFT + RIGHT
+         * -----------------------------------------------------------
          */
-        if ((ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) &&
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) &&
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT)) {
+        if (top &&
+            !bottom &&
+            (!left || right) &&
+            (left == right)) {
 
+            /*
+             * Margin belongs to exclusive geometry.
+             */
             zone += ls->margin_top;
 
             if (zone > (int32_t)area->height)
                 zone = (int32_t)area->height;
 
             area->y += zone;
-            area->height -= zone;
+            area->height -= (uint32_t)zone;
+
+            LOGI(
+                "exclusive TOP surf=%p "
+                "zone=%d usable=%ux%u@%d,%d",
+                (void *)surf,
+                zone,
+                area->width,
+                area->height,
+                area->x,
+                area->y);
 
             continue;
         }
 
         /*
-         * -------------------------------------------------------------
+         * -----------------------------------------------------------
          * BOTTOM
-         * -------------------------------------------------------------
+         *
+         * Valid:
+         *
+         *     BOTTOM
+         *     BOTTOM + LEFT + RIGHT
+         * -----------------------------------------------------------
          */
-        if ((ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) &&
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) &&
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT)) {
+        if (bottom &&
+            !top &&
+            (!left || right) &&
+            (left == right)) {
 
             zone += ls->margin_bottom;
 
             if (zone > (int32_t)area->height)
                 zone = (int32_t)area->height;
 
-            area->height -= zone;
+            area->height -= (uint32_t)zone;
+
+            LOGI(
+                "exclusive BOTTOM surf=%p "
+                "zone=%d usable=%ux%u@%d,%d",
+                (void *)surf,
+                zone,
+                area->width,
+                area->height,
+                area->x,
+                area->y);
 
             continue;
         }
 
         /*
-         * -------------------------------------------------------------
+         * -----------------------------------------------------------
          * LEFT
-         * -------------------------------------------------------------
+         *
+         * Valid:
+         *
+         *     LEFT
+         *     LEFT + TOP + BOTTOM
+         * -----------------------------------------------------------
          */
-        if ((ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) &&
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) &&
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM)) {
+        if (left &&
+            !right &&
+            (!top || bottom) &&
+            (top == bottom)) {
 
             zone += ls->margin_left;
 
@@ -1092,32 +1222,77 @@ static void layer_shell_get_work_area(
                 zone = (int32_t)area->width;
 
             area->x += zone;
-            area->width -= zone;
+            area->width -= (uint32_t)zone;
+
+            LOGI(
+                "exclusive LEFT surf=%p "
+                "zone=%d usable=%ux%u@%d,%d",
+                (void *)surf,
+                zone,
+                area->width,
+                area->height,
+                area->x,
+                area->y);
 
             continue;
         }
 
         /*
-         * -------------------------------------------------------------
+         * -----------------------------------------------------------
          * RIGHT
-         * -------------------------------------------------------------
+         *
+         * Valid:
+         *
+         *     RIGHT
+         *     RIGHT + TOP + BOTTOM
+         * -----------------------------------------------------------
          */
-        if ((ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) &&
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) &&
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM)) {
+        if (right &&
+            !left &&
+            (!top || bottom) &&
+            (top == bottom)) {
 
             zone += ls->margin_right;
 
             if (zone > (int32_t)area->width)
                 zone = (int32_t)area->width;
 
-            area->width -= zone;
+            area->width -= (uint32_t)zone;
+
+            LOGI(
+                "exclusive RIGHT surf=%p "
+                "zone=%d usable=%ux%u@%d,%d",
+                (void *)surf,
+                zone,
+                area->width,
+                area->height,
+                area->x,
+                area->y);
 
             continue;
         }
+
+        /*
+         * -----------------------------------------------------------
+         * Positive exclusive zone but no unique exclusive edge.
+         *
+         * Examples:
+         *
+         *     TOP + LEFT
+         *     TOP + RIGHT
+         *     TOP + BOTTOM
+         *     LEFT + RIGHT
+         *     all four edges
+         *
+         * Protocol semantics treat these as non-exclusive.
+         * -----------------------------------------------------------
+         */
+        LOGI(
+            "exclusive ignored surf=%p "
+            "zone=%d anchor=0x%x",
+            (void *)surf,
+            ls->exclusive_zone,
+            ls->anchor);
     }
 
     LOGI(
