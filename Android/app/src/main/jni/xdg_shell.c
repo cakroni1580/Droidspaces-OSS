@@ -533,7 +533,7 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
              * Jika default tiling state == NONE, GTK shell dapat
              * menggunakan floating/cascade geometry.
              */
-            gtk_shell_apply_initial_geometry(surf);
+            send_gtk_surface_configure(surf);
 
         } else {
             /*
