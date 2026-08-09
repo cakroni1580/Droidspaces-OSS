@@ -927,16 +927,35 @@ void send_gtk_surface_configure(
     enum compositor_tiling_state tiling =
         compositor_surface_get_tiling(surf);
 
-    if (tiling == COMPOSITOR_TILING_NONE) {
-
-        LOGI(
-            "GTK configure skipped "
-            "surface=%p "
-            "reason=tiling-none",
-            (void *)surf);
-
-        return;
-    }
+    /*
+     * ============================================================
+     * CONTEXT:
+     *
+     * GTK shell adalah window-management layer untuk DIRECT mode.
+     *
+     * Ada dua jalur geometry:
+     *
+     *   TILING:
+     *
+     *       layer-shell
+     *           ↓
+     *       work-area
+     *           ↓
+     *       gtk_shell_apply_tiling_geometry()
+     *           ↓
+     *       wm_x / wm_y + requested tile size
+     *
+     *   FLOATING / NONE:
+     *
+     *       send_gtk_surface_configure()
+     *           ↓
+     *       existing floating geometry
+     *
+     * Jangan return hanya karena tiling == NONE.
+     *
+     * NONE adalah state floating yang valid.
+     * ============================================================
+     */
 
     struct wl_array states;
     struct wl_array edges;
@@ -948,8 +967,10 @@ void send_gtk_surface_configure(
         gtk_surface_get_tiling_state(surf);
 
     /*
-     * gtk_state sekarang harus selalu != 0 karena
-     * COMPOSITOR_TILING_NONE sudah di-filter di atas.
+     * Tiling state hanya dikirim jika memang sedang tiled.
+     *
+     * NONE berarti floating dan tidak memiliki
+     * GTK tiled state.
      */
     if (gtk_state != 0) {
 
@@ -963,29 +984,22 @@ void send_gtk_surface_configure(
     }
 
     /*
-     * Resize constraints juga berasal dari compositor state.
+     * Resize constraints tetap berasal dari
+     * compositor_surface.
      */
     gtk_surface_build_edge_constraints(
         surf,
         &edges);
 
     /*
-     * GTK shell protocol configure.
+     * GTK configure hanya membawa metadata state.
      *
-     * Ini hanya state metadata:
-     *
-     *     tiled
-     *     tiled-left
-     *     tiled-right
-     *     ...
+     * Geometry XDG tetap dikirim oleh send_toplevel_configure().
      */
     gtk_surface1_send_configure(
         state->resource,
         &states);
 
-    /*
-     * configure_edges hanya tersedia mulai GTK shell v2.
-     */
     if (wl_resource_get_version(state->resource) >= 2) {
 
         gtk_surface1_send_configure_edges(
@@ -993,19 +1007,20 @@ void send_gtk_surface_configure(
             &edges);
     }
 
-    wl_array_release(&states);
-    wl_array_release(&edges);
-
     LOGI(
         "GTK configure "
         "surface=%p "
-        "tiling=%u "
+        "tiling=%d "
+        "gtk_state=%u "
         "resize_edges=0x%x",
         (void *)surf,
+        tiling,
         gtk_state,
         compositor_surface_get_resize_edges(surf));
-}
 
+    wl_array_release(&states);
+    wl_array_release(&edges);
+}
 /*
  * CONTEXT:
  *
