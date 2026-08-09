@@ -144,6 +144,21 @@ struct layer_surface_state {
     char namespace_name[128];
 };
 
+/*
+ * CONTEXT:
+ * Layer-shell exclusive zones menyediakan usable output area
+ * untuk WM_MODE_DIRECT.
+ *
+ * xdg-shell menggunakan hasil ini untuk maximized/fullscreen
+ * geometry dan tidak menghitung exclusive zone sendiri.
+ */
+struct trierarch_work_area {
+    int32_t x;
+    int32_t y;
+    uint32_t width;
+    uint32_t height;
+};
+
 struct compositor_surface {
     struct wl_list link;
     struct wl_resource *resource;
@@ -405,5 +420,10 @@ void surface_notify_preferred_buffer_scale_all(
  */
 void layer_surface_notify_output_change(
         struct wayland_server *srv);
+
+void layer_shell_get_work_area(
+        struct wayland_server *srv,
+        struct compositor_surface *exclude,
+        struct trierarch_work_area *area);
 
 #endif
