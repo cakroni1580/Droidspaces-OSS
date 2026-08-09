@@ -710,7 +710,7 @@ static void gtk_surface_build_edge_constraints(
             wl_array_add(edges, sizeof(*edge));
 
         if (edge)
-            *edge = GTK_SURFACE1_EDGE_RESIZABLE_TOP;
+            *edge = GTK_SURFACE1_EDGE_CONSTRAINT_RESIZABLE_TOP;
     }
 
     if (resize_edges & COMPOSITOR_RESIZE_RIGHT) {
@@ -719,7 +719,7 @@ static void gtk_surface_build_edge_constraints(
             wl_array_add(edges, sizeof(*edge));
 
         if (edge)
-            *edge = GTK_SURFACE1_EDGE_RESIZABLE_RIGHT;
+            *edge = GTK_SURFACE1_EDGE_CONSTRAINT_RESIZABLE_RIGHT;
     }
 
     if (resize_edges & COMPOSITOR_RESIZE_BOTTOM) {
@@ -728,7 +728,7 @@ static void gtk_surface_build_edge_constraints(
             wl_array_add(edges, sizeof(*edge));
 
         if (edge)
-            *edge = GTK_SURFACE1_EDGE_RESIZABLE_BOTTOM;
+            *edge = GTK_SURFACE1_EDGE_CONSTRAINT_RESIZABLE_BOTTOM;
     }
 
     if (resize_edges & COMPOSITOR_RESIZE_LEFT) {
@@ -737,7 +737,7 @@ static void gtk_surface_build_edge_constraints(
             wl_array_add(edges, sizeof(*edge));
 
         if (edge)
-            *edge = GTK_SURFACE1_EDGE_RESIZABLE_LEFT;
+            *edge = GTK_SURFACE1_EDGE_CONSTRAINT_RESIZABLE_LEFT;
     }
 }
 
