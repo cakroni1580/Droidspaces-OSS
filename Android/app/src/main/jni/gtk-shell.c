@@ -924,6 +924,20 @@ void send_gtk_surface_configure(
     if (!state->resource)
         return;
 
+    enum compositor_tiling_state tiling =
+        compositor_surface_get_tiling(surf);
+
+    if (tiling == COMPOSITOR_TILING_NONE) {
+
+        LOGI(
+            "GTK configure skipped "
+            "surface=%p "
+            "reason=tiling-none",
+            (void *)surf);
+
+        return;
+    }
+
     struct wl_array states;
     struct wl_array edges;
 
@@ -934,14 +948,8 @@ void send_gtk_surface_configure(
         gtk_surface_get_tiling_state(surf);
 
     /*
-     * CONTEXT:
-     *
-     * GTK shell hanya mempublikasikan state hasil
-     * tiling engine.
-     *
-     * Geometry TIDAK dikirim melalui gtk-shell.
-     *
-     * Geometry sudah menjadi geometry xdg-toplevel.
+     * gtk_state sekarang harus selalu != 0 karena
+     * COMPOSITOR_TILING_NONE sudah di-filter di atas.
      */
     if (gtk_state != 0) {
 
