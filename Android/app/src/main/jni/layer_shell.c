@@ -666,8 +666,8 @@ static void layer_shell_get_layer_surface(
      *
      * Like xdg-shell, the client should not attach
      * its first buffer until configure has been sent.
-     */
-    send_layer_surface_configure(surf);
+     *
+     * send_layer_surface_configure(surf); */
 }
 
 /*
