@@ -515,6 +515,102 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
 /* --------------------------------------------------------------- */
 /* gtk_shell global bind                                              */
 /* --------------------------------------------------------------- */
+/*
+ * --------------------------------------------------------------------
+ * GTK surface configure sender.
+ *
+ * Dipanggil oleh output.c setelah geometry compositor_surface
+ * selesai diproses.
+ *
+ * GTK shell tidak mengirim width/height seperti xdg_toplevel.
+ * Geometry tetap berasal dari compositor_surface.
+ *
+ * Yang dikirim melalui gtk_surface1.configure adalah window state
+ * dan tiled edges.
+ *
+ * State GTK harus mengikuti state compositor, bukan menjadi
+ * window-management authority sendiri.
+ * --------------------------------------------------------------------
+ */
+void send_gtk_surface_configure(struct compositor_surface *surf)
+{
+    if (!surf ||
+        !surf->gtk_surface ||
+        !surf->srv)
+        return;
+
+    struct gtk_surface_state *state = surf->gtk_surface;
+
+    if (!state->resource)
+        return;
+
+    /*
+     * ------------------------------------------------------------
+     * Ambil geometry dari compositor_surface.
+     *
+     * GTK tidak menerima width/height secara langsung melalui
+     * gtk_surface1.configure, tetapi geometry ini menjadi sumber
+     * state untuk menentukan bagaimana GTK surface diperlakukan.
+     * ------------------------------------------------------------
+     */
+    int32_t width = 0;
+    int32_t height = 0;
+
+    compositor_surface_get_logical_size(
+            surf,
+            &width,
+            &height);
+
+    if (width <= 0 || height <= 0)
+        return;
+
+    /*
+     * ------------------------------------------------------------
+     * GTK surface state.
+     *
+     * Untuk sekarang Trierarch mempertahankan surface sebagai
+     * tiled window. State ini harus konsisten dengan geometry
+     * yang diberikan compositor.
+     * ------------------------------------------------------------
+     */
+    struct wl_array states;
+    struct wl_array edges;
+
+    wl_array_init(&states);
+    wl_array_init(&edges);
+
+    uint32_t *state_id =
+            wl_array_add(&states, sizeof(*state_id));
+
+    if (state_id)
+        *state_id = GTK_SURFACE1_STATE_TILED;
+
+    /*
+     * ------------------------------------------------------------
+     * Tiled edges.
+     *
+     * Belum ada edge-specific tiling di compositor.
+     * Karena itu array tetap kosong.
+     * ------------------------------------------------------------
+     */
+    gtk_surface1_send_configure(
+            state->resource,
+            &states);
+
+    gtk_surface1_send_configure_edges(
+            state->resource,
+            &edges);
+
+    wl_array_release(&states);
+    wl_array_release(&edges);
+
+    LOGI(
+        "send_gtk_surface_configure "
+        "surface=%p geometry=%dx%d",
+        (void *)surf,
+        (int)width,
+        (int)height);
+}
 
 void gtk_shell_bind(
         struct wl_client *client,
