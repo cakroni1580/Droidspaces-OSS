@@ -268,7 +268,100 @@ static void layer_surface_set_keyboard_interactivity(
         mode);
 }
 
-Android/app/src/main/jni/xdg_shell.c
+/*
+ * -------------------------------------------------------------------------
+ * Layer-shell popup integration
+ * -------------------------------------------------------------------------
+ *
+ * CONTEXT:
+ *
+ * zwlr_layer_surface_v1.get_popup() menerima xdg_popup resource
+ * yang dibuat client dengan parent layer-surface.
+ *
+ * Layer-shell tidak membuat popup protocol object sendiri.
+ * xdg_popup tetap dimiliki oleh xdg-shell.c.
+ *
+ * Tugas layer-shell hanya:
+ *
+ *   1. menerima popup resource;
+ *   2. memastikan layer surface masih valid;
+ *   3. memastikan hanya satu popup yang diregistrasikan;
+ *   4. menyimpan popup resource sebagai child dari layer surface.
+ *
+ * Positioning tetap menggunakan xdg_positioner milik xdg-shell.
+ *
+ * Tidak ada render traversal di sini.
+ * Popup tetap menjadi compositor_surface biasa dan masuk
+ * ke srv->surfaces seperti surface lainnya.
+ */
+static void layer_surface_get_popup(
+        struct wl_client *client,
+        struct wl_resource *resource,
+        struct wl_resource *popup)
+{
+    (void)client;
+
+    struct compositor_surface *surf =
+            wl_resource_get_user_data(resource);
+
+    if (!surf ||
+        !surf->layer_surface) {
+
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_SURFACE_STATE,
+                "layer surface is not active");
+        return;
+    }
+
+    /*
+     * CONTEXT:
+     *
+     * Layer surface hanya boleh mempunyai satu popup
+     * yang diregistrasikan sebagai child pada satu waktu.
+     *
+     * Jangan overwrite popup_res karena popup lama masih
+     * dapat digunakan oleh client.
+     */
+    if (surf->layer_surface->popup_res) {
+
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_SURFACE_STATE,
+                "layer surface already has a popup");
+        return;
+    }
+
+    /*
+     * Pastikan popup memang berasal dari client yang sama.
+     *
+     * Ini mencegah resource dari client lain dipasang
+     * sebagai child layer surface.
+     */
+    if (!popup ||
+        wl_resource_get_client(popup) !=
+            wl_resource_get_client(resource)) {
+
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_SURFACE_STATE,
+                "popup belongs to another client");
+        return;
+    }
+
+    /*
+     * Simpan popup sebagai child protocol object.
+     *
+     * Positioning dan configure popup tetap ditangani
+     * oleh xdg-shell popup path.
+     */
+    surf->layer_surface->popup_res = popup;
+
+    LOGI(
+        "layer popup attached surf=%p popup=%p",
+        (void *)surf,
+        (void *)popup);
+}
 
 static void layer_surface_ack_configure(
         struct wl_client *client,
