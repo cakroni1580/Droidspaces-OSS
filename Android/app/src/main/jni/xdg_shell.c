@@ -395,45 +395,67 @@ void send_toplevel_configure(struct compositor_surface *surf)
 
         if (tiling != COMPOSITOR_TILING_NONE) {
 
-        uint32_t tile_w = 0;
-        uint32_t tile_h = 0;
+            uint32_t tile_w = 0;
+            uint32_t tile_h = 0;
 
-        if (gtk_shell_apply_tiling_geometry(
-                surf,
-                &tile_w,
-                &tile_h)) {
+            if (gtk_shell_apply_tiling_geometry(
+                    surf,
+                    &tile_w,
+                    &tile_h)) {
 
-            /*
-             * GTK successfully produced the tiling rectangle.
-             */
-            w = (int32_t)tile_w;
-            h = (int32_t)tile_h;
+                /*
+                 * GTK successfully produced the tiling rectangle.
+                 */
+                w = (int32_t)tile_w;
+                h = (int32_t)tile_h;
+
+            } else {
+
+                /*
+                 * CONTEXT:
+                 * ----------------------------------------------------------
+                 * GTK tiling failed.
+                 *
+                 * Do NOT fall through with the old tiling state.
+                 *
+                 * The surface becomes floating, but remains entirely under
+                 * GTK shell management.
+                 * ----------------------------------------------------------
+                 */
+                compositor_surface_set_tiling(
+                    surf,
+                    COMPOSITOR_TILING_NONE);
+
+                tiling = COMPOSITOR_TILING_NONE;
+
+                /*
+                 * GTK floating fallback.
+                 *
+                 * send_gtk_surface_configure() establishes the GTK-managed
+                 * floating geometry. xdg-shell will publish that geometry
+                 * through the configure below.
+                 */
+                send_gtk_surface_configure(surf);
+
+                if (surf->wm_req_w > 0 ||
+                    surf->wm_req_h > 0) {
+
+                    w = surf->wm_req_w > 0
+                            ? surf->wm_req_w
+                            : 0;
+
+                    h = surf->wm_req_h > 0
+                            ? surf->wm_req_h
+                            : 0;
+                }
+            }
 
         } else {
 
             /*
-             * CONTEXT:
-             * ----------------------------------------------------------
-             * GTK tiling failed.
+             * Already floating under GTK shell.
              *
-             * Do NOT fall through with the old tiling state.
-             *
-             * The surface becomes floating, but remains entirely under
-             * GTK shell management.
-             * ----------------------------------------------------------
-             */
-            compositor_surface_set_tiling(
-                surf,
-                COMPOSITOR_TILING_NONE);
-
-            tiling = COMPOSITOR_TILING_NONE;
-
-            /*
-             * GTK floating fallback.
-             *
-             * send_gtk_surface_configure() establishes the GTK-managed
-             * floating geometry. xdg-shell will publish that geometry
-             * through the configure below.
+             * No legacy/nested stage is involved.
              */
             send_gtk_surface_configure(surf);
 
@@ -449,30 +471,7 @@ void send_toplevel_configure(struct compositor_surface *surf)
                         : 0;
             }
         }
-
-    } else {
-
-        /*
-         * Already floating under GTK shell.
-         *
-         * No legacy/nested stage is involved.
-         */
-        send_gtk_surface_configure(surf);
-
-        if (surf->wm_req_w > 0 ||
-            surf->wm_req_h > 0) {
-
-            w = surf->wm_req_w > 0
-                    ? surf->wm_req_w
-                    : 0;
-
-            h = surf->wm_req_h > 0
-                    ? surf->wm_req_h
-                    : 0;
-        }
-    
     }
-
     /*
      * xdg_toplevel.configure()
      */
