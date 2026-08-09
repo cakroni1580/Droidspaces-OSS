@@ -159,6 +159,34 @@ struct trierarch_work_area {
     uint32_t height;
 };
 
+/*
+ * ---------------------------------------------------------------
+ * Common compositor tiling state.
+ *
+ * Semua shell protocol membaca state ini.
+ *
+ * GTK shell hanya melakukan translation ke enum
+ * GTK_SURFACE1_STATE_*.
+ * ---------------------------------------------------------------
+ */
+enum compositor_tiling_state {
+    COMPOSITOR_TILING_NONE = 0,
+
+    COMPOSITOR_TILING_ALL,
+    COMPOSITOR_TILING_TOP,
+    COMPOSITOR_TILING_RIGHT,
+    COMPOSITOR_TILING_BOTTOM,
+    COMPOSITOR_TILING_LEFT,
+};
+enum compositor_resize_edges {
+    COMPOSITOR_RESIZE_NONE   = 0,
+    COMPOSITOR_RESIZE_TOP    = 1 << 0,
+    COMPOSITOR_RESIZE_RIGHT  = 1 << 1,
+    COMPOSITOR_RESIZE_BOTTOM = 1 << 2,
+    COMPOSITOR_RESIZE_LEFT   = 1 << 3,
+};
+
+
 struct compositor_surface {
     struct wl_list link;
     struct wl_resource *resource;
@@ -175,6 +203,10 @@ struct compositor_surface {
      * Diisi oleh gtk_shell_get_gtk_surface().
      */
     struct gtk_surface_state *gtk_surface;
+    enum compositor_tiling_state tiling_state;
+    uint32_t resize_edges;
+
+
     struct layer_surface_state *layer_surface;
     struct wl_resource *layer_surface_res;
 
@@ -408,9 +440,24 @@ void layer_shell_bind(
         void *data,
         uint32_t version,
         uint32_t id);
+void compositor_surface_set_tiling(
+        struct compositor_surface *surf,
+        enum compositor_tiling_state state);
+
+enum compositor_tiling_state
+compositor_surface_get_tiling(
+        struct compositor_surface *surf);
+
+
 void send_layer_surface_configure(struct compositor_surface *surf);
 void surface_notify_preferred_buffer_scale_all(
         struct wayland_server *srv);
+void compositor_surface_set_resize_edges(
+        struct compositor_surface *surf,
+        uint32_t edges);
+
+uint32_t compositor_surface_get_resize_edges(
+        struct compositor_surface *surf);
 
 
 /*
