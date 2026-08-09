@@ -171,15 +171,52 @@ static void layer_surface_set_exclusive_zone(
         int32_t zone)
 {
     (void)client;
-    (void)resource;
-    (void)zone;
+
     struct compositor_surface *surf =
             wl_resource_get_user_data(resource);
 
     if (!surf || !surf->layer_surface)
-            return;
+        return;
+
+    /*
+     * CONTEXT:
+     *
+     * wlr-layer-shell semantics:
+     *
+     *   zone > 0
+     *       reserve area for other surfaces.
+     *
+     *   zone == 0
+     *       no exclusive reservation.
+     *
+     *   zone == -1
+     *       surface must not be moved to accommodate
+     *       another exclusive surface.
+     *
+     * Phoc/Phosh dan Plasma Mobile sama-sama menggunakan
+     * semantics standard ini untuk panel/top-bar/home-bar/
+     * system surfaces.
+     *
+     * Nilai kurang dari -1 tidak memiliki semantics
+     * exclusive-zone dalam protocol.
+     */
+    if (zone < -1) {
+
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_SURFACE_STATE,
+                "invalid exclusive zone %d",
+                zone);
+
+        return;
+    }
 
     surf->layer_surface->exclusive_zone = zone;
+
+    LOGI(
+        "layer exclusive zone surf=%p zone=%d",
+        (void *)surf,
+        zone);
 }
 
 static void layer_surface_set_margin(
@@ -862,45 +899,6 @@ static void layer_surface_calculate_size(
      * layer surface anchored at the requested edge.
      */
 }
-
-/*
- * -------------------------------------------------------------------------
- * Trierarch layer-shell exclusive-zone layout
- * -------------------------------------------------------------------------
- *
- * CONTEXT:
- *
- * exclusive_zone tidak mengubah geometry layer surface.
- *
- * Contoh:
- *
- *     TOP panel:
- *
- *         output = 1080x1920
- *         panel  = 1080x100
- *         exclusive_zone = 100
- *
- *     panel geometry:
- *
- *         x = 0
- *         y = 0
- *         w = 1080
- *         h = 100
- *
- *     usable work area:
- *
- *         x = 0
- *         y = 100
- *         w = 1080
- *         h = 1820
- *
- * Jadi exclusive_zone hanya mempengaruhi layout surface lain.
- *
- * Trierarch hanya mempunyai satu logical output, sehingga work-area
- * dapat dihitung langsung dari seluruh layer surface yang mempunyai
- * exclusive_zone > 0.
- */
-
 struct trierarch_work_area {
     int32_t x;
     int32_t y;
@@ -909,6 +907,40 @@ struct trierarch_work_area {
 };
 
 
+/*
+ * -------------------------------------------------------------------------
+ * Trierarch layer-shell work-area calculation
+ * -------------------------------------------------------------------------
+ *
+ * CONTEXT:
+ *
+ * Positive exclusive-zone:
+ *
+ *     panel:
+ *
+ *         anchor = TOP | LEFT | RIGHT
+ *         height = 100
+ *         exclusive_zone = 100
+ *
+ *     usable area:
+ *
+ *         y      = 100
+ *         height = output_height - 100
+ *
+ *
+ * Margin ikut masuk ke exclusive reservation.
+ *
+ * Special value:
+ *
+ *     exclusive_zone == -1
+ *
+ * berarti surface tersebut tidak ingin dipindahkan untuk
+ * mengakomodasi exclusive surface lain.
+ *
+ * Oleh karena itu -1 TIDAK mengurangi usable area.
+ *
+ * Layer surface sendiri tetap menggunakan full output.
+ */
 static void layer_shell_get_work_area(
         struct wayland_server *srv,
         struct compositor_surface *exclude,
@@ -937,12 +969,6 @@ static void layer_shell_get_work_area(
             &srv->surfaces,
             link) {
 
-        /*
-         * CONTEXT:
-         *
-         * Surface yang sedang dihitung geometry-nya tidak boleh
-         * ikut mereservasi dirinya sendiri.
-         */
         if (surf == exclude)
             continue;
 
@@ -953,13 +979,10 @@ static void layer_shell_get_work_area(
             continue;
 
         /*
-         * exclusive_zone <= 0:
+         * Only positive values reserve space.
          *
-         *   0  = tidak reserve
-         *   <0 = special protocol semantics, bukan reservation
-         *
-         * Untuk Trierarch host policy tahap ini hanya positive
-         * exclusive zone yang menjadi reserved work area.
+         * 0  -> no reservation
+         * -1 -> do not move this surface for other exclusives
          */
         if (ls->exclusive_zone <= 0)
             continue;
@@ -968,28 +991,54 @@ static void layer_shell_get_work_area(
             ls->exclusive_zone;
 
         /*
-         * TOP exclusive layer.
+         * -------------------------------------------------------------
+         * TOP
+         * -------------------------------------------------------------
          *
-         * Hanya reserve jika surface benar-benar anchored TOP.
+         * Positive exclusive zone is meaningful when the surface
+         * is anchored to TOP and spans the perpendicular axis.
          */
-        if (ls->anchor &
-            ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) {
+        if ((ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) &&
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) &&
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT)) {
+
+            /*
+             * Protocol:
+             *
+             * exclusive zone includes the margin.
+             *
+             * For top:
+             *
+             *     top margin
+             *   + exclusive zone
+             */
+            zone += ls->margin_top;
 
             if (zone > (int32_t)area->height)
                 zone = (int32_t)area->height;
 
             area->y += zone;
-
             area->height -= zone;
 
             continue;
         }
 
         /*
-         * BOTTOM exclusive layer.
+         * -------------------------------------------------------------
+         * BOTTOM
+         * -------------------------------------------------------------
          */
-        if (ls->anchor &
-            ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) {
+        if ((ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) &&
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) &&
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT)) {
+
+            zone += ls->margin_bottom;
 
             if (zone > (int32_t)area->height)
                 zone = (int32_t)area->height;
@@ -1000,26 +1049,41 @@ static void layer_shell_get_work_area(
         }
 
         /*
-         * LEFT exclusive layer.
+         * -------------------------------------------------------------
+         * LEFT
+         * -------------------------------------------------------------
          */
-        if (ls->anchor &
-            ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) {
+        if ((ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) &&
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) &&
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM)) {
+
+            zone += ls->margin_left;
 
             if (zone > (int32_t)area->width)
                 zone = (int32_t)area->width;
 
             area->x += zone;
-
             area->width -= zone;
 
             continue;
         }
 
         /*
-         * RIGHT exclusive layer.
+         * -------------------------------------------------------------
+         * RIGHT
+         * -------------------------------------------------------------
          */
-        if (ls->anchor &
-            ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) {
+        if ((ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) &&
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) &&
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM)) {
+
+            zone += ls->margin_right;
 
             if (zone > (int32_t)area->width)
                 zone = (int32_t)area->width;
@@ -1030,8 +1094,6 @@ static void layer_shell_get_work_area(
         }
     }
 }
-
-
 /* ------------------------------------------------------------------------- */
 /* layer_shell interface                                                     */
 /* ------------------------------------------------------------------------- */
