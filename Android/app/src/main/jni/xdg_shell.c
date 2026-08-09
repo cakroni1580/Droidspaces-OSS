@@ -391,7 +391,7 @@ void send_toplevel_configure(struct compositor_surface *surf)
         }
 
         enum compositor_tiling_state tiling =
-        compositor_surface_get_tiling(surf);
+            compositor_surface_get_tiling(surf);
 
         /*
          * ================================================================
@@ -554,7 +554,7 @@ void send_toplevel_configure(struct compositor_surface *surf)
                   h,
                   surf->wm_x,
                   surf->wm_y);
-              }
+              
          }
     }
     /*
