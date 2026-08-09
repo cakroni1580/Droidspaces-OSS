@@ -162,7 +162,7 @@ void compositor_set_output_user_scale(wayland_server_t *srv_opaque, int32_t scal
              * selalu melihat state window yang sama.
              * ----------------------------------------------------------
              */
-             gtk_surface_send_configure(surf);
+             send_gtk_surface_configure(surf);
             
     }
     pthread_mutex_unlock(&srv->surfaces_mutex);
