@@ -52,8 +52,10 @@
  *      xdg-shell    gtk-shell
  *
  * ================================================================
- *
- *
+ */
+ static uint32_t gtk_surface_get_tiling_state(
+        struct compositor_surface *surf);
+ /*
  * CONTEXT:
  * GTK geometry mengikuti geometry final layer-shell.
  *
