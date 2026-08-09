@@ -61,6 +61,18 @@
 extern void keyboard_focus_update(
         struct wayland_server *srv,
         struct compositor_surface *surface);
+/*
+ * Return work-area yang boleh digunakan GTK tiling.
+ *
+ * IMPORTANT:
+ *
+ * Jangan menghitung exclusive_zone di sini.
+ * layer-shell.c adalah authority untuk work-area.
+ */
+extern void layer_shell_get_work_area(
+        struct wayland_server *srv,
+        struct compositor_surface *exclude,
+        struct trierarch_work_area *area);
 
 
 /* --------------------------------------------------------------- */
@@ -94,6 +106,139 @@ static const struct gtk_shell1_interface gtk_shell_impl;
 /* --------------------------------------------------------------- */
 /* wl_surface lifecycle                                             */
 /* --------------------------------------------------------------- */
+/*
+ * ================================================================
+ * GTK SHELL <-> LAYER-SHELL WORK-AREA BRIDGE
+ * ================================================================
+ *
+ * GTK shell tidak membaca:
+ *
+ *     layer_surface->exclusive_zone
+ *
+ * secara langsung.
+ *
+ * Source of truth work-area tetap berada di layer-shell.c:
+ *
+ *     layer_shell_get_work_area()
+ *
+ * API ini sudah menangani:
+ *
+ *     exclusive_zone
+ *     anchor
+ *     margin
+ *     WM_MODE_DIRECT / WM_MODE_NESTED
+ *
+ * GTK shell hanya meminta hasil akhirnya.
+ *
+ * Flow:
+ *
+ *     layer-shell exclusive_zone
+ *              |
+ *              v
+ *     layer_shell_get_work_area()
+ *              |
+ *              v
+ *       trierarch_work_area
+ *              |
+ *              v
+ *       GTK tiling geometry
+ * ================================================================
+ */
+
+static bool gtk_shell_get_work_area(
+        struct compositor_surface *surf,
+        struct trierarch_work_area *area)
+{
+    if (!surf ||
+        !surf->srv ||
+        !area)
+        return false;
+
+    /*
+     * layer-shell API sudah menangani:
+     *
+     *     WM_MODE_DIRECT
+     *     WM_MODE_NESTED
+     *
+     * serta seluruh exclusive-zone calculation.
+     */
+    layer_shell_get_work_area(
+        surf->srv,
+        surf,
+        area);
+
+    return true;
+}
+
+
+/*
+ * GTK tiling geometry.
+ *
+ * Work-area berasal dari layer-shell.
+ * Tiling state tetap berasal dari compositor_surface.
+ */
+static bool gtk_shell_get_tiling_geometry(
+        struct compositor_surface *surf,
+        int32_t *x,
+        int32_t *y,
+        uint32_t *width,
+        uint32_t *height)
+{
+    if (!surf ||
+        !surf->srv ||
+        !x ||
+        !y ||
+        !width ||
+        !height)
+        return false;
+
+    /*
+     * Tiling hanya digunakan pada DIRECT.
+     */
+    if (surf->srv->wm_mode != WM_MODE_DIRECT)
+        return false;
+
+    uint32_t tiling =
+        gtk_surface_get_tiling_state(surf);
+
+    if (!tiling)
+        return false;
+
+    struct trierarch_work_area area;
+
+    if (!gtk_shell_get_work_area(
+            surf,
+            &area))
+        return false;
+
+    /*
+     * ------------------------------------------------------------
+     * Tiling geometry memakai DIRECT work-area.
+     *
+     * Untuk tahap ini state tiling tetap menjadi source of truth.
+     * API ini hanya menyediakan area yang sudah dikurangi
+     * exclusive-zone layer-shell.
+     * ------------------------------------------------------------
+     */
+    *x = area.x;
+    *y = area.y;
+    *width = area.width;
+    *height = area.height;
+
+    LOGI(
+        "gtk tiling work-area "
+        "surface=%p "
+        "tiling=0x%x "
+        "area=%ux%u+%d+%d",
+        (void *)surf,
+        tiling,
+        area.width,
+        area.height,
+        area.x,
+        area.y);
+
+    return true;
+}
 
 static void gtk_surface_wl_surface_destroy(
         struct wl_listener *listener,
@@ -694,10 +839,41 @@ void send_gtk_surface_configure(
     int32_t width = 0;
     int32_t height = 0;
 
-    compositor_surface_get_logical_size(
-        surf,
-        &width,
-        &height);
+    /*
+     * ================================================================
+     * GTK geometry source
+     * ================================================================
+     *
+     * DIRECT + tiled:
+     *
+     *     layer-shell exclusive_zone
+     *              ↓
+     *       DIRECT work-area
+     *              ↓
+     *       GTK tiling geometry
+     *
+     * DIRECT + non-tiled:
+     *
+     *     normal compositor geometry
+     *
+     * NESTED:
+     *
+     *     normal compositor geometry
+     *     (tiling API tidak digunakan)
+     * ================================================================
+     */
+    if (!gtk_shell_get_tiling_geometry(
+            surf,
+            &surf->wm_x,
+            &surf->wm_y,
+            (uint32_t *)&width,
+            (uint32_t *)&height)) {
+
+        compositor_surface_get_logical_size(
+            surf,
+            &width,
+            &height);
+    }
 
     if (width <= 0 || height <= 0)
         return;
