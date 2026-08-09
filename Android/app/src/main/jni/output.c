@@ -153,6 +153,16 @@ void compositor_set_output_user_scale(wayland_server_t *srv_opaque, int32_t scal
             send_toplevel_configure(surf);
             /*layer_shell.c*/
             send_layer_surface_configure(surf);
+            /*
+             * ----------------------------------------------------------
+             * Sinkronkan GTK shell dan Layer shell dengan xdg-shell.
+             *
+             * Bila client juga membuat gtk_surface1, kirim configure
+             * setelah xdg_surface.configure sehingga kedua protocol
+             * selalu melihat state window yang sama.
+             * ----------------------------------------------------------
+             */
+             gtk_surface_send_configure(surf);
             
     }
     pthread_mutex_unlock(&srv->surfaces_mutex);
