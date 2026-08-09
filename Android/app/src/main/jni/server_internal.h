@@ -158,26 +158,47 @@ struct trierarch_work_area {
     uint32_t width;
     uint32_t height;
 };
-
 /*
- * ---------------------------------------------------------------
- * Common compositor tiling state.
+ * ================================================================
+ * Compositor window-management state
+ * ================================================================
  *
- * Semua shell protocol membaca state ini.
+ * Source of truth untuk:
  *
- * GTK shell hanya melakukan translation ke enum
- * GTK_SURFACE1_STATE_*.
- * ---------------------------------------------------------------
+ *   - xdg-shell
+ *   - layer-shell
+ *   - gtk-shell
+ *
+ * Semua protocol membaca state yang sama.
+ *
+ * WM policy hanya boleh diterapkan oleh compositor pada:
+ *
+ *     WM_MODE_DIRECT
+ *
+ * Pada WM_MODE_NESTED state WM tidak dipaksakan ke client.
+ * ================================================================
  */
+
 enum compositor_tiling_state {
     COMPOSITOR_TILING_NONE = 0,
 
+    /* Full tiling / window occupies compositor tile. */
     COMPOSITOR_TILING_ALL,
+
+    /* Edge-specific tiling. */
     COMPOSITOR_TILING_TOP,
     COMPOSITOR_TILING_RIGHT,
     COMPOSITOR_TILING_BOTTOM,
     COMPOSITOR_TILING_LEFT,
 };
+
+#define COMPOSITOR_RESIZE_NONE   0u
+#define COMPOSITOR_RESIZE_TOP    (1u << 0)
+#define COMPOSITOR_RESIZE_RIGHT  (1u << 1)
+#define COMPOSITOR_RESIZE_BOTTOM (1u << 2)
+#define COMPOSITOR_RESIZE_LEFT   (1u << 3)
+
+
 enum compositor_resize_edges {
     COMPOSITOR_RESIZE_NONE   = 0,
     COMPOSITOR_RESIZE_TOP    = 1 << 0,
