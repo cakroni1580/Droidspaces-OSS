@@ -916,12 +916,6 @@ static void layer_surface_calculate_size(
      * layer surface anchored at the requested edge.
      */
 }
-struct trierarch_work_area {
-    int32_t x;
-    int32_t y;
-    uint32_t width;
-    uint32_t height;
-};
 /*
  * -------------------------------------------------------------------------
  * Trierarch layer-shell work-area calculation
