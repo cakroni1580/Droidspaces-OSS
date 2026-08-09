@@ -377,34 +377,22 @@ static void layer_surface_ack_configure(
         return;
 
     /*
-     * CONTEXT:
-     * Hanya configure terbaru yang valid.
+     * PHOC/Trierarch contract:
      *
-     * Configure lama dapat masih berada di client event queue.
-     * Jangan membuka gate buffer berdasarkan serial lama.
-     */
-    if (serial != surf->layer_surface->last_configure_serial) {
-        LOGI(
-            "layer stale ack ignored surf=%p serial=%u expected=%u",
-            (void *)surf,
-            serial,
-            surf->layer_surface->last_configure_serial);
-        return;
-    }
-
-    surf->layer_surface->acked_serial = serial;
-    surf->layer_surface->configured = true;
-
-    /*
-     * Client sekarang sudah meng-ack geometry terbaru.
+     * ack_configure() tidak menjadi buffer gate.
      *
-     * surface_commit() berikutnya boleh mempromosikan
-     * pending_buffer menjadi current_buffer.
+     * Client tetap wajib melakukan ack sesuai protocol,
+     * tetapi Trierarch tidak menyimpan:
+     *
+     *   - configured bool
+     *   - first_buffer_allowed
+     *   - acked_serial
+     *
+     * Buffer lifecycle ditentukan oleh surface_commit()
+     * milik compositor, bukan oleh state machine wlroots.
      */
-    surf->layer_surface->first_buffer_allowed = true;
-
     LOGI(
-        "layer configure acked surf=%p serial=%u",
+        "layer configure ack surf=%p serial=%u",
         (void *)surf,
         serial);
 }
@@ -616,8 +604,14 @@ static void layer_shell_get_layer_surface(
                 sizeof(state->namespace_name) - 1);
     }
     
-    state->configured = false;
-    state->first_buffer_allowed = false;
+    /*
+     * PHOC/Trierarch contract:
+     *
+     * Layer surface langsung menjadi role aktif setelah
+     * zwlr_layer_surface_v1 berhasil dibuat.
+     *
+     * Tidak ada pending/configure gate internal.
+     */
     surf->layer_surface = state;
     surf->layer_surface_res = layer_res;
 
@@ -661,13 +655,18 @@ static void layer_shell_get_layer_surface(
         layer,
         namespace ? namespace : "");
 
-    /*
-     * Initial configure.
-     *
-     * Like xdg-shell, the client should not attach
-     * its first buffer until configure has been sent.
-     *
-     * send_layer_surface_configure(surf); */
+        /*
+         * PHOC/Trierarch contract:
+         *
+         * Initial configure tetap dikirim sebagai bagian
+         * dari protocol layer-shell.
+         *
+         * Configure memberi client geometry yang harus
+         * digunakan untuk initial commit.
+         *
+         * Tidak ada internal pending-buffer/configure gate.
+         */
+        send_layer_surface_configure(surf);
 }
 
 /*
@@ -885,72 +884,6 @@ layer_shell_impl = {
 };
 
 
-/* ------------------------------------------------------------------------- */
-/* global bind                                                               */
-/* ------------------------------------------------------------------------- */
-/*
- * CONTEXT:
- * Public compositor-side API.
- *
- * Mengembalikan true hanya jika compositor_surface sedang
- * memiliki layer-shell role aktif.
- */
-bool layer_surface_is_active(
-        struct compositor_surface *surf)
-{
-    return surf &&
-           surf->layer_surface &&
-           surf->layer_surface_res;
-}
-/*
- * CONTEXT:
- * Read-only compositor API.
- *
- * Dipakai focus policy untuk mengetahui apakah layer
- * meminta keyboard interaction.
- */
-bool layer_surface_wants_keyboard(
-        struct compositor_surface *surf)
-{
-    if (!surf || !surf->layer_surface)
-        return false;
-
-    return surf->layer_surface->keyboard_interactive !=
-           ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE;
-}
-
-/*
- * CONTEXT:
- * Configure gate API.
- *
- * Buffer pertama layer-shell hanya boleh dipromosikan
- * setelah configure terbaru di-ack.
- */
-bool layer_surface_buffer_allowed(
-        struct compositor_surface *surf)
-{
-    if (!surf || !surf->layer_surface)
-        return false;
-
-    return surf->layer_surface->first_buffer_allowed;
-}
-
-bool layer_surface_configured(
-        struct compositor_surface *surf)
-{
-    if (!surf || !surf->layer_surface)
-        return false;
-
-    return surf->layer_surface->configured;
-}
-
-/*
- * CONTEXT:
- * Geometry API.
- *
- * Mengambil geometry hasil policy layer-shell yang sudah
- * ada sekarang. Tidak melakukan recalculation tambahan.
- */
 bool layer_surface_get_geometry(
         struct compositor_surface *surf,
         uint32_t *width,
@@ -985,36 +918,43 @@ void send_layer_surface_configure(struct compositor_surface *surf)
         !surf->srv)
         return;
 
-     uint32_t width = 0;
-     uint32_t height = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
 
-
+    /*
+     * CONTEXT:
+     * Geometry dihitung langsung dari state layer-shell
+     * saat configure dikirim.
+     *
+     * Tidak ada state pending/configured yang disimpan
+     * untuk mengontrol buffer lifecycle.
+     */
     layer_surface_calculate_size(
             surf,
             &width,
             &height);
-    
+
+    /*
+     * Configure serial tetap diperlukan oleh protocol.
+     *
+     * Serial ini hanya protocol serial untuk configure.
+     * Bukan buffer gate.
+     */
     uint32_t serial =
         wl_display_next_serial(surf->srv->display);
-
-    surf->layer_surface->last_configure_serial =
-            serial;
-
-    /*
-     * Menunggu ack_configure().
-     */
-    surf->layer_surface->configured = false;
-    /*
-     * Tunggu ack_configure sebelum
-     * menerima buffer pertama.
-     */
-    surf->layer_surface->first_buffer_allowed = false;
 
     zwlr_layer_surface_v1_send_configure(
             surf->layer_surface_res,
             serial,
             width,
             height);
+
+    LOGI(
+        "layer configure surf=%p serial=%u size=%ux%u",
+        (void *)surf,
+        serial,
+        width,
+        height);
 }
 
 void layer_surface_notify_output_change(
