@@ -250,11 +250,55 @@ void send_toplevel_configure(struct compositor_surface *surf) {
             uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
             if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
         }
+        /*
+         * CONTEXT:
+         * ---------------------------------------------------------------
+         * WM_MODE_DIRECT menggunakan work area yang sudah dikurangi
+         * oleh layer-shell exclusive zones.
+         *
+         * Jangan memakai output_width/output_height langsung untuk
+         * maximized xdg-toplevel.
+         *
+         * Contoh:
+         *
+         * output       = 1080 x 2400
+         * top zone     = 120
+         * bottom zone  = 120
+         *
+         * work area:
+         *
+         *     x=0
+         *     y=120
+         *     w=1080
+         *     h=2160
+         */
         if (surf->wm_maximized) {
-            w = surf->srv->output_width  > 0 ? surf->srv->output_width  : 0;
-            h = surf->srv->output_height > 0 ? surf->srv->output_height : 0;
-            uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
-            if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+
+           struct trierarch_work_area area;
+
+           layer_shell_get_work_area(
+                   surf->srv,
+                   surf,
+                   &area);
+
+           w = area.width;
+           h = area.height;
+
+           /*
+            * Posisi window juga harus mengikuti usable area.
+            *
+            * Jangan menaruh maximized window di (0,0)
+            * karena top panel sudah mengambil area tersebut.
+            */
+           surf->wm_x = area.x;
+           surf->wm_y = area.y;
+
+           uint32_t *s_max =
+                wl_array_add(&states, sizeof(uint32_t));
+
+           if (s_max)
+               *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+        
         } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
             /* Compositor-driven resize: send requested size (best-effort). */
             w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
@@ -296,9 +340,44 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
 
     /* Assign a cascaded initial position and a unique stacking z_order. */
     if (surf->srv) {
-        surf->wm_x = surf->srv->cascade_x;
-        surf->wm_y = surf->srv->cascade_y;
-        surf->z_order = surf->srv->next_z_order++;
+
+        /*
+         * CONTEXT:
+         * -----------------------------------------------------------
+         * Initial xdg-toplevel placement pada DIRECT mode harus
+         * dimulai dari usable work area.
+         *
+         * Layer-shell exclusive zones sudah mengurangi area tersebut.
+         *
+         * NESTED tetap menggunakan existing nested policy.
+         */
+        if (surf->srv->wm_mode == WM_MODE_DIRECT) {
+
+            struct trierarch_work_area area;
+
+            layer_shell_get_work_area(
+                    surf->srv,
+                    surf,
+                    &area);
+
+            surf->wm_x =
+                area.x + surf->srv->cascade_x;
+
+            surf->wm_y =
+                area.y + surf->srv->cascade_y;
+
+        } else {
+
+            surf->wm_x =
+                surf->srv->cascade_x;
+
+            surf->wm_y =
+                surf->srv->cascade_y;
+        }
+
+        surf->z_order =
+            surf->srv->next_z_order++;
+
         surf->srv->cascade_x += 40;
         surf->srv->cascade_y += 40;
         /* Wrap cascade within the top-left quarter so windows stay accessible. */
