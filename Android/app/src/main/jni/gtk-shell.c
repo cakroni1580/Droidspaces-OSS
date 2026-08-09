@@ -8,7 +8,11 @@
 #define LOG_TAG "TrierarchGtkShell"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-
+#define COMPOSITOR_RESIZE_NONE   0u
+#define COMPOSITOR_RESIZE_TOP    (1u << 0)
+#define COMPOSITOR_RESIZE_RIGHT  (1u << 1)
+#define COMPOSITOR_RESIZE_BOTTOM (1u << 2)
+#define COMPOSITOR_RESIZE_LEFT   (1u << 3)
 /*
  * ================================================================
  * GTK SHELL ARCHITECTURE
