@@ -814,7 +814,7 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
     .set_startup_id  = gtk_shell_set_startup_id,
     .system_bell     = gtk_shell_system_bell,
     .notify_launch   = gtk_shell_notify_launch,
-}
+};
 
 /*
  * --------------------------------------------------------------------
