@@ -222,18 +222,14 @@ static void layer_surface_set_exclusive_zone(
     LOGI(
         "layer exclusive zone "
         "surf=%p zone=%d anchor=0x%x "
-        "margin=%d,%d,%d,%d mode=%s",
+        "margin=%d,%d,%d,%d",
         (void *)surf,
         zone,
         surf->layer_surface->anchor,
         surf->layer_surface->margin_top,
         surf->layer_surface->margin_right,
         surf->layer_surface->margin_bottom,
-        surf->layer_surface->margin_left,
-        surf->srv &&
-        surf->srv->wm_mode == WM_MODE_DIRECT
-            ? "DIRECT"
-            : "NESTED");
+        surf->layer_surface->margin_left);
 }
 
 static void layer_surface_set_margin(
@@ -896,79 +892,8 @@ static void layer_surface_calculate_size(
             ((int32_t)oh -
              (int32_t)*height) / 2;
     }
-
-    /*
-     * ------------------------------------------------------------------
-     * Exclusive zone
-     * ------------------------------------------------------------------
-     *
-     * DO NOT replace surface height with exclusive_zone.
-     *
-     * exclusive_zone means:
-     *
-     *     "reserve this amount of output space"
-     *
-     * It is therefore relevant to layout of other surfaces.
-     *
-     * The layer surface itself keeps its calculated width/height.
-     *
-     * For Trierarch's single-fullscreen-host model we keep the
-     * layer surface anchored at the requested edge.
-     */
 }
-/*
- * -------------------------------------------------------------------------
- * Trierarch layer-shell work-area calculation
- * -------------------------------------------------------------------------
- *
- * CONTEXT:
- *
- * Positive exclusive zone reserves output space for normal/direct
- * surfaces.
- *
- * The reservation is measured from the anchored edge.
- *
- * Examples:
- *
- *     TOP + exclusive_zone=100
- *
- *         +-------------------------+
- *         |       reserved 100      |
- *         +-------------------------+
- *         |                         |
- *         |       usable area       |
- *         |                         |
- *         +-------------------------+
- *
- *     BOTTOM + exclusive_zone=80
- *
- *         +-------------------------+
- *         |       usable area       |
- *         |                         |
- *         +-------------------------+
- *         |       reserved 80       |
- *         +-------------------------+
- *
- * Margin is included in the exclusive reservation.
- *
- * exclusive_zone:
- *
- *     > 0 : reserve space
- *      0  : no reservation
- *     -1  : no reservation
- *
- * A positive exclusive zone is meaningful only when the surface
- * is anchored to an edge. A corner-only anchor or parallel-edge
- * combination without a unique exclusive edge is ignored.
- *
- * WM_MODE_DIRECT:
- *
- *     exclusive zone modifies the direct output work area.
- *
- * WM_MODE_NESTED:
- *
- *     exclusive zone does not modify nested desktop geometry.
- */
+
 void layer_shell_get_work_area(
         struct wayland_server *srv,
         struct compositor_surface *exclude,
@@ -992,26 +917,6 @@ void layer_shell_get_work_area(
     area->y = 0;
     area->width = ow;
     area->height = oh;
-
-    /*
-     * ---------------------------------------------------------------
-     * NESTED
-     * ---------------------------------------------------------------
-     *
-     * Nested WM owns its own desktop/window geometry.
-     *
-     * Do NOT consume layer-shell exclusive zones here.
-     */
-    if (srv->wm_mode != WM_MODE_DIRECT) {
-
-        LOGI(
-            "layer work-area: NESTED "
-            "exclusive ignored output=%ux%u",
-            ow,
-            oh);
-
-        return;
-    }
 
     struct compositor_surface *surf;
 
@@ -1265,32 +1170,10 @@ void layer_shell_get_work_area(
 
             continue;
         }
-
-        /*
-         * -----------------------------------------------------------
-         * Positive exclusive zone but no unique exclusive edge.
-         *
-         * Examples:
-         *
-         *     TOP + LEFT
-         *     TOP + RIGHT
-         *     TOP + BOTTOM
-         *     LEFT + RIGHT
-         *     all four edges
-         *
-         * Protocol semantics treat these as non-exclusive.
-         * -----------------------------------------------------------
-         */
-        LOGI(
-            "exclusive ignored surf=%p "
-            "zone=%d anchor=0x%x",
-            (void *)surf,
-            ls->exclusive_zone,
-            ls->anchor);
     }
 
     LOGI(
-        "layer work-area: DIRECT "
+        "layer work-area "
         "x=%d y=%d size=%ux%u",
         area->x,
         area->y,
