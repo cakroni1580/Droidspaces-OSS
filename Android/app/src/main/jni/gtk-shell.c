@@ -443,6 +443,112 @@ static void gtk_shell_get_gtk_surface(
         (void *)surf);
 }
 
+/* --------------------------------------------------------------- */
+/* GTK state translation                                             */
+/* --------------------------------------------------------------- */
+
+/*
+ * GTK shell mempunyai state tiling sendiri.
+ *
+ * Source of truth tetap compositor_surface.
+ *
+ * GTK shell hanya menerjemahkan state compositor menjadi:
+ *
+ *   GTK_SURFACE1_STATE_TILED
+ *   GTK_SURFACE1_STATE_TILED_TOP
+ *   GTK_SURFACE1_STATE_TILED_RIGHT
+ *   GTK_SURFACE1_STATE_TILED_BOTTOM
+ *   GTK_SURFACE1_STATE_TILED_LEFT
+ *
+ * GTK shell TIDAK menentukan apakah surface harus tiled.
+ */
+
+/*
+ * Return non-zero apabila compositor menganggap surface
+ * sedang tiled.
+ *
+ * API ini sengaja dipisahkan dari gtk-shell.c supaya
+ * xdg-shell dan layer-shell dapat memakai state yang sama.
+ *
+ * Implementasinya harus membaca state authority milik
+ * compositor_surface.
+ */
+static uint32_t gtk_surface_get_tiling_state(
+        struct compositor_surface *surf)
+{
+    if (!surf)
+        return 0;
+
+    /*
+     * ------------------------------------------------------------
+     * IMPORTANT:
+     *
+     * Jangan menentukan tiling dari width/height.
+     *
+     * Geometry:
+     *
+     *     wm_x / wm_y / width / height
+     *
+     * hanya menjelaskan posisi dan ukuran.
+     *
+     * Tiling adalah compositor state.
+     * ------------------------------------------------------------
+     */
+
+    /*
+     * Jika compositor_surface nantinya mempunyai state:
+     *
+     *     tiled_top
+     *     tiled_right
+     *     tiled_bottom
+     *     tiled_left
+     *
+     * mapping dilakukan di sini.
+     *
+     * Untuk state tiled generik, gunakan TILED.
+     */
+
+    return GTK_SURFACE1_STATE_TILED;
+}
+
+
+/*
+ * ---------------------------------------------------------------
+ * GTK edge constraints
+ * ---------------------------------------------------------------
+ *
+ * GTK shell v2 menyediakan configure_edges().
+ *
+ * Ini BUKAN posisi window.
+ *
+ * Ini memberi tahu GTK edge mana yang masih boleh di-resize.
+ *
+ * Karena compositor Trierarch saat ini belum mempunyai
+ * edge-specific resize policy, jangan mengarang constraint.
+ *
+ * Array kosong berarti tidak ada constraint khusus.
+ */
+static void gtk_surface_build_edge_constraints(
+        struct compositor_surface *surf,
+        struct wl_array *edges)
+{
+    (void)surf;
+
+    /*
+     * Intentionally empty.
+     *
+     * Nanti apabila compositor_surface mempunyai:
+     *
+     *     resizable_top
+     *     resizable_right
+     *     resizable_bottom
+     *     resizable_left
+     *
+     * mapping dilakukan di sini.
+     */
+    wl_array_init(edges);
+}
+
 
 /* --------------------------------------------------------------- */
 /* GTK startup notification                                          */
@@ -518,105 +624,148 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
     .notify_launch   = gtk_shell_notify_launch,
 };
 
+/* --------------------------------------------------------------- */
+/* GTK surface configure                                             */
+/* --------------------------------------------------------------- */
 
-/* --------------------------------------------------------------- */
-/* gtk_shell global bind                                              */
-/* --------------------------------------------------------------- */
 /*
  * --------------------------------------------------------------------
  * GTK surface configure sender.
  *
- * Dipanggil oleh output.c setelah geometry compositor_surface
- * selesai diproses.
+ * Dipanggil dari output.c:
  *
- * GTK shell tidak mengirim width/height seperti xdg_toplevel.
- * Geometry tetap berasal dari compositor_surface.
+ *     send_gtk_surface_configure(surf);
  *
- * Yang dikirim melalui gtk_surface1.configure adalah window state
- * dan tiled edges.
+ * setelah geometry/state compositor_surface selesai diproses.
  *
- * State GTK harus mengikuti state compositor, bukan menjadi
- * window-management authority sendiri.
+ * IMPORTANT:
+ *
+ * gtk-shell.c TIDAK menghitung geometry.
+ *
+ * Authority:
+ *
+ *     compositor_surface
+ *            |
+ *            +--> xdg-shell
+ *            |
+ *            +--> layer-shell
+ *            |
+ *            +--> gtk-shell
+ *
+ * Dengan demikian ketiga protocol melihat state compositor
+ * yang sama.
  * --------------------------------------------------------------------
  */
-void send_gtk_surface_configure(struct compositor_surface *surf)
+void send_gtk_surface_configure(
+        struct compositor_surface *surf)
 {
     if (!surf ||
         !surf->gtk_surface ||
         !surf->srv)
         return;
 
-    struct gtk_surface_state *state = surf->gtk_surface;
+    struct gtk_surface_state *state =
+        surf->gtk_surface;
 
     if (!state->resource)
         return;
 
     /*
      * ------------------------------------------------------------
-     * Ambil geometry dari compositor_surface.
+     * Geometry validation.
      *
-     * GTK tidak menerima width/height secara langsung melalui
-     * gtk_surface1.configure, tetapi geometry ini menjadi sumber
-     * state untuk menentukan bagaimana GTK surface diperlakukan.
+     * Geometry bukan payload gtk_surface1.configure,
+     * tetapi tetap divalidasi karena configure GTK hanya boleh
+     * dikirim untuk surface yang mempunyai geometry valid.
      * ------------------------------------------------------------
      */
     int32_t width = 0;
     int32_t height = 0;
 
     compositor_surface_get_logical_size(
-            surf,
-            &width,
-            &height);
+        surf,
+        &width,
+        &height);
 
     if (width <= 0 || height <= 0)
         return;
 
     /*
      * ------------------------------------------------------------
-     * GTK surface state.
+     * Build GTK state.
      *
-     * Untuk sekarang Trierarch mempertahankan surface sebagai
-     * tiled window. State ini harus konsisten dengan geometry
-     * yang diberikan compositor.
+     * State berasal dari compositor_surface.
      * ------------------------------------------------------------
      */
     struct wl_array states;
-    struct wl_array edges;
 
     wl_array_init(&states);
-    wl_array_init(&edges);
 
-    uint32_t *state_id =
-            wl_array_add(&states, sizeof(*state_id));
+    uint32_t gtk_state =
+        gtk_surface_get_tiling_state(surf);
 
-    if (state_id)
-        *state_id = GTK_SURFACE1_STATE_TILED;
+    if (gtk_state != 0) {
+
+        uint32_t *state_id =
+            wl_array_add(
+                &states,
+                sizeof(*state_id));
+
+        if (state_id)
+            *state_id = gtk_state;
+    }
 
     /*
      * ------------------------------------------------------------
-     * Tiled edges.
+     * Build GTK edge constraints.
      *
-     * Belum ada edge-specific tiling di compositor.
-     * Karena itu array tetap kosong.
+     * GTK shell v2+ mendukung configure_edges().
+     * ------------------------------------------------------------
+     */
+    struct wl_array edges;
+
+    gtk_surface_build_edge_constraints(
+        surf,
+        &edges);
+
+    /*
+     * ------------------------------------------------------------
+     * Send configure.
+     *
+     * GTK configure tidak membawa width/height.
+     *
+     * Geometry sudah diproses melalui xdg/layer-shell.
+     * GTK hanya diberi state representation.
      * ------------------------------------------------------------
      */
     gtk_surface1_send_configure(
-            state->resource,
-            &states);
+        state->resource,
+        &states);
 
-    gtk_surface1_send_configure_edges(
+    /*
+     * configure_edges hanya tersedia mulai protocol v2.
+     *
+     * Jangan mengirim event ini kepada resource v1.
+     */
+    if (wl_resource_get_version(state->resource) >= 2) {
+
+        gtk_surface1_send_configure_edges(
             state->resource,
             &edges);
+    }
 
     wl_array_release(&states);
     wl_array_release(&edges);
 
     LOGI(
         "send_gtk_surface_configure "
-        "surface=%p geometry=%dx%d",
+        "surface=%p geometry=%dx%d "
+        "gtk_state=%u gtk_version=%u",
         (void *)surf,
         (int)width,
-        (int)height);
+        (int)height,
+        gtk_state,
+        wl_resource_get_version(state->resource));
 }
 
 void gtk_shell_bind(
