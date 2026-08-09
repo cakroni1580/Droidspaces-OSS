@@ -111,6 +111,7 @@ void compositor_set_output_size(wayland_server_t *srv_opaque,
             send_toplevel_configure(surf);
         if (surf->layer_surface_res)
             send_layer_surface_configure(surf);
+            
     }
     pthread_mutex_unlock(&srv->surfaces_mutex);
     /* Notify already-bound wl_output resources so Resolution takes effect without reconnecting. */
@@ -161,8 +162,8 @@ void compositor_set_output_user_scale(wayland_server_t *srv_opaque, int32_t scal
              * setelah xdg_surface.configure sehingga kedua protocol
              * selalu melihat state window yang sama.
              * ----------------------------------------------------------
-             */
-             send_gtk_surface_configure(surf);
+             *
+             *send_gtk_surface_configure(surf);*/
             
     }
     pthread_mutex_unlock(&srv->surfaces_mutex);
