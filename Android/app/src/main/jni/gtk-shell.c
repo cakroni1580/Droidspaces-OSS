@@ -876,20 +876,21 @@ void send_gtk_surface_configure(
         (uint32_t *)&width,
         (uint32_t *)&height)) {
 
-    if (!layer_surface_get_geometry(
-            surf,
-            &width,
-            &height,
-            &x,
-            &y)) {
+        if (!layer_surface_get_geometry(
+                surf,
+                &width,
+                &height,
+                &x,
+                &y)) {
 
-        LOGE(
-            "gtk configure: "
-            "layer geometry unavailable surface=%p",
-            (void *)surf);
+            LOGE(
+                "gtk configure: "
+                "layer geometry unavailable surface=%p",
+                (void *)surf);
 
-        return;
-    }
+            return;
+        }
+    }       
 
     if (width == 0 || height == 0)
         return;
