@@ -140,7 +140,36 @@ static void xdg_toplevel_move(struct wl_client *c, struct wl_resource *r,
 }
 static void xdg_toplevel_resize(struct wl_client *c, struct wl_resource *r,
         struct wl_resource *s, uint32_t edge, uint32_t serial) {
-    (void)c;(void)r;(void)s;(void)edge;(void)serial;
+    (void)c;
+    (void)s;
+    (void)serial;
+
+    struct compositor_surface *surf =
+        wl_resource_get_user_data(r);
+
+    if (!surf || !surf->srv)
+        return;
+
+    /*
+     * CONTEXT:
+     * ---------------------------------------------------------------
+     * resize edge merupakan state milik compositor_surface.
+     *
+     * Direct Mode menggunakan state ini untuk menentukan arah resize
+     * window berikutnya. Jangan menyimpan edge hanya di xdg resource.
+     */
+    compositor_surface_set_resize_edges(surf, edge);
+
+    if (surf->srv->wm_mode != WM_MODE_DIRECT)
+        return;
+
+    /*
+     * Resize sedang aktif.
+     * send_toplevel_configure() akan membawa RESIZING state.
+     */
+    surf->wm_resizing = true;
+
+    send_toplevel_configure(surf);
 }
 static void xdg_toplevel_set_max_size(struct wl_client *c, struct wl_resource *r, int32_t w, int32_t h) {
     (void)c;(void)r;(void)w;(void)h;
@@ -253,26 +282,15 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         /*
          * CONTEXT:
          * ---------------------------------------------------------------
-         * WM_MODE_DIRECT menggunakan work area yang sudah dikurangi
-         * oleh layer-shell exclusive zones.
+         * Direct Mode sekarang mempunyai window state sendiri.
          *
-         * Jangan memakai output_width/output_height langsung untuk
-         * maximized xdg-toplevel.
-         *
-         * Contoh:
-         *
-         * output       = 1080 x 2400
-         * top zone     = 120
-         * bottom zone  = 120
-         *
-         * work area:
-         *
-         *     x=0
-         *     y=120
-         *     w=1080
-         *     h=2160
+         * Tiling dan maximize sama-sama menggunakan work area yang sudah
+         * dikurangi exclusive-zone layer-shell.
          */
-        if (surf->wm_maximized) {
+        enum compositor_tiling_state tiling =
+            compositor_surface_get_tiling(surf);
+        if (surf->wm_maximized ||
+            tiling != COMPOSITOR_TILING_NONE) {
 
            struct trierarch_work_area area;
 
@@ -281,23 +299,25 @@ void send_toplevel_configure(struct compositor_surface *surf) {
                    surf,
                    &area);
 
+           /*
+            * Default: gunakan seluruh usable work area.
+            *
+            * Tiling-specific placement dapat menentukan subset area
+            * berikutnya tanpa menyentuh output_width/output_height.
+            */
            w = area.width;
            h = area.height;
 
-           /*
-            * Posisi window juga harus mengikuti usable area.
-            *
-            * Jangan menaruh maximized window di (0,0)
-            * karena top panel sudah mengambil area tersebut.
-            */
-           surf->wm_x = area.x;
-           surf->wm_y = area.y;
+           if (surf->wm_maximized) {
+               surf->wm_x = area.x;
+               surf->wm_y = area.y;
 
-           uint32_t *s_max =
-                wl_array_add(&states, sizeof(uint32_t));
+               uint32_t *s_max =
+                    wl_array_add(&states, sizeof(uint32_t));
 
-           if (s_max)
-               *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+               if (s_max)
+                   *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+           }
         
         } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
             /* Compositor-driven resize: send requested size (best-effort). */
