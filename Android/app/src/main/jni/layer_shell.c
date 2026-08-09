@@ -5,20 +5,26 @@
  *
  *
  *
- * Stage 1
  *
- * Implemented:
- *   - global bind
- *   - layer shell global
- *   - layer surface resource
- *   - destroy callback
+ * CONTEXT:
  *
- * Not implemented yet:
- *   - configure
- *   - layout
- *   - popup
- *   - keyboard focus
- *   - exclusive zone
+ * Layer-shell exclusive zones belong to the DIRECT output layout.
+ *
+ * WM_MODE_DIRECT:
+ *     layer-shell exclusive zones define the usable output area
+ *     for xdg toplevels rendered directly on the compositor output.
+ *
+ * WM_MODE_NESTED:
+ *     xdg surfaces are managed inside the nested desktop/window
+ *     layout and must NOT consume the layer-shell work area.
+ *
+ * This prevents:
+ *
+ *     layer exclusive zone
+ *              +
+ *     nested WM geometry
+ *
+ * from applying the same reservation twice.
  */
 
 #include "server_internal.h"
