@@ -393,53 +393,57 @@ void send_toplevel_configure(struct compositor_surface *surf)
         enum compositor_tiling_state tiling =
             compositor_surface_get_tiling(surf);
 
-        /*
-         * ---------------------------------------------------------
-         * TILED
-         * ---------------------------------------------------------
-         *
-         * GTK shell menentukan:
-         *
-         *     width
-         *     height
-         *     wm_x
-         *     wm_y
-         *
-         * berdasarkan layer-shell work-area.
-         */
         if (tiling != COMPOSITOR_TILING_NONE) {
 
-            gtk_shell_apply_tiling_geometry(
-                surf,
-                &w,
-                &h);
+            uint32_t tile_w = 0;
+            uint32_t tile_h = 0;
 
             /*
-             * TILING_ALL = maximize.
+             * GTK shell menghitung:
              *
-             * LEFT / RIGHT tetap tiled tetapi bukan
-             * xdg MAXIMIZED.
+             *   - work-area
+             *   - exclusive-zone
+             *   - tile position
+             *   - tile size
+             *
+             * dan sekaligus memperbarui:
+             *
+             *   surf->wm_x
+             *   surf->wm_y
+             */
+            if (gtk_shell_apply_tiling_geometry(
+                    surf,
+                    &tile_w,
+                    &tile_h)) {
+
+                w = (int32_t)tile_w;
+                h = (int32_t)tile_h;
+            }
+
+            /*
+             * TILING_ALL pada DIRECT mode adalah maximize,
+             * bukan fullscreen.
+             *
+             * Fullscreen hanya berasal dari nested policy atau
+             * explicit xdg_toplevel.set_fullscreen().
              */
             if (tiling == COMPOSITOR_TILING_ALL) {
 
                 uint32_t *s_max =
-                    wl_array_add(
-                        &states,
-                        sizeof(uint32_t));
+                    wl_array_add(&states, sizeof(uint32_t));
 
                 if (s_max)
-                    *s_max =
-                        XDG_TOPLEVEL_STATE_MAXIMIZED;
+                    *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
             }
 
-        /*
-         * ---------------------------------------------------------
-         * FLOATING
-         * ---------------------------------------------------------
-         */
         } else if (surf->wm_req_w > 0 ||
                    surf->wm_req_h > 0) {
 
+            /*
+             * Floating / non-tiled surface.
+             *
+             * Jangan sentuh wm_x/wm_y.
+             */
             w = surf->wm_req_w > 0
                     ? surf->wm_req_w
                     : 0;
