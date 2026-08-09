@@ -283,7 +283,7 @@ static void gtk_shell_get_gtk_surface(
 
 /*
  * Trierarch tidak menggunakan GTK startup-notification.
- *
+ * inplepemt soon if possible
  * Request diterima hanya untuk menjaga kompatibilitas protocol.
  */
 static void gtk_shell_set_startup_id(
@@ -345,8 +345,7 @@ static const struct gtk_surface1_interface gtk_surface_impl = {
  * --------------------------------------------------------------------
  * GTK configure sender.
  *
- * Dipanggil oleh xdg-shell setiap kali compositor mengirim
- * xdg_toplevel.configure(), sehingga GTK menerima update state
+ * Dipanggil oleh output.c agar menerima geometry yang sama
  * yang sinkron dengan xdg-shell.
  *
  * Saat ini Trierarch belum mengimplementasikan tiled-edge ataupun
@@ -374,7 +373,7 @@ void gtk_surface_send_configure(
     /*
      * ------------------------------------------------------------
      * NOTE:
-     * GTK tidak memiliki window state sendiri.
+     * GTK belum memiliki window state sendiri.
      *
      * Semua state diterjemahkan dari compositor_surface
      * yang dikelola xdg-shell.
