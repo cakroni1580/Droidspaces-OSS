@@ -479,36 +479,27 @@ static uint32_t gtk_surface_get_tiling_state(
     if (!surf)
         return 0;
 
-    /*
-     * ------------------------------------------------------------
-     * IMPORTANT:
-     *
-     * Jangan menentukan tiling dari width/height.
-     *
-     * Geometry:
-     *
-     *     wm_x / wm_y / width / height
-     *
-     * hanya menjelaskan posisi dan ukuran.
-     *
-     * Tiling adalah compositor state.
-     * ------------------------------------------------------------
-     */
+    switch (compositor_surface_get_tiling(surf)) {
 
-    /*
-     * Jika compositor_surface nantinya mempunyai state:
-     *
-     *     tiled_top
-     *     tiled_right
-     *     tiled_bottom
-     *     tiled_left
-     *
-     * mapping dilakukan di sini.
-     *
-     * Untuk state tiled generik, gunakan TILED.
-     */
+    case COMPOSITOR_TILING_ALL:
+        return GTK_SURFACE1_STATE_TILED;
 
-    return GTK_SURFACE1_STATE_TILED;
+    case COMPOSITOR_TILING_TOP:
+        return GTK_SURFACE1_STATE_TILED_TOP;
+
+    case COMPOSITOR_TILING_RIGHT:
+        return GTK_SURFACE1_STATE_TILED_RIGHT;
+
+    case COMPOSITOR_TILING_BOTTOM:
+        return GTK_SURFACE1_STATE_TILED_BOTTOM;
+
+    case COMPOSITOR_TILING_LEFT:
+        return GTK_SURFACE1_STATE_TILED_LEFT;
+
+    case COMPOSITOR_TILING_NONE:
+    default:
+        return 0;
+    }
 }
 
 
@@ -532,21 +523,54 @@ static void gtk_surface_build_edge_constraints(
         struct compositor_surface *surf,
         struct wl_array *edges)
 {
-    (void)surf;
+    wl_array_init(edges);
+
+    if (!surf)
+        return;
+
+    uint32_t resize_edges =
+        compositor_surface_get_resize_edges(surf);
 
     /*
-     * Intentionally empty.
-     *
-     * Nanti apabila compositor_surface mempunyai:
-     *
-     *     resizable_top
-     *     resizable_right
-     *     resizable_bottom
-     *     resizable_left
-     *
-     * mapping dilakukan di sini.
+     * GTK shell protocol menggunakan satu uint32_t
+     * untuk setiap edge.
      */
-    wl_array_init(edges);
+
+    if (resize_edges & COMPOSITOR_RESIZE_TOP) {
+
+        uint32_t *edge =
+            wl_array_add(edges, sizeof(*edge));
+
+        if (edge)
+            *edge = GTK_SURFACE1_EDGE_RESIZABLE_TOP;
+    }
+
+    if (resize_edges & COMPOSITOR_RESIZE_RIGHT) {
+
+        uint32_t *edge =
+            wl_array_add(edges, sizeof(*edge));
+
+        if (edge)
+            *edge = GTK_SURFACE1_EDGE_RESIZABLE_RIGHT;
+    }
+
+    if (resize_edges & COMPOSITOR_RESIZE_BOTTOM) {
+
+        uint32_t *edge =
+            wl_array_add(edges, sizeof(*edge));
+
+        if (edge)
+            *edge = GTK_SURFACE1_EDGE_RESIZABLE_BOTTOM;
+    }
+
+    if (resize_edges & COMPOSITOR_RESIZE_LEFT) {
+
+        uint32_t *edge =
+            wl_array_add(edges, sizeof(*edge));
+
+        if (edge)
+            *edge = GTK_SURFACE1_EDGE_RESIZABLE_LEFT;
+    }
 }
 
 
@@ -766,6 +790,45 @@ void send_gtk_surface_configure(
         (int)height,
         gtk_state,
         wl_resource_get_version(state->resource));
+}
+
+void compositor_surface_set_resize_edges(
+        struct compositor_surface *surf,
+        uint32_t edges)
+{
+    if (!surf)
+        return;
+
+    surf->resize_edges = edges;
+}
+
+uint32_t compositor_surface_get_resize_edges(
+        struct compositor_surface *surf)
+{
+    if (!surf)
+        return COMPOSITOR_RESIZE_NONE;
+
+    return surf->resize_edges;
+}
+
+void compositor_surface_set_tiling(
+        struct compositor_surface *surf,
+        enum compositor_tiling_state state)
+{
+    if (!surf)
+        return;
+
+    surf->tiling_state = state;
+}
+
+enum compositor_tiling_state
+compositor_surface_get_tiling(
+        struct compositor_surface *surf)
+{
+    if (!surf)
+        return COMPOSITOR_TILING_NONE;
+
+    return surf->tiling_state;
 }
 
 void gtk_shell_bind(
