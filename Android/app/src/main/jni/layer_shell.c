@@ -863,6 +863,174 @@ static void layer_surface_calculate_size(
      */
 }
 
+/*
+ * -------------------------------------------------------------------------
+ * Trierarch layer-shell exclusive-zone layout
+ * -------------------------------------------------------------------------
+ *
+ * CONTEXT:
+ *
+ * exclusive_zone tidak mengubah geometry layer surface.
+ *
+ * Contoh:
+ *
+ *     TOP panel:
+ *
+ *         output = 1080x1920
+ *         panel  = 1080x100
+ *         exclusive_zone = 100
+ *
+ *     panel geometry:
+ *
+ *         x = 0
+ *         y = 0
+ *         w = 1080
+ *         h = 100
+ *
+ *     usable work area:
+ *
+ *         x = 0
+ *         y = 100
+ *         w = 1080
+ *         h = 1820
+ *
+ * Jadi exclusive_zone hanya mempengaruhi layout surface lain.
+ *
+ * Trierarch hanya mempunyai satu logical output, sehingga work-area
+ * dapat dihitung langsung dari seluruh layer surface yang mempunyai
+ * exclusive_zone > 0.
+ */
+
+struct trierarch_work_area {
+    int32_t x;
+    int32_t y;
+    uint32_t width;
+    uint32_t height;
+};
+
+
+static void layer_shell_get_work_area(
+        struct wayland_server *srv,
+        struct compositor_surface *exclude,
+        struct trierarch_work_area *area)
+{
+    if (!srv || !area)
+        return;
+
+    uint32_t ow =
+        srv->output_width > 0 ?
+        srv->output_width : 1;
+
+    uint32_t oh =
+        srv->output_height > 0 ?
+        srv->output_height : 1;
+
+    area->x = 0;
+    area->y = 0;
+    area->width = ow;
+    area->height = oh;
+
+    struct compositor_surface *surf;
+
+    wl_list_for_each(
+            surf,
+            &srv->surfaces,
+            link) {
+
+        /*
+         * CONTEXT:
+         *
+         * Surface yang sedang dihitung geometry-nya tidak boleh
+         * ikut mereservasi dirinya sendiri.
+         */
+        if (surf == exclude)
+            continue;
+
+        struct layer_surface_state *ls =
+            surf->layer_surface;
+
+        if (!ls)
+            continue;
+
+        /*
+         * exclusive_zone <= 0:
+         *
+         *   0  = tidak reserve
+         *   <0 = special protocol semantics, bukan reservation
+         *
+         * Untuk Trierarch host policy tahap ini hanya positive
+         * exclusive zone yang menjadi reserved work area.
+         */
+        if (ls->exclusive_zone <= 0)
+            continue;
+
+        int32_t zone =
+            ls->exclusive_zone;
+
+        /*
+         * TOP exclusive layer.
+         *
+         * Hanya reserve jika surface benar-benar anchored TOP.
+         */
+        if (ls->anchor &
+            ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) {
+
+            if (zone > (int32_t)area->height)
+                zone = (int32_t)area->height;
+
+            area->y += zone;
+
+            area->height -= zone;
+
+            continue;
+        }
+
+        /*
+         * BOTTOM exclusive layer.
+         */
+        if (ls->anchor &
+            ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) {
+
+            if (zone > (int32_t)area->height)
+                zone = (int32_t)area->height;
+
+            area->height -= zone;
+
+            continue;
+        }
+
+        /*
+         * LEFT exclusive layer.
+         */
+        if (ls->anchor &
+            ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) {
+
+            if (zone > (int32_t)area->width)
+                zone = (int32_t)area->width;
+
+            area->x += zone;
+
+            area->width -= zone;
+
+            continue;
+        }
+
+        /*
+         * RIGHT exclusive layer.
+         */
+        if (ls->anchor &
+            ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) {
+
+            if (zone > (int32_t)area->width)
+                zone = (int32_t)area->width;
+
+            area->width -= zone;
+
+            continue;
+        }
+    }
+}
+
 
 /* ------------------------------------------------------------------------- */
 /* layer_shell interface                                                     */
