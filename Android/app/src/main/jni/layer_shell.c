@@ -27,17 +27,8 @@
 #include <android/log.h>
 #include <stdlib.h>
 #include <string.h>
-/*
- * CONTEXT:
- * Keyboard focus policy dimiliki oleh compositor/server.
- *
- * layer-shell tidak mengubah keyboard focus secara langsung.
- * Setelah layer surface benar-benar aktif, layer-shell meminta
- * compositor untuk mengubah focus melalui API external ini.
- */
-extern void keyboard_focus_update(
-        struct wayland_server *srv,
-        struct compositor_surface *surface);
+
+
 #define LOG_TAG "TrierarchLayerShell"
 
 #define LOGI(...) \
@@ -69,6 +60,9 @@ extern void keyboard_focus_update(
 /* ------------------------------------------------------------------------- */
 /* layer_surface resource                                                    */
 /* ------------------------------------------------------------------------- */
+extern void keyboard_focus_update(
+        struct wayland_server *srv,
+        struct compositor_surface *surface);
 
 static void layer_surface_resource_destroy(
         struct wl_resource *resource)
