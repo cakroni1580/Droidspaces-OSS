@@ -606,60 +606,9 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
 
     /* Assign a cascaded initial position and a unique stacking z_order. */
     if (surf->srv) {
-
-        /*
-         * CONTEXT:
-         * -----------------------------------------------------------
-         * Initial xdg-toplevel placement pada DIRECT mode harus
-         * dimulai dari usable work area.
-         *
-         * Layer-shell exclusive zones sudah mengurangi area tersebut.
-         *
-         * NESTED tetap menggunakan existing nested policy.
-         */
-        if (surf->srv->wm_mode == WM_MODE_DIRECT) {
-
-            /*
-             * CONTEXT:
-             * -------------------------------------------------------------
-             * Initial placement tetap menjadi policy GTK shell.
-             *
-             * xdg-shell tidak menghitung:
-             *
-             *     - exclusive-zone
-             *     - work-area
-             *     - tile rectangle
-             *     - cascade rectangle
-             *
-             * GTK shell menentukan geometry awal.
-             *
-             * Jika default tiling state == NONE, GTK shell dapat
-             * menggunakan floating/cascade geometry.
-             */
-            LOGI(
-               "DIRECT get_toplevel: "
-               "geometry delegated to GTK/xdg configure "
-               "surface=%p",
-               (void *)surf);
-
-        } else {
-            /*
-             * NESTED:
-             *
-             * Jangan menggunakan tiling engine.
-             * Desktop client tetap fullscreen.
-             */
-
-            surf->wm_x =
-                surf->srv->cascade_x;
-
-            surf->wm_y =
-                surf->srv->cascade_y;
-        }
-
-        surf->z_order =
-            surf->srv->next_z_order++;
-
+        surf->wm_x = surf->srv->cascade_x;
+        surf->wm_y = surf->srv->cascade_y;
+        surf->z_order = surf->srv->next_z_order++;
         surf->srv->cascade_x += 40;
         surf->srv->cascade_y += 40;
         /* Wrap cascade within the top-left quarter so windows stay accessible. */
