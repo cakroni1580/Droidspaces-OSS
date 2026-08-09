@@ -1423,7 +1423,6 @@ void layer_surface_notify_output_change(
             continue;
 
         send_layer_surface_configure(surf);
-        layer_surface_notify_output_change(srv);
     }
 
     
