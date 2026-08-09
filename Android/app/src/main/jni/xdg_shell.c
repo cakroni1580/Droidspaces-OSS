@@ -137,9 +137,30 @@ static void xdg_toplevel_move(struct wl_client *c, struct wl_resource *r,
     srv->wm_drag_ptr_start_y = (float)wl_fixed_to_double(srv->pointer_y);
     srv->wm_drag_surf_start_x = surf->wm_x;
     srv->wm_drag_surf_start_y = surf->wm_y;
+    /*
+     * CONTEXT:
+     * -------------------------------------------------------------
+     * Window yang sedang ditile tidak boleh tetap terkunci pada
+     * rectangle tiling ketika user mulai drag.
+     *
+     * Begitu user melakukan xdg_toplevel.move(), window menjadi
+     * floating.
+     * -------------------------------------------------------------
+     */
+    compositor_surface_set_tiling(
+            surf,
+            COMPOSITOR_TILING_NONE);
+
+    surf->wm_maximized = false;
+
 }
-static void xdg_toplevel_resize(struct wl_client *c, struct wl_resource *r,
-        struct wl_resource *s, uint32_t edge, uint32_t serial) {
+
+static void xdg_toplevel_resize(struct wl_client *c,
+        struct wl_resource *r,
+        struct wl_resource *s,
+        uint32_t edge,
+        uint32_t serial)
+{
     (void)c;
     (void)s;
     (void)serial;
@@ -152,25 +173,34 @@ static void xdg_toplevel_resize(struct wl_client *c, struct wl_resource *r,
 
     /*
      * CONTEXT:
-     * ---------------------------------------------------------------
-     * resize edge merupakan state milik compositor_surface.
+     * -------------------------------------------------------------
+     * WM_MODE_DIRECT sekarang bertindak sebagai window manager.
      *
-     * Direct Mode menggunakan state ini untuk menentukan arah resize
-     * window berikutnya. Jangan menyimpan edge hanya di xdg resource.
+     * xdg_toplevel.resize() hanya memberi tahu compositor bahwa
+     * client memulai interactive resize.
+     *
+     * State resize edges harus disimpan di compositor_surface agar
+     * pointer/input code dapat menentukan sisi mana yang digeser.
+     * -------------------------------------------------------------
      */
+
     compositor_surface_set_resize_edges(surf, edge);
 
-    if (surf->srv->wm_mode != WM_MODE_DIRECT)
-        return;
+    surf->wm_resizing = true;
 
     /*
-     * Resize sedang aktif.
-     * send_toplevel_configure() akan membawa RESIZING state.
+     * Resize interactive membatalkan tiling sementara.
+     *
+     * Setelah user mulai menarik edge, window kembali menjadi
+     * floating sampai window manager menetapkan tiling baru.
      */
-    surf->wm_resizing = true;
+    compositor_surface_set_tiling(
+            surf,
+            COMPOSITOR_TILING_NONE);
 
     send_toplevel_configure(surf);
 }
+
 static void xdg_toplevel_set_max_size(struct wl_client *c, struct wl_resource *r, int32_t w, int32_t h) {
     (void)c;(void)r;(void)w;(void)h;
 }
@@ -202,6 +232,18 @@ static void xdg_toplevel_unset_maximized(struct wl_client *c, struct wl_resource
         surf->wm_x = surf->wm_saved_x;
         surf->wm_y = surf->wm_saved_y;
         surf->wm_maximized = false;
+        /*
+         * CONTEXT:
+         * ---------------------------------------------------------
+         * Setelah keluar dari maximized, window kembali menjadi
+         * floating kecuali window manager kemudian menetapkan
+         * tiling state lain.
+         * ---------------------------------------------------------
+         */
+        compositor_surface_set_tiling(
+                surf,
+                COMPOSITOR_TILING_NONE);
+
     }
     send_toplevel_configure(surf);
 }
@@ -209,7 +251,9 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
     (void)c;(void)o;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
     if (!surf) return;
-    if (!surf->wm_maximized) {
+    if (compositor_surface_get_tiling(surf) !=
+            COMPOSITOR_TILING_MAXIMIZED) {
+
         int32_t sw = 0, sh = 0;
         compositor_surface_get_logical_size(surf, &sw, &sh);
         surf->wm_saved_x = surf->wm_x;
@@ -218,7 +262,19 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
         surf->wm_saved_h = sh;
         surf->wm_x = 0;
         surf->wm_y = 0;
+        /*
+         * CONTEXT:
+         * ---------------------------------------------------------
+         * Fullscreen tetap merupakan state xdg-shell tersendiri.
+         * Jangan gunakan wm_maximized sebagai satu-satunya sumber
+         * state window-management.
+         * ---------------------------------------------------------
+         */
         surf->wm_maximized = true;
+
+        compositor_surface_set_tiling(
+                surf,
+                COMPOSITOR_TILING_MAXIMIZED);
     }
     send_toplevel_configure(surf);
 }
@@ -288,36 +344,66 @@ void send_toplevel_configure(struct compositor_surface *surf) {
          * dikurangi exclusive-zone layer-shell.
          */
         enum compositor_tiling_state tiling =
-            compositor_surface_get_tiling(surf);
-        if (surf->wm_maximized ||
-            tiling != COMPOSITOR_TILING_NONE) {
+               compositor_surface_get_tiling(surf);
 
-           struct trierarch_work_area area;
+        if (tiling != COMPOSITOR_TILING_NONE) {
 
-           layer_shell_get_work_area(
-                   surf->srv,
-                   surf,
-                   &area);
+            struct trierarch_work_area area;
 
-           /*
-            * Default: gunakan seluruh usable work area.
-            *
-            * Tiling-specific placement dapat menentukan subset area
-            * berikutnya tanpa menyentuh output_width/output_height.
-            */
-           w = area.width;
-           h = area.height;
+            layer_shell_get_work_area(
+                    surf->srv,
+                    surf,
+                    &area);
 
-           if (surf->wm_maximized) {
-               surf->wm_x = area.x;
-               surf->wm_y = area.y;
+            switch (tiling) {
 
-               uint32_t *s_max =
-                    wl_array_add(&states, sizeof(uint32_t));
+            case COMPOSITOR_TILING_MAXIMIZED:
+                /*
+                 * Full usable work-area.
+                 */
+                w = area.width;
+                h = area.height;
 
-               if (s_max)
-                   *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
-           }
+                surf->wm_x = area.x;
+                surf->wm_y = area.y;
+
+                {
+                   uint32_t *s_max =
+                        wl_array_add(&states, sizeof(uint32_t));
+
+                   if (s_max)
+                        *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+                }
+                break;
+
+            case COMPOSITOR_TILING_LEFT:
+                /*
+                * Left half of usable work-area.
+                */
+                w = area.width / 2;
+                h = area.height;
+
+                surf->wm_x = area.x;
+                surf->wm_y = area.y;
+                break;
+
+            case COMPOSITOR_TILING_RIGHT:
+                /*
+                 * Right half of usable work-area.
+                 */
+                w = area.width / 2;
+                h = area.height;
+
+                surf->wm_x =
+                    area.x + area.width / 2;
+
+                surf->wm_y = area.y;
+                break;
+
+             default:
+                break;
+             }
+        
         
         } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
             /* Compositor-driven resize: send requested size (best-effort). */
