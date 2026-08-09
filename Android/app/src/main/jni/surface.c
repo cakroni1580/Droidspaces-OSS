@@ -243,31 +243,32 @@ static void surface_commit(struct wl_client *client, struct wl_resource *resourc
     struct compositor_surface *surf = wl_resource_get_user_data(resource);
     if (!surf) return;
     /*
-     * Layer shell configure contract.
+     * CONTEXT:
+     * Layer-shell configure/ack sekarang hanya merupakan
+     * protocol synchronization.
      *
-     * Buffer pertama tidak boleh diterima
-     * sebelum ack_configure().
+     * layershell.c tidak lagi menyediakan:
+     *
+     *   - first_buffer_allowed
+     *   - configured
+     *   - acked_serial
+     *
+     * Karena itu surface_commit() TIDAK boleh membuang
+     * pending_buffer hanya karena client belum ack configure.
+     *
+     * Lifecycle buffer Trierarch:
+     *
+     *   attach()
+     *      ↓
+     *   pending_buffer
+     *      ↓
+     *   commit()
+     *      ↓
+     *   current_buffer
+     *
+     * Configure layer-shell tetap dikirim ke client,
+     * tetapi tidak menjadi buffer gate internal.
      */
-    if (surf->layer_surface &&
-        !surf->layer_surface->first_buffer_allowed &&
-        surf->pending_buffer) {
-
-
-        LOGI(
-            "layer surface waiting configure ack surf=%p",
-            (void *)surf);
-
-
-        buffer_ref_clear_owner(
-                surf->pending_buffer);
-
-        buffer_ref_release(
-                surf->pending_buffer);
-
-        surf->pending_buffer = NULL;
-
-        return;
-    }
 
     pthread_mutex_lock(&surf->srv->surfaces_mutex);
     struct compositor_buffer_ref *pending = surf->pending_buffer;
