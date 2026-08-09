@@ -141,19 +141,6 @@ struct layer_surface_state {
     int32_t margin_bottom;
     int32_t margin_left;
 
-    /*
-     * Configure tracking.
-     */
-    uint32_t last_configure_serial;
-    uint32_t acked_serial;
-
-    bool configured;
-    /*
-     * True setelah client menerima
-     * configure dan boleh commit buffer.
-     */
-    bool first_buffer_allowed;
-
     char namespace_name[128];
 };
 
@@ -418,16 +405,5 @@ void surface_notify_preferred_buffer_scale_all(
  */
 void layer_surface_notify_output_change(
         struct wayland_server *srv);
-
-bool layer_surface_is_active(
-        struct compositor_surface *surf);
-bool layer_surface_wants_keyboard(
-        struct compositor_surface *surf);
-bool layer_surface_buffer_allowed(
-        struct compositor_surface *surf);
-
-bool layer_surface_configured(
-        struct compositor_surface *surf);
-
 
 #endif
