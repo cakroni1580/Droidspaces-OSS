@@ -449,11 +449,31 @@ void android_wlegl_bind(struct wl_client *client, void *data, uint32_t version, 
 void gtk_shell_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
 void send_gtk_surface_configure(
         struct compositor_surface *surf);
+bool gtk_shell_apply_tiling_geometry(
+        struct compositor_surface *surf,
+        uint32_t *width,
+        uint32_t *height);
+
 void layer_shell_bind(
         struct wl_client *client,
         void *data,
         uint32_t version,
         uint32_t id);
+/*
+ * layer-shell geometry update.
+ *
+ * Dipanggil ketika output geometry berubah.
+ */
+void layer_surface_notify_output_change(
+        struct wayland_server *srv);
+
+void layer_shell_get_work_area(
+        struct wayland_server *srv,
+        struct compositor_surface *exclude,
+        struct trierarch_work_area *area);
+
+/*unmanaged api*/
+
 void compositor_surface_set_tiling(
         struct compositor_surface *surf,
         enum compositor_tiling_state state);
@@ -473,18 +493,5 @@ void compositor_surface_set_resize_edges(
 uint32_t compositor_surface_get_resize_edges(
         struct compositor_surface *surf);
 
-
-/*
- * layer-shell geometry update.
- *
- * Dipanggil ketika output geometry berubah.
- */
-void layer_surface_notify_output_change(
-        struct wayland_server *srv);
-
-void layer_shell_get_work_area(
-        struct wayland_server *srv,
-        struct compositor_surface *exclude,
-        struct trierarch_work_area *area);
 
 #endif
