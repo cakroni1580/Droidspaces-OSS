@@ -26,68 +26,6 @@ struct positioner_state {
     int32_t offset_x, offset_y;    /* additional x/y offset */
 };
 
-/*
- * -------------------------------------------------------------------------
- * XDG work-area helper
- * -------------------------------------------------------------------------
- *
- * CONTEXT:
- *
- * WM_MODE_DIRECT:
- *     layer-shell exclusive zones define the usable output area.
- *
- * WM_MODE_NESTED:
- *     nested desktop owns its own geometry; layer-shell reservations
- *     must not affect XDG geometry.
- *
- * IMPORTANT:
- *
- * This helper does NOT change normal XDG window size.
- * It only provides the usable geometry to operations such as:
- *
- *     - maximized placement
- *     - initial cascade placement
- *     - future compositor-managed placement
- *
- * Fullscreen intentionally does NOT use this helper because fullscreen
- * occupies the complete output.
- */
-static void xdg_get_work_area(
-        struct compositor_surface *surf,
-        struct trierarch_work_area *area)
-{
-    if (!surf ||
-        !surf->srv ||
-        !area)
-        return;
-
-    struct wayland_server *srv = surf->srv;
-
-    area->x = 0;
-    area->y = 0;
-
-    area->width =
-        srv->output_width > 0 ?
-        srv->output_width : 1;
-
-    area->height =
-        srv->output_height > 0 ?
-        srv->output_height : 1;
-
-    /*
-     * Layer-shell reservation only participates in DIRECT mode.
-     *
-     * NESTED must keep its existing full-output contract.
-     */
-    if (srv->wm_mode != WM_MODE_DIRECT)
-        return;
-
-    layer_shell_get_work_area(
-            srv,
-            surf,
-            area);
-}
-
 /* Compute the popup's top-left position in parent-surface-local coords.
  * Follows xdg-shell spec §anchor/gravity logic (simplified: no constraint adjustment). */
 static void positioner_compute_local(const struct positioner_state *p,
@@ -221,36 +159,9 @@ static void xdg_toplevel_set_maximized(struct wl_client *c, struct wl_resource *
         surf->wm_saved_y = surf->wm_y;
         surf->wm_saved_w = sw;
         surf->wm_saved_h = sh;
-        struct trierarch_work_area area;
-
-        xdg_get_work_area(
-                surf,
-                &area);
-
-        /*
-         * DIRECT:
-         *
-         *     xdg maximized window occupies layer-shell
-         *     usable area.
-         *
-         * NESTED:
-         *
-         *     helper returns complete output, preserving
-         *     existing nested behavior.
-         */
-        surf->wm_x = area.x;
-        surf->wm_y = area.y;
-
+        surf->wm_x = 0;
+        surf->wm_y = 0;
         surf->wm_maximized = true;
-
-        LOGI(
-            "xdg maximize surf=%p "
-            "work-area=%d,%d %ux%u",
-            (void *)surf,
-            area.x,
-            area.y,
-            area.width,
-            area.height);
     }
     send_toplevel_configure(surf);
 }
@@ -314,169 +225,47 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
     .set_minimized = xdg_toplevel_set_minimized,
 };
 
-void send_toplevel_configure(
-        struct compositor_surface *surf)
-{
-    if (!surf ||
-        !surf->xdg_toplevel_res ||
-        !surf->xdg_surface_res ||
-        !surf->srv)
-        return;
-
+void send_toplevel_configure(struct compositor_surface *surf) {
+    if (!surf || !surf->xdg_toplevel_res || !surf->xdg_surface_res || !surf->srv) return;
     struct wl_array states;
-
     wl_array_init(&states);
-
-    uint32_t *s_act =
-        wl_array_add(
-                &states,
-                sizeof(uint32_t));
-
-    if (s_act)
-        *s_act =
-            XDG_TOPLEVEL_STATE_ACTIVATED;
-
-    int32_t w = 0;
-    int32_t h = 0;
+    uint32_t *s_act = wl_array_add(&states, sizeof(uint32_t));
+    if (s_act) *s_act = XDG_TOPLEVEL_STATE_ACTIVATED;
+    int32_t w = 0, h = 0;
 
     if (surf->srv->wm_mode == WM_MODE_NESTED) {
-
-        /*
-         * NESTED CONTRACT:
-         *
-         * Layer-shell work-area is intentionally ignored.
-         *
-         * Nested XDG surface occupies the complete compositor
-         * output as before.
-         */
-        w =
-            surf->srv->output_width > 0 ?
-            surf->srv->output_width : 0;
-
-        h =
-            surf->srv->output_height > 0 ?
-            surf->srv->output_height : 0;
-
-        uint32_t *s_fs =
-            wl_array_add(
-                    &states,
-                    sizeof(uint32_t));
-
-        if (s_fs)
-            *s_fs =
-                XDG_TOPLEVEL_STATE_FULLSCREEN;
-
-        uint32_t *s_max =
-            wl_array_add(
-                    &states,
-                    sizeof(uint32_t));
-
-        if (s_max)
-            *s_max =
-                XDG_TOPLEVEL_STATE_MAXIMIZED;
-
+        /* Nested mode: tell the client (KDE/Sway) to occupy the full output.
+         * FULLSCREEN + MAXIMIZED prevents it from drawing decorations and ensures
+         * it allocates a buffer that matches the output size. */
+        w = surf->srv->output_width  > 0 ? surf->srv->output_width  : 0;
+        h = surf->srv->output_height > 0 ? surf->srv->output_height : 0;
+        uint32_t *s_fs  = wl_array_add(&states, sizeof(uint32_t));
+        if (s_fs)  *s_fs  = XDG_TOPLEVEL_STATE_FULLSCREEN;
+        uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
+        if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
     } else {
-
-        /*
-         * DIRECT CONTRACT:
-         *
-         * Normal XDG toplevel:
-         *
-         *     w = 0
-         *     h = 0
-         *
-         * means the client may choose its own size.
-         *
-         * Layer-shell work-area is therefore NOT forced onto
-         * every normal window.
-         */
+        /* Direct mode: let the client choose its own size (w=0, h=0 per xdg-shell spec).
+         * If explicitly maximized, fill the output and advertise MAXIMIZED. */
         if (surf->wm_resizing) {
-
-            uint32_t *s_rz =
-                wl_array_add(
-                        &states,
-                        sizeof(uint32_t));
-
-            if (s_rz)
-                *s_rz =
-                    XDG_TOPLEVEL_STATE_RESIZING;
+            uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
+            if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
         }
-
         if (surf->wm_maximized) {
-
-            /*
-             * DIRECT + MAXIMIZED:
-             *
-             * Consume layer-shell usable area.
-             */
-            struct trierarch_work_area area;
-
-            xdg_get_work_area(
-                    surf,
-                    &area);
-
-            w = (int32_t)area.width;
-            h = (int32_t)area.height;
-
-            /*
-             * Keep actual compositor placement synchronized
-             * with the geometry sent to the client.
-             */
-            surf->wm_x = area.x;
-            surf->wm_y = area.y;
-
-            uint32_t *s_max =
-                wl_array_add(
-                        &states,
-                        sizeof(uint32_t));
-
-            if (s_max)
-                *s_max =
-                    XDG_TOPLEVEL_STATE_MAXIMIZED;
-
-            LOGI(
-                "xdg configure maximized "
-                "surf=%p area=%d,%d %dx%d",
-                (void *)surf,
-                area.x,
-                area.y,
-                area.width,
-                area.height);
-
-        } else if (surf->wm_req_w > 0 ||
-                   surf->wm_req_h > 0) {
-
-            /*
-             * Compositor-driven resize.
-             *
-             * This remains independent from layer-shell
-             * reservation.
-             */
-            w =
-                surf->wm_req_w > 0 ?
-                surf->wm_req_w : 0;
-
-            h =
-                surf->wm_req_h > 0 ?
-                surf->wm_req_h : 0;
+            w = surf->srv->output_width  > 0 ? surf->srv->output_width  : 0;
+            h = surf->srv->output_height > 0 ? surf->srv->output_height : 0;
+            uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
+            if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+        } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
+            /* Compositor-driven resize: send requested size (best-effort). */
+            w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
+            h = surf->wm_req_h > 0 ? surf->wm_req_h : 0;
         }
     }
 
-    xdg_toplevel_send_configure(
-            surf->xdg_toplevel_res,
-            w,
-            h,
-            &states);
-
+    xdg_toplevel_send_configure(surf->xdg_toplevel_res, w, h, &states);
     wl_array_release(&states);
-
-    uint32_t serial =
-        wl_display_next_serial(
-                surf->srv->display);
-
-    xdg_surface_send_configure(
-            surf->xdg_surface_res,
-            serial);
+    uint32_t serial = wl_display_next_serial(surf->srv->display);
+    xdg_surface_send_configure(surf->xdg_surface_res, serial);
 }
 
 static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resource *xdg_surface_res, uint32_t id) {
@@ -497,26 +286,64 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
 
     /* Assign a cascaded initial position and a unique stacking z_order. */
     /*
-     * Assign a cascaded initial position and a unique stacking z_order.
-     *
      * CONTEXT:
      *
-     * DIRECT:
-     *     initial XDG placement starts inside the layer-shell
-     *     usable work-area.
+     * Initial XDG toplevel geometry is established here.
      *
-     * NESTED:
-     *     helper returns the complete output, preserving the
-     *     existing nested behavior.
+     * IMPORTANT:
+     *
+     * layer_shell_get_work_area() is WM-mode neutral.
+     * It only reports the output area remaining after
+     * layer-shell exclusive zones.
+     *
+     * WM_MODE_DIRECT / WM_MODE_NESTED remain global XDG
+     * policy and are intentionally NOT evaluated here.
+     *
+     * At this stage we only establish the initial geometry
+     * relative to the compositor's current usable output area.
      */
     if (surf->srv) {
 
         struct trierarch_work_area area;
 
-        xdg_get_work_area(
+        /*
+         * Start with the complete output.
+         *
+         * layer_shell_get_work_area() then applies every active
+         * layer-shell exclusive reservation.
+         */
+        area.x = 0;
+        area.y = 0;
+
+        area.width =
+            surf->srv->output_width > 0 ?
+            surf->srv->output_width : 1;
+
+        area.height =
+            surf->srv->output_height > 0 ?
+            surf->srv->output_height : 1;
+
+        layer_shell_get_work_area(
+                surf->srv,
                 surf,
                 &area);
 
+        /*
+         * Initial cascade is relative to the usable area,
+         * not the raw output origin.
+         *
+         * Example:
+         *
+         *     output      = 1920x1080
+         *     top panel   = 80px exclusive
+         *
+         *     work-area   = x=0 y=80 1920x1000
+         *
+         * First XDG surface:
+         *
+         *     wm_x = 0
+         *     wm_y = 80
+         */
         surf->wm_x =
             area.x +
             surf->srv->cascade_x;
@@ -525,17 +352,25 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
             area.y +
             surf->srv->cascade_y;
 
+        /*
+         * Keep normal XDG stacking policy unchanged.
+         */
         surf->z_order =
             surf->srv->next_z_order++;
 
+        /*
+         * Cascade progression remains independent from
+         * layer-shell reservation.
+         */
         surf->srv->cascade_x += 40;
         surf->srv->cascade_y += 40;
 
         /*
-         * Keep cascade positions inside the usable work-area.
+         * Wrap cascade inside the usable work-area,
+         * rather than the raw output.
          *
-         * Do not use output_width/output_height directly here,
-         * because DIRECT mode may have a layer-shell reservation.
+         * This prevents new windows from progressively
+         * entering the reserved layer-shell region.
          */
         int32_t max_x =
             (int32_t)area.width / 4;
@@ -554,17 +389,6 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
 
         if (surf->srv->cascade_y >= max_y)
             surf->srv->cascade_y = 0;
-
-        LOGI(
-            "xdg initial placement "
-            "surf=%p pos=%d,%d work-area=%d,%d %ux%u",
-            (void *)surf,
-            surf->wm_x,
-            surf->wm_y,
-            area.x,
-            area.y,
-            area.width,
-            area.height);
     }
 
     send_toplevel_configure(surf);
