@@ -217,12 +217,24 @@ static void layer_surface_set_exclusive_zone(
         return;
     }
 
+    /*
+     * CONTEXT:
+     *
+     * exclusive_zone selalu merupakan state protocol layer-shell.
+     *
+     * WM_MODE tidak boleh mengubah arti request client.
+     * WM_MODE hanya menentukan apakah reservation tersebut
+     * dikonsumsi oleh layout compositor.
+     */
     surf->layer_surface->exclusive_zone = zone;
 
     LOGI(
-        "layer exclusive zone surf=%p zone=%d",
+        "layer exclusive zone surf=%p zone=%d mode=%s",
         (void *)surf,
-        zone);
+        zone,
+        surf->srv && surf->srv->wm_mode == WM_MODE_DIRECT
+            ? "DIRECT"
+            : "NESTED");
 }
 
 static void layer_surface_set_margin(
@@ -912,41 +924,6 @@ struct trierarch_work_area {
     uint32_t height;
 };
 
-
-/*
- * -------------------------------------------------------------------------
- * Trierarch layer-shell work-area calculation
- * -------------------------------------------------------------------------
- *
- * CONTEXT:
- *
- * Positive exclusive-zone:
- *
- *     panel:
- *
- *         anchor = TOP | LEFT | RIGHT
- *         height = 100
- *         exclusive_zone = 100
- *
- *     usable area:
- *
- *         y      = 100
- *         height = output_height - 100
- *
- *
- * Margin ikut masuk ke exclusive reservation.
- *
- * Special value:
- *
- *     exclusive_zone == -1
- *
- * berarti surface tersebut tidak ingin dipindahkan untuk
- * mengakomodasi exclusive surface lain.
- *
- * Oleh karena itu -1 TIDAK mengurangi usable area.
- *
- * Layer surface sendiri tetap menggunakan full output.
- */
 static void layer_shell_get_work_area(
         struct wayland_server *srv,
         struct compositor_surface *exclude,
@@ -968,6 +945,62 @@ static void layer_shell_get_work_area(
     area->width = ow;
     area->height = oh;
 
+    /*
+     * ------------------------------------------------------------------
+     * CONTEXT:
+     * ------------------------------------------------------------------
+     *
+     * Layer-shell exclusive zones hanya menjadi layout reservation
+     * untuk DIRECT output layout.
+     *
+     * WM_MODE_DIRECT:
+     *
+     *     layer exclusive zone
+     *             ↓
+     *     direct work-area
+     *             ↓
+     *     xdg direct toplevel
+     *
+     * WM_MODE_NESTED:
+     *
+     *     xdg toplevel memiliki nested desktop/window geometry.
+     *
+     *     Layer-shell tetap dirender sebagai layer,
+     *     tetapi exclusive zone TIDAK boleh mengubah
+     *     geometry nested desktop.
+     *
+     * Ini penting karena send_toplevel_configure() pada
+     * WM_MODE_NESTED memang mengkonfigurasi xdg surface
+     * sebagai fullscreen terhadap output.
+     *
+     * Kalau exclusive zone diterapkan di sini pada NESTED,
+     * kita mendapatkan dua layout authority:
+     *
+     *     nested WM geometry
+     *              +
+     *     layer-shell work-area
+     *
+     * sehingga reservation dapat diterapkan dua kali
+     * atau membuat layer/xdg geometry overlap.
+     */
+    if (srv->wm_mode != WM_MODE_DIRECT) {
+
+        LOGI(
+            "layer work-area: NESTED mode, "
+            "exclusive zones ignored "
+            "output=%ux%u",
+            ow,
+            oh);
+
+        return;
+    }
+
+    /*
+     * DIRECT mode:
+     *
+     * exclusive zones sekarang menjadi bagian dari
+     * output work-area.
+     */
     struct compositor_surface *surf;
 
     wl_list_for_each(
@@ -988,7 +1021,7 @@ static void layer_shell_get_work_area(
          * Only positive values reserve space.
          *
          * 0  -> no reservation
-         * -1 -> do not move this surface for other exclusives
+         * -1 -> no reservation
          */
         if (ls->exclusive_zone <= 0)
             continue;
@@ -1000,9 +1033,6 @@ static void layer_shell_get_work_area(
          * -------------------------------------------------------------
          * TOP
          * -------------------------------------------------------------
-         *
-         * Positive exclusive zone is meaningful when the surface
-         * is anchored to TOP and spans the perpendicular axis.
          */
         if ((ls->anchor &
              ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) &&
@@ -1011,16 +1041,6 @@ static void layer_shell_get_work_area(
             (ls->anchor &
              ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT)) {
 
-            /*
-             * Protocol:
-             *
-             * exclusive zone includes the margin.
-             *
-             * For top:
-             *
-             *     top margin
-             *   + exclusive zone
-             */
             zone += ls->margin_top;
 
             if (zone > (int32_t)area->height)
@@ -1099,8 +1119,16 @@ static void layer_shell_get_work_area(
             continue;
         }
     }
+
+    LOGI(
+        "layer work-area: DIRECT "
+        "x=%d y=%d size=%ux%u",
+        area->x,
+        area->y,
+        area->width,
+        area->height);
 }
-/* ------------------------------------------------------------------------- */
+
 /* layer_shell interface                                                     */
 /* ------------------------------------------------------------------------- */
 
