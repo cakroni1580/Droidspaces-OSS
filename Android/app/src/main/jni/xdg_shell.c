@@ -137,70 +137,11 @@ static void xdg_toplevel_move(struct wl_client *c, struct wl_resource *r,
     srv->wm_drag_ptr_start_y = (float)wl_fixed_to_double(srv->pointer_y);
     srv->wm_drag_surf_start_x = surf->wm_x;
     srv->wm_drag_surf_start_y = surf->wm_y;
-    /*
-     * CONTEXT:
-     * -------------------------------------------------------------
-     * Window yang sedang ditile tidak boleh tetap terkunci pada
-     * rectangle tiling ketika user mulai drag.
-     *
-     * Begitu user melakukan xdg_toplevel.move(), window menjadi
-     * floating.
-     * -------------------------------------------------------------
-     */
-    compositor_surface_set_tiling(
-            surf,
-            COMPOSITOR_TILING_NONE);
-
-    surf->wm_maximized = false;
-
 }
-
-static void xdg_toplevel_resize(struct wl_client *c,
-        struct wl_resource *r,
-        struct wl_resource *s,
-        uint32_t edge,
-        uint32_t serial)
-{
-    (void)c;
-    (void)s;
-    (void)serial;
-
-    struct compositor_surface *surf =
-        wl_resource_get_user_data(r);
-
-    if (!surf || !surf->srv)
-        return;
-
-    /*
-     * CONTEXT:
-     * -------------------------------------------------------------
-     * WM_MODE_DIRECT sekarang bertindak sebagai window manager.
-     *
-     * xdg_toplevel.resize() hanya memberi tahu compositor bahwa
-     * client memulai interactive resize.
-     *
-     * State resize edges harus disimpan di compositor_surface agar
-     * pointer/input code dapat menentukan sisi mana yang digeser.
-     * -------------------------------------------------------------
-     */
-
-    compositor_surface_set_resize_edges(surf, edge);
-
-    surf->wm_resizing = true;
-
-    /*
-     * Resize interactive membatalkan tiling sementara.
-     *
-     * Setelah user mulai menarik edge, window kembali menjadi
-     * floating sampai window manager menetapkan tiling baru.
-     */
-    compositor_surface_set_tiling(
-            surf,
-            COMPOSITOR_TILING_NONE);
-
-    send_toplevel_configure(surf);
+static void xdg_toplevel_resize(struct wl_client *c, struct wl_resource *r,
+        struct wl_resource *s, uint32_t edge, uint32_t serial) {
+    (void)c;(void)r;(void)s;(void)edge;(void)serial;
 }
-
 static void xdg_toplevel_set_max_size(struct wl_client *c, struct wl_resource *r, int32_t w, int32_t h) {
     (void)c;(void)r;(void)w;(void)h;
 }
@@ -232,18 +173,6 @@ static void xdg_toplevel_unset_maximized(struct wl_client *c, struct wl_resource
         surf->wm_x = surf->wm_saved_x;
         surf->wm_y = surf->wm_saved_y;
         surf->wm_maximized = false;
-        /*
-         * CONTEXT:
-         * ---------------------------------------------------------
-         * Setelah keluar dari maximized, window kembali menjadi
-         * floating kecuali window manager kemudian menetapkan
-         * tiling state lain.
-         * ---------------------------------------------------------
-         */
-        compositor_surface_set_tiling(
-                surf,
-                COMPOSITOR_TILING_NONE);
-
     }
     send_toplevel_configure(surf);
 }
@@ -251,9 +180,7 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
     (void)c;(void)o;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
     if (!surf) return;
-    if (compositor_surface_get_tiling(surf) !=
-            COMPOSITOR_TILING_ALL) {
-
+    if (!surf->wm_maximized) {
         int32_t sw = 0, sh = 0;
         compositor_surface_get_logical_size(surf, &sw, &sh);
         surf->wm_saved_x = surf->wm_x;
@@ -262,19 +189,7 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
         surf->wm_saved_h = sh;
         surf->wm_x = 0;
         surf->wm_y = 0;
-        /*
-         * CONTEXT:
-         * ---------------------------------------------------------
-         * Fullscreen tetap merupakan state xdg-shell tersendiri.
-         * Jangan gunakan wm_maximized sebagai satu-satunya sumber
-         * state window-management.
-         * ---------------------------------------------------------
-         */
         surf->wm_maximized = true;
-
-        compositor_surface_set_tiling(
-                surf,
-                COMPOSITOR_TILING_ALL);
     }
     send_toplevel_configure(surf);
 }
@@ -310,282 +225,47 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
     .set_minimized = xdg_toplevel_set_minimized,
 };
 
-void send_toplevel_configure(struct compositor_surface *surf)
-{
-    if (!surf ||
-        !surf->xdg_toplevel_res ||
-        !surf->xdg_surface_res ||
-        !surf->srv)
-        return;
-
+void send_toplevel_configure(struct compositor_surface *surf) {
+    if (!surf || !surf->xdg_toplevel_res || !surf->xdg_surface_res || !surf->srv) return;
     struct wl_array states;
     wl_array_init(&states);
+    uint32_t *s_act = wl_array_add(&states, sizeof(uint32_t));
+    if (s_act) *s_act = XDG_TOPLEVEL_STATE_ACTIVATED;
+    int32_t w = 0, h = 0;
 
-    /*
-     * Semua active toplevel tetap menerima ACTIVATED
-     * sesuai policy Trierarch saat ini.
-     */
-    uint32_t *s_act =
-        wl_array_add(&states, sizeof(uint32_t));
-
-    if (s_act)
-        *s_act = XDG_TOPLEVEL_STATE_ACTIVATED;
-
-    int32_t w = 0;
-    int32_t h = 0;
-
-    /*
-     * =============================================================
-     * NESTED MODE
-     * =============================================================
-     *
-     * Nested desktop tetap fullscreen.
-     *
-     * Tidak boleh masuk GTK tiling engine.
-     * Tidak boleh menggunakan layer-shell work-area.
-     */
     if (surf->srv->wm_mode == WM_MODE_NESTED) {
-
-        w = surf->srv->output_width > 0
-                ? surf->srv->output_width
-                : 0;
-
-        h = surf->srv->output_height > 0
-                ? surf->srv->output_height
-                : 0;
-
-        uint32_t *s_fs =
-            wl_array_add(&states, sizeof(uint32_t));
-
-        if (s_fs)
-            *s_fs = XDG_TOPLEVEL_STATE_FULLSCREEN;
-
-        uint32_t *s_max =
-            wl_array_add(&states, sizeof(uint32_t));
-
-        if (s_max)
-            *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
-
-    /*
-     * =============================================================
-     * DIRECT MODE
-     * =============================================================
-     *
-     * GTK shell = tiling/window-management engine.
-     *
-     * Layer-shell exclusive-zone sudah menjadi input
-     * ke work-area GTK shell.
-     */
+        /* Nested mode: tell the client (KDE/Sway) to occupy the full output.
+         * FULLSCREEN + MAXIMIZED prevents it from drawing decorations and ensures
+         * it allocates a buffer that matches the output size. */
+        w = surf->srv->output_width  > 0 ? surf->srv->output_width  : 0;
+        h = surf->srv->output_height > 0 ? surf->srv->output_height : 0;
+        uint32_t *s_fs  = wl_array_add(&states, sizeof(uint32_t));
+        if (s_fs)  *s_fs  = XDG_TOPLEVEL_STATE_FULLSCREEN;
+        uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
+        if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
     } else {
-
+        /* Direct mode: let the client choose its own size (w=0, h=0 per xdg-shell spec).
+         * If explicitly maximized, fill the output and advertise MAXIMIZED. */
         if (surf->wm_resizing) {
-
-            uint32_t *s_rz =
-                wl_array_add(
-                    &states,
-                    sizeof(uint32_t));
-
-            if (s_rz)
-                *s_rz =
-                    XDG_TOPLEVEL_STATE_RESIZING;
+            uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
+            if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
         }
-
-        enum compositor_tiling_state tiling =
-            compositor_surface_get_tiling(surf);
-
-        /*
-         * ================================================================
-         * CONTEXT:
-         *
-         * DIRECT mode geometry pipeline:
-         *
-         *     layer-shell
-         *          │
-         *          └── work-area
-         *                  │
-         *                  ▼
-         *          GTK shell tiling
-         *                  │
-         *          ┌───────┴────────┐
-         *          │                │
-         *       success           failure
-         *          │                │
-         *          ▼                ▼
-         *    tile geometry       floating
-         *          │                │
-         *          └───────┬────────┘
-         *                  ▼
-         *             xdg configure
-         *
-         * Tiling == NONE langsung menggunakan GTK floating path.
-         *
-         * Tiling gagal juga menjadi floating path.
-         *
-         * Jangan menggunakan compositor_surface_set_tiling()
-         * di sini karena setter tersebut memanggil
-         * send_toplevel_configure() dan menyebabkan recursive configure.
-         * ================================================================
-         */
-
-        if (tiling != COMPOSITOR_TILING_NONE) {
-
-            uint32_t tile_w = 0;
-            uint32_t tile_h = 0;
-
-            /*
-             * PRIMARY PATH:
-             *
-             * GTK shell meminta geometry dari layer-shell work-area.
-             */
-            if (gtk_shell_apply_tiling_geometry(
-                    surf,
-                    &tile_w,
-                    &tile_h)) {
-
-                /*
-                 * Tiling berhasil.
-                 *
-                 * Geometry sudah diterapkan oleh:
-                 *
-                 *     gtk_shell_apply_tiling_geometry()
-                 *
-                 * wm_x / wm_y sudah di-update di sana.
-                 */
-              w = (int32_t)tile_w;
-              h = (int32_t)tile_h;
-
-              LOGI(
-                   "DIRECT xdg configure: "
-                   "GTK tiling success "
-                   "surface=%p "
-                   "geometry=%ux%u+%d+%d",
-                   (void *)surf,
-                   tile_w,
-                   tile_h,
-                   surf->wm_x,
-                   surf->wm_y);
-
-            } else {
-
-                /*
-                 * FALLBACK PATH:
-                 *
-                 * GTK gagal menghasilkan tile geometry.
-                 *
-                 * Jangan memanggil:
-                 *
-                 *     compositor_surface_set_tiling()
-                 *
-                 * karena setter tersebut mengirim configure lagi.
-                 *
-                 * Cukup ubah state secara lokal karena
-                 * send_toplevel_configure() sedang berjalan.
-                 */
-                surf->tiling_state =
-                    COMPOSITOR_TILING_NONE;
-
-                tiling =
-                    COMPOSITOR_TILING_NONE;
-
-                /*
-                 * GTK floating state.
-                 */
-                send_gtk_surface_configure(surf);
-
-                /*
-                 * Floating geometry berasal dari request/current
-                 * compositor geometry.
-                 */
-               if (surf->wm_req_w > 0 ||
-                   surf->wm_req_h > 0) {
-
-                   w = surf->wm_req_w > 0
-                           ? surf->wm_req_w
-                           : 0;
-
-                   h = surf->wm_req_h > 0
-                           ? surf->wm_req_h
-                           : 0;
-                }
-
-                LOGI(
-                    "DIRECT xdg configure: "
-                    "GTK tiling failed -> floating fallback "
-                    "surface=%p "
-                    "geometry=%dx%d+%d+%d",
-                    (void *)surf,
-                     w,
-                     h,
-                     surf->wm_x,
-                     surf->wm_y);
-               }
- 
-         } else {
-
-           /*
-            * FLOATING PATH:
-            *
-            * Tiling state memang NONE.
-            *
-            * GTK shell tetap diberi kesempatan mengirim
-            * floating metadata/configure state.
-            */
-            send_gtk_surface_configure(surf);
-
-            if (surf->wm_req_w > 0 ||
-                surf->wm_req_h > 0) {
-
-                w = surf->wm_req_w > 0
-                        ? surf->wm_req_w
-                        : 0;
-
-               h = surf->wm_req_h > 0
-                       ? surf->wm_req_h
-                       : 0;
-             }
-
-              LOGI(
-                  "DIRECT xdg configure: "
-                  "GTK floating "
-                  "surface=%p "
-                  "geometry=%dx%d+%d+%d",
-                  (void *)surf,
-                  w,
-                  h,
-                  surf->wm_x,
-                  surf->wm_y);
-              
-         }
+        if (surf->wm_maximized) {
+            w = surf->srv->output_width  > 0 ? surf->srv->output_width  : 0;
+            h = surf->srv->output_height > 0 ? surf->srv->output_height : 0;
+            uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
+            if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+        } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
+            /* Compositor-driven resize: send requested size (best-effort). */
+            w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
+            h = surf->wm_req_h > 0 ? surf->wm_req_h : 0;
+        }
     }
-    /*
-     * xdg_toplevel.configure()
-     */
-    xdg_toplevel_send_configure(
-        surf->xdg_toplevel_res,
-        w,
-        h,
-        &states);
 
+    xdg_toplevel_send_configure(surf->xdg_toplevel_res, w, h, &states);
     wl_array_release(&states);
-
-    /*
-     * xdg_surface.configure()
-     */
-    uint32_t serial =
-        wl_display_next_serial(
-            surf->srv->display);
-
-    xdg_surface_send_configure(
-        surf->xdg_surface_res,
-        serial);
-
-    /*
-     * GTK shell tidak perlu mengirim configure kedua di sini.
-     *
-     * GTK shell hanya menentukan geometry.
-     * xdg-shell adalah protocol yang mengirim configure
-     * kepada xdg client.
-     */
+    uint32_t serial = wl_display_next_serial(surf->srv->display);
+    xdg_surface_send_configure(surf->xdg_surface_res, serial);
 }
 
 static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resource *xdg_surface_res, uint32_t id) {
