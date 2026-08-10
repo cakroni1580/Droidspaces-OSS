@@ -2,30 +2,8 @@
  * wlr-layer-shell (zwlr_layer_shell_v1)
  * note contract:layershell.c berjalan di trierarch compositor jni sebagai compositor display host
  * note contract:buat agar agar mengikuti phoc alih alih wlroots.
- *
- *
- *
- *
- * CONTEXT:
- *
- * Layer-shell exclusive zones belong to the DIRECT output layout.
- *
- * WM_MODE_DIRECT:
- *     layer-shell exclusive zones define the usable output area
- *     for xdg toplevels rendered directly on the compositor output.
- *
- * WM_MODE_NESTED:
- *     xdg surfaces are managed inside the nested desktop/window
- *     layout and must NOT consume the layer-shell work area.
- *
- * This prevents:
- *
- *     layer exclusive zone
- *              +
- *     nested WM geometry
- *
- * from applying the same reservation twice.
  */
+ 
 
 #include "server_internal.h"
 #include "wlr-layer-shell-unstable-v1-server-protocol.h"
