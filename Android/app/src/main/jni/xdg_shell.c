@@ -252,6 +252,89 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         }
         if (surf->wm_maximized) {
 
+        /*
+         * ============================================================
+         * CONTEXT:
+         *
+         * WM_MODE_DIRECT maximize harus mengikuti geometry policy
+         * yang sama dengan GTK tiling.
+         *
+         * Flow:
+         *
+         *     layer-shell
+         *          ↓
+         *     exclusive zones
+         *          ↓
+         *     usable work-area
+         *          ↓
+         *     GTK geometry policy
+         *          ↓
+         *     XDG MAXIMIZED configure
+         *
+         * Jangan langsung memakai:
+         *
+         *     output_width
+         *     output_height
+         *
+         * karena itu mengabaikan layer-shell work-area.
+         *
+         * gtk_shell_get_maximized_geometry() juga tidak berarti
+         * client harus memiliki gtk_surface1.
+         *
+         * Ini compositor-side geometry helper.
+         *
+         * Jika tidak ada GTK client dan tidak ada layer-shell
+         * reservation, helper akan menghasilkan full output area.
+         * ============================================================
+         */
+
+         int32_t max_x = 0;
+         int32_t max_y = 0;
+         uint32_t max_w = 0;
+         uint32_t max_h = 0;
+
+         if (gtk_shell_get_maximized_geometry(
+                surf,
+                &max_x,
+                &max_y,
+                &max_w,
+                &max_h)) {
+
+            /*
+             * Geometry FINAL untuk MAXIMIZED.
+             */
+            surf->wm_x = max_x;
+            surf->wm_y = max_y;
+
+            w = (int32_t)max_w;
+            h = (int32_t)max_h;
+
+            LOGI(
+                "xdg maximize: GTK/layer-shell work-area "
+                "surface=%p "
+                "geometry=%ux%u+%d+%d",
+                (void *)surf,
+                max_w,
+                max_h,
+                max_x,
+                max_y);
+
+        } else {
+
+            /*
+             * --------------------------------------------------------
+             * FALLBACK
+             * --------------------------------------------------------
+             *
+             * Geometry subsystem tidak menghasilkan work-area valid.
+             *
+             * Tetap pertahankan perilaku maximize normal menggunakan
+             * output geometry.
+             *
+             * Ini membuat GTK/layer-shell bersifat optional terhadap
+             * XDG application.
+             * --------------------------------------------------------
+             */
             w = surf->srv->output_width > 0
                     ? surf->srv->output_width
                     : 0;
@@ -260,13 +343,27 @@ void send_toplevel_configure(struct compositor_surface *surf) {
                     ? surf->srv->output_height
                     : 0;
 
-            uint32_t *s_max =
-                wl_array_add(&states, sizeof(uint32_t));
+            surf->wm_x = 0;
+            surf->wm_y = 0;
 
-            if (s_max)
-                *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+            LOGI(
+                "xdg maximize: work-area unavailable, "
+                "fallback output "
+                "surface=%p geometry=%ux%u+0+0",
+                (void *)surf,
+                w,
+                h);
+        }
 
-        } else {
+        uint32_t *s_max =
+            wl_array_add(
+                &states,
+                sizeof(uint32_t));
+
+        if (s_max)
+            *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+
+    } else {
 
             /*
              * ====================================================
