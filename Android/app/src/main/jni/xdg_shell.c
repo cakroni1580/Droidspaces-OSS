@@ -251,14 +251,80 @@ void send_toplevel_configure(struct compositor_surface *surf) {
             if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
         }
         if (surf->wm_maximized) {
-            w = surf->srv->output_width  > 0 ? surf->srv->output_width  : 0;
-            h = surf->srv->output_height > 0 ? surf->srv->output_height : 0;
-            uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
-            if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
-        } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
-            /* Compositor-driven resize: send requested size (best-effort). */
-            w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
-            h = surf->wm_req_h > 0 ? surf->wm_req_h : 0;
+
+            w = surf->srv->output_width > 0
+                    ? surf->srv->output_width
+                    : 0;
+
+            h = surf->srv->output_height > 0
+                    ? surf->srv->output_height
+                    : 0;
+
+            uint32_t *s_max =
+                wl_array_add(&states, sizeof(uint32_t));
+
+            if (s_max)
+                *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+
+        } else {
+
+            /*
+             * ====================================================
+             * CONTEXT:
+             *
+             * GTK tiling adalah geometry authority untuk XDG
+             * surface yang memiliki tiling_state.
+             *
+             * Jangan memakai WM_MODE_DIRECT/NESTED sebagai gate.
+             *
+             * Tiling:
+             *
+             *     layer-shell work-area
+             *             ↓
+             *     gtk_shell_apply_tiling_geometry()
+             *             ↓
+             *     wm_x / wm_y + w/h
+             *             ↓
+             *     xdg_toplevel.configure
+             * ====================================================
+             */
+            uint32_t tile_w = 0;
+            uint32_t tile_h = 0;
+
+            if (gtk_shell_apply_tiling_geometry(
+                    surf,
+                    &tile_w,
+                    &tile_h)) {
+
+                w = (int32_t)tile_w;
+                h = (int32_t)tile_h;
+
+                LOGI(
+                    "xdg configure: GTK tiling geometry "
+                    "surface=%p "
+                    "geometry=%ux%u+%d+%d",
+                    (void *)surf,
+                    tile_w,
+                    tile_h,
+                    surf->wm_x,
+                    surf->wm_y);
+
+            } else if (surf->wm_req_w > 0 ||
+                       surf->wm_req_h > 0) {
+
+                /*
+                 * Floating compositor-driven resize.
+                 *
+                 * Hanya dipakai jika tidak ada tiling geometry.
+                 */
+                w = surf->wm_req_w > 0
+                        ? surf->wm_req_w
+                        : 0;
+
+                h = surf->wm_req_h > 0
+                        ? surf->wm_req_h
+                        : 0;
+            }
         }
     }
 
@@ -353,17 +419,92 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
             surf->srv->cascade_y;
 
         /*
+         * ========================================================
+         * CONTEXT:
+         *
+         * Initial XDG position sudah ditentukan berdasarkan
+         * layer-shell work-area.
+         *
+         * Sekarang beri GTK tiling engine kesempatan untuk
+         * mengganti geometry tersebut jika surface memang
+         * memiliki compositor_tiling_state.
+         *
+         * gtk_shell_apply_tiling_geometry():
+         *
+         *     layer-shell work-area
+         *             ↓
+         *        GTK tiling state
+         *             ↓
+         *        wm_x / wm_y
+         *             ↓
+         *        width / height
+         *
+         * IMPORTANT:
+         *
+         * Jangan gate berdasarkan WM_MODE_DIRECT/NESTED
+         * di sini.
+         *
+         * Tiling state adalah compositor state tersendiri.
+         * ========================================================
+         */
+        uint32_t tile_w = 0;
+        uint32_t tile_h = 0;
+
+        if (gtk_shell_apply_tiling_geometry(
+                surf,
+                &tile_w,
+                &tile_h)) {
+
+            /*
+             * Geometry position sudah ditulis oleh
+             * gtk_shell_apply_tiling_geometry() ke:
+             *
+             *     surf->wm_x
+             *     surf->wm_y
+             *
+             * Size belum disimpan ke compositor_surface,
+             * sehingga size diteruskan melalui configure.
+             */
+            LOGI(
+                "xdg get_toplevel: GTK tiling applied "
+                "surface=%p "
+                "geometry=%ux%u+%d+%d",
+                (void *)surf,
+                tile_w,
+                tile_h,
+                surf->wm_x,
+                surf->wm_y);
+
+            /*
+             * wm_req_w / wm_req_h menjadi requested configure
+             * untuk initial XDG configure.
+             *
+             * Ini membuat send_toplevel_configure() memakai
+             * hasil GTK tiling pada configure pertama.
+             */
+            surf->wm_req_w = (int32_t)tile_w;
+            surf->wm_req_h = (int32_t)tile_h;
+        }
+
+        /*
          * Keep normal XDG stacking policy unchanged.
          */
         surf->z_order =
             surf->srv->next_z_order++;
 
         /*
-         * Cascade progression remains independent from
-         * layer-shell reservation.
+         * Cascade progression hanya digunakan untuk
+         * floating XDG surfaces.
+         *
+         * Surface yang sudah di-tiling tidak perlu menggeser
+         * cascade position berikutnya berdasarkan geometry tile.
          */
-        surf->srv->cascade_x += 40;
-        surf->srv->cascade_y += 40;
+        if (compositor_surface_get_tiling(surf) ==
+            COMPOSITOR_TILING_NONE) {
+
+            surf->srv->cascade_x += 40;
+            surf->srv->cascade_y += 40;
+        }
 
         /*
          * Wrap cascade inside the usable work-area,
