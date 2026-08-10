@@ -269,6 +269,17 @@ static volatile sig_atomic_t g_local_forward_active = 0;
 static char g_upstream_ifaces[DS_MAX_UPSTREAM_IFACES][IFNAMSIZ];
 static int g_upstream_count = 0;
 
+/* Shape of the host-side rules this monitor installed, captured in
+ * setup_veth_host_side() before the monitor thread starts and only rewritten
+ * from that same path on a container reboot.  The monitor replays exactly
+ * these when Android's netd flushes the tables out from under a running
+ * container - see install_netfilter_rules(). */
+static int g_host_bridgeless = 0;
+static char g_host_veth[IFNAMSIZ];
+static struct ds_port_forward g_host_port_forwards[DS_MAX_PORT_FORWARDS];
+static int g_host_port_forward_count = 0;
+static char g_host_container_ip[INET_ADDRSTRLEN];
+
 /* Returns 1 if ifname exists and is both UP and RUNNING.
  * On Android, the active data interface has IFF_RUNNING set; an interface
  * that is physically present but not carrying data loses IFF_RUNNING. */
@@ -585,65 +596,79 @@ int fix_networking_host(struct ds_config *cfg) {
 static int find_active_uplink(ds_nl_ctx_t *ctx, char *iface_out,
                               int *table_out);
 
+/* Install (or reinstall) the container policy rules.  Single source of truth
+ * for the FIB rule set: container start calls it once, and the route monitor
+ * calls it on every cycle, because Android's netd flushes the whole rule table
+ * when it restarts and strands every running container (see the monitor's
+ * reconciliation notes).  ds_nl_add_rule4() maps EEXIST to success, so
+ * re-running this is a silent no-op once the rules are in place - which is why
+ * it stays quiet and lets the caller report failures.
+ *
+ * DS_RULE_PRIO_TO_SUBNET (6090): inbound traffic to our subnet always resolves
+ * via the main table.  Installed even with no uplink - without it the host
+ * cannot reach the container at all.
+ *
+ * DS_RULE_PRIO_TETHER (6095): replies from our subnet to hotspot/USB-tether
+ * clients must consult netd's local_network table (which holds every
+ * downstream interface's connected route and no default route) before the
+ * uplink table grabs them.  Also uplink-independent, so tether clients can
+ * reach forwarded ports even with no WAN.
+ *
+ * DS_RULE_PRIO_FROM_SUBNET (6100): traffic from our subnet → the uplink's
+ * internet table, so it only goes in once an uplink has been selected.
+ *
+ * All three sit above Android's VPN rule range (10000–22000), so they are
+ * checked FIRST and container traffic is never hijacked by a VPN catch-all,
+ * and above the OEM reserved low-priority rules (typically < 1000).
+ *
+ * Returns 0 when every applicable rule is in place, -1 if any add failed. */
+static int install_policy_rules(ds_nl_ctx_t *ctx) {
+  uint32_t subnet_be, mask_be;
+  parse_cidr(DS_DEFAULT_SUBNET, &subnet_be, &mask_be);
+  (void)mask_be;
+
+  int ret = 0;
+
+  if (ds_nl_add_rule4(ctx, 0, 0, subnet_be, DS_NAT_PREFIX, RT_TABLE_MAIN,
+                      DS_RULE_PRIO_TO_SUBNET) < 0)
+    ret = -1;
+
+  if (ds_nl_add_rule4(ctx, subnet_be, DS_NAT_PREFIX, 0, 0,
+                      DS_ANDROID_TABLE_LOCAL_NETWORK, DS_RULE_PRIO_TETHER) < 0)
+    ret = -1;
+
+  pthread_mutex_lock(&g_gw_mutex);
+  int gw_table = g_current_gw_table;
+  pthread_mutex_unlock(&g_gw_mutex);
+
+  if (gw_table > 0 && ds_nl_add_rule4(ctx, subnet_be, DS_NAT_PREFIX, 0, 0,
+                                      gw_table, DS_RULE_PRIO_FROM_SUBNET) < 0)
+    ret = -1;
+
+  return ret;
+}
+
 static void ds_net_setup_android_routing(ds_nl_ctx_t *ctx) {
   char active_iface[IFNAMSIZ] = {0};
   int gw_table = 0;
-  find_active_uplink(ctx, active_iface, &gw_table);
-
-  uint32_t subnet_be, mask_be;
-  parse_cidr(DS_DEFAULT_SUBNET, &subnet_be, &mask_be);
-  uint8_t prefix = DS_NAT_PREFIX;
-
-  /* DS_RULE_PRIO_TO_SUBNET (6090): inbound traffic to our subnet always
-   * resolves via main table.  Install this even if no uplink is active
-   * yet - the monitor will handle the FROM rule once an interface comes up.
-   *
-   * Priority 6090 is:
-   *   • above Android's VPN rule range (10000–22000) -> checked FIRST, so
-   *     reply-to-container traffic is never hijacked by a VPN's catch-all rule
-   *   • above OEM reserved low-priority rules (typically < 1000) */
-  int ret = ds_nl_add_rule4(ctx, 0, 0, subnet_be, prefix, RT_TABLE_MAIN,
-                            DS_RULE_PRIO_TO_SUBNET);
-  if (ret < 0)
-    ds_warn("[NET] Android routing: failed to add 'to subnet' rule (%d)",
-            DS_RULE_PRIO_TO_SUBNET);
-
-  /* DS_RULE_PRIO_TETHER (6095): replies from our subnet to hotspot/USB-tether
-   * clients must consult netd's local_network table (which holds every
-   * downstream interface's connected route and no default route) before the
-   * uplink table grabs them.  Installed regardless of uplink state - tether
-   * clients can reach forwarded ports even with no WAN. */
-  ret = ds_nl_add_rule4(ctx, subnet_be, prefix, 0, 0,
-                        DS_ANDROID_TABLE_LOCAL_NETWORK, DS_RULE_PRIO_TETHER);
-  if (ret < 0)
-    ds_warn("[NET] Android routing: failed to add tether-return rule (%d)",
-            DS_RULE_PRIO_TETHER);
 
   /* No uplink yet: find_active_uplink() already logged the single "no WAN"
-   * line.  The TO_SUBNET/tether rules above are in place; the route monitor
-   * installs the FROM rule once an uplink appears. */
-  if (!active_iface[0])
-    return;
-
-  ds_log("[NET] Android routing: active uplink %s → table %d", active_iface,
-         gw_table);
-
-  /* DS_RULE_PRIO_FROM_SUBNET (6100): traffic from our subnet → uplink
-   * internet table.  Also above Android's VPN range so container-originated
-   * traffic always routes through the physical uplink, not through any VPN
-   * tunnel (the container has its own isolation layer). */
-  ret = ds_nl_add_rule4(ctx, subnet_be, prefix, 0, 0, gw_table,
-                        DS_RULE_PRIO_FROM_SUBNET);
-  if (ret == 0) {
-    ds_log("[NET] Android routing: rule from %s lookup table %d (prio %d)",
-           DS_DEFAULT_SUBNET, gw_table, DS_RULE_PRIO_FROM_SUBNET);
+   * line.  The uplink-independent rules still go in below; the route monitor
+   * adds the FROM rule once an interface appears. */
+  if (find_active_uplink(ctx, active_iface, &gw_table) == 0) {
+    ds_log("[NET] Android routing: active uplink %s → table %d, rule from %s "
+           "lookup table %d (prio %d)",
+           active_iface, gw_table, DS_DEFAULT_SUBNET, gw_table,
+           DS_RULE_PRIO_FROM_SUBNET);
     /* Seed the monitor's current table so it knows the baseline */
     pthread_mutex_lock(&g_gw_mutex);
     g_current_gw_table = gw_table;
     pthread_mutex_unlock(&g_gw_mutex);
-  } else {
-    ds_warn("[NET] Android routing: ds_nl_add_rule4 failed (ret=%d)", ret);
   }
+
+  if (install_policy_rules(ctx) < 0)
+    ds_warn("[NET] Android routing: one or more policy rules failed to install "
+            "- container reachability may be degraded");
 }
 
 /* ---------------------------------------------------------------------------
@@ -670,6 +695,45 @@ int ds_net_disable_tx_checksum(const char *ifname) {
 }
 
 /* ---------------------------------------------------------------------------
+ * install_netfilter_rules
+ *
+ * Install (or reinstall) the host-side netfilter rules for this container's
+ * topology.  Counterpart to install_policy_rules(): the single source of truth
+ * for the iptables side, called once at container start and again by the route
+ * monitor after netd flushes the tables.  Every helper is idempotent.
+ *
+ * Reads the g_host_* snapshot rather than cfg, so the monitor thread can call
+ * it without reaching into a struct the reboot path rewrites in place.
+ * ---------------------------------------------------------------------------*/
+
+/* Interface the filter rules match on: bridge mode filters on the bridge,
+ * bridgeless PTP filters on the veth itself.  Shared by the installer and the
+ * monitor's presence probe so the two can never disagree about what to look
+ * for.  Empty until setup_veth_host_side() has taken its snapshot. */
+static const char *host_filter_iface(void) {
+  return g_host_bridgeless ? g_host_veth : DS_NAT_BRIDGE;
+}
+
+static void install_netfilter_rules(void) {
+  const char *iface = host_filter_iface();
+
+  if (iface[0]) {
+    ds_ipt_ensure_input_accept(iface);
+    if (ds_ipt_ensure_forward_accept(iface) < 0)
+      ds_warn("[NET] FORWARD ACCEPT failed");
+  }
+
+  if (ds_ipt_ensure_masquerade(DS_DEFAULT_SUBNET) < 0)
+    ds_warn("[NET] MASQUERADE rule failed");
+
+  ds_ipt_ensure_mss_clamp();
+
+  if (g_host_port_forward_count > 0 && g_host_container_ip[0])
+    ds_ipt_add_portforwards(g_host_port_forwards, g_host_port_forward_count,
+                            g_host_container_ip);
+}
+
+/* ---------------------------------------------------------------------------
  * setup_veth_host_side
  *
  * Called from the Monitor process AFTER receiving the "ready" signal from the
@@ -692,6 +756,19 @@ int setup_veth_host_side(struct ds_config *cfg, pid_t child_pid) {
 
   ds_log("Setting up host-side NAT networking for %s (PID %d)...",
          cfg->container_name, (int)child_pid);
+
+  /* Snapshot everything install_netfilter_rules() needs, before anything else
+   * touches the tables.  The monitor thread replays these to rebuild the rules
+   * after a netd flush and must not read cfg directly - the reboot path
+   * rewrites *cfg in place.  static_nat_ip is already resolved and persisted
+   * before the fork, and is exactly what nat_container_ip is set to below. */
+  g_host_bridgeless = cfg->net_bridgeless;
+  safe_strncpy(g_host_veth, veth_host, sizeof(g_host_veth));
+  g_host_port_forward_count = cfg->port_forward_count;
+  memcpy(g_host_port_forwards, cfg->port_forwards,
+         sizeof(g_host_port_forwards));
+  safe_strncpy(g_host_container_ip, cfg->static_nat_ip,
+               sizeof(g_host_container_ip));
 
   ds_nl_ctx_t *ctx = ds_nl_open();
   if (!ctx) {
@@ -741,26 +818,15 @@ int setup_veth_host_side(struct ds_config *cfg, pid_t child_pid) {
         write_file("/proc/sys/net/bridge/bridge-nf-call-iptables", "0");
         write_file("/proc/sys/net/bridge/bridge-nf-call-ip6tables", "0");
       }
-      ds_ipt_ensure_input_accept(DS_NAT_BRIDGE);
     } else {
       write_file("/proc/sys/net/ipv4/conf/all/rp_filter", "0");
       write_file("/proc/sys/net/ipv4/conf/default/rp_filter", "0");
-      /* In bridgeless mode, we must accept input from the veth itself */
-      ds_ipt_ensure_input_accept(veth_host);
     }
   }
 
-  /* 2. iptables rules */
-  if (ds_ipt_ensure_masquerade(DS_DEFAULT_SUBNET) < 0)
-    ds_warn("[NET] MASQUERADE rule failed");
-  if (!cfg->net_bridgeless) {
-    if (ds_ipt_ensure_forward_accept(DS_NAT_BRIDGE) < 0)
-      ds_warn("[NET] FORWARD ACCEPT failed");
-  } else {
-    if (ds_ipt_ensure_forward_accept(veth_host) < 0)
-      ds_warn("[NET] FORWARD ACCEPT failed");
-  }
-  ds_ipt_ensure_mss_clamp();
+  /* 2. iptables rules - the same set the route monitor reinstalls whenever
+   * netd flushes the tables out from under us. */
+  install_netfilter_rules();
 
   /* 3. Create veth pair */
   ds_log("[DEBUG] Creating veth pair %s <-> %s...", veth_host, veth_peer);
@@ -889,9 +955,8 @@ int setup_veth_host_side(struct ds_config *cfg, pid_t child_pid) {
     safe_strncpy(cfg->nat_container_ip, cfg->static_nat_ip,
                  sizeof(cfg->nat_container_ip));
 
-    /* Install DNAT + FORWARD rules for any --port mappings */
-    if (cfg->port_forward_count > 0)
-      ds_ipt_add_portforwards(cfg, cfg->nat_container_ip);
+    /* --port DNAT/FORWARD rules were installed with the rest of the netfilter
+     * set above, from the same snapshot the monitor replays. */
   }
 
   return 0;
@@ -1823,6 +1888,37 @@ static void do_uplink_reprobe(void) {
   ds_nl_ctx_t *ctx = ds_nl_open();
   if (!ctx)
     return;
+
+  /* Reconcile our host rules before anything else.
+   *
+   * Android's netd rebuilds its entire netfilter and policy-routing state when
+   * it restarts, and a system_server crash ("soft reboot") is enough to
+   * trigger that.  It flushes the iptables built-in chains and the FIB rule
+   * table wholesale, taking our rules with them, which silently strands every
+   * running container: the policy rules are gone so nothing consults the main
+   * table for 172.28.0.0/16 (the host cannot reach the container at all), and
+   * MASQUERADE / FORWARD ACCEPT are gone so the container cannot reach the
+   * WAN.  The container keeps running and the host's own connectivity comes
+   * back, which is why this looks like a Droidspaces failure.
+   *
+   * Nothing notifies us, so reconcile instead of assuming the one-time setup
+   * survived.  This runs even with no uplink at all, since host <-> container
+   * traffic over the bridge needs the policy rules regardless of WAN state. */
+  install_policy_rules(ctx);
+
+  /* The netfilter set is gated behind a fork-free probe of every rule in it:
+   * ds_ipt_ensure_mss_clamp() and the port-forward helpers shell out to the
+   * iptables binary, so they must not run every cycle.  Only 0 means
+   * "something is definitely missing"; -1 is "tables unreadable", where a
+   * blind reinstall through those binary fallbacks would stack duplicates. */
+  const char *iface = host_filter_iface();
+  if (iface[0] &&
+      ds_ipt_host_rules_present(iface, DS_DEFAULT_SUBNET,
+                                g_host_port_forward_count > 0) == 0) {
+    ds_warn("[NET] Route monitor: host netfilter rules are missing "
+            "(netd restart or firewall app?) - reinstalling");
+    install_netfilter_rules();
+  }
 
   char new_iface[IFNAMSIZ] = {0};
   int new_table = 0;

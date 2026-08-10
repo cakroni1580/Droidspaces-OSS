@@ -510,4 +510,33 @@
     <string name="accent_color">強調色</string>
     <string name="type_container_name_to_confirm">請準確輸入容器名稱以進行確認：</string>
     <string name="debugging_section">偵錯</string>
+    <string name="inspect_unit">檢查設備</string>
+    <string name="edit_override">編輯覆蓋</string>
+    <string name="property_description">描述</string>
+    <string name="property_load_state">載入狀態</string>
+    <string name="property_active_state">活動狀態</string>
+    <string name="property_sub_state">子狀態</string>
+    <string name="property_enablement">賦能</string>
+    <string name="property_unit_file">單元檔案</string>
+    <string name="property_drop_ins">追蹤者</string>
+    <string name="property_main_pid">主 PID</string>
+    <string name="property_started_at">開始於</string>
+    <string name="property_restart_policy">重啟策略</string>
+    <string name="property_memory">記憶體</string>
+    <string name="property_cpu_time">CPU 時間 (ns)</string>
+    <string name="unit_detail_load_error_title">無法載入詳細地單元訊息</string>
+    <string name="unit_detail_load_error_message">該單元可能已不存在，或該容器可能無法存取。</string>
+    <string name="properties_section">屬性</string>
+    <string name="dependencies_section">相依性</string>
+    <string name="systemctl_status_section">系統控制狀態</string>
+    <string name="override_saved">覆蓋設定已儲存。請重新啟動設備以套用變更。</string>
+    <string name="failed_to_save_override">覆蓋設定保存失敗</string>
+    <string name="override_removed">覆蓋設定已移除。</string>
+    <string name="failed_to_remove_override">覆蓋設定移除失敗</string>
+    <string name="edit_override_title">編輯覆蓋設定 · %1$s</string>
+    <string name="delete_override">刪除覆蓋設定</string>
+    <string name="save_override">保存覆蓋設定</string>
+    <string name="override_placeholder">[服務]\n環境=FOO=bar</string>
+    <string name="saving_override">正在保存覆蓋設定…</string>
+    <string name="applying_override">正在套用覆蓋設定…</string>
 </resources>

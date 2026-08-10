@@ -90,6 +90,10 @@ fun SettingsScreen(
     val amoledMode = themeState.amoledMode
     val useDynamicColor = themeState.useDynamicColor
 
+    // Terminal-only dark mode - local state mirrors the preference so the switch
+    // updates immediately without waiting for a SharedPreferences listener.
+    var terminalDarkTheme by remember { mutableStateOf(prefsManager.terminalDarkTheme) }
+
     // About dialog state
     var showAboutDialog by remember { mutableStateOf(false) }
 
@@ -385,6 +389,19 @@ fun SettingsScreen(
                     }
                 )
             }
+
+            // Terminal Dark Mode - independent of the app-wide theme
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            SwitchItem(
+                icon = Icons.Default.Terminal,
+                title = context.getString(R.string.terminal_dark_theme),
+                summary = context.getString(R.string.terminal_dark_theme_description),
+                checked = terminalDarkTheme,
+                onCheckedChange = { checked ->
+                    prefsManager.terminalDarkTheme = checked
+                    terminalDarkTheme = checked
+                }
+            )
 
             // AMOLED Mode (shown when followSystemTheme is true OR manual darkTheme is true)
             if (followSystemTheme || darkTheme) {

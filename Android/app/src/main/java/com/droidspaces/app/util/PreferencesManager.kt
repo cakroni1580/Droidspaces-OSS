@@ -136,6 +136,14 @@ class PreferencesManager private constructor(context: Context) {
             prefs.edit().putString(KEY_THEME_PALETTE, value).apply()
         }
 
+    // Terminal-only dark mode - independent of the app-wide theme, so the rest
+    // of the app can stay light while the terminal page renders dark.
+    var terminalDarkTheme: Boolean
+        get() = prefs.getBoolean(KEY_TERMINAL_DARK_THEME, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_TERMINAL_DARK_THEME, value).apply()
+        }
+
     var isDaemonModeEnabled: Boolean
         get() = prefs.getBoolean(KEY_DAEMON_MODE_ENABLED, false)
         set(value) {
@@ -385,6 +393,7 @@ class PreferencesManager private constructor(context: Context) {
         private const val KEY_DARK_THEME = Constants.KEY_DARK_THEME
         private const val KEY_AMOLED_MODE = Constants.KEY_AMOLED_MODE
         private const val KEY_USE_DYNAMIC_COLOR = Constants.KEY_USE_DYNAMIC_COLOR
+        private const val KEY_TERMINAL_DARK_THEME = Constants.KEY_TERMINAL_DARK_THEME
         const val KEY_THEME_PALETTE = Constants.KEY_THEME_PALETTE
         const val KEY_DAEMON_MODE_ENABLED = Constants.KEY_DAEMON_MODE_ENABLED
         const val KEY_SYMLINK_ENABLED = Constants.KEY_SYMLINK_ENABLED
