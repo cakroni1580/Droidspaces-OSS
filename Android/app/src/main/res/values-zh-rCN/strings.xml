@@ -69,6 +69,8 @@
     <string name="follow_system_theme_description">自动跟随系统主题</string>
     <string name="dark_theme">深色模式</string>
     <string name="dark_theme_description">开启深色模式</string>
+    <string name="terminal_dark_theme">终端深色模式</string>
+    <string name="terminal_dark_theme_description">仅终端页面使用深色配色</string>
     <string name="amoled_mode">AMOLED 模式</string>
     <string name="amoled_mode_description">为 OLED 屏幕提供纯黑背景</string>
     <string name="dynamic_color">使用系统默认配色方案</string>
@@ -342,7 +344,7 @@
     <string name="feat_containers_desc">采用与 LXC、Podman 及 Docker 相同的内核命名空间技术。无需模拟或 chroot。</string>
     <string name="feat_overhead_title">零开销</string>
     <string name="feat_overhead_desc">直接与宿主 Linux 内核交互。无需 Hypervisor，亦无虚拟机层。</string>
-    <string name="feat_unkillable_title">由于设计层面而无法被终止</string>
+    <string name="feat_unkillable_title">设计上不可终止</string>
     <string name="feat_unkillable_desc">原生支持 init.rc 集成与双层用户空间守护进程。不会被轻易终止。</string>
     <string name="feat_init_title">以 systemd / OpenWrt procd / OpenRC 作为 PID 1</string>
     <string name="feat_init_desc">支持完整的 Init 系统。具备真实的服务管理能力，并非简单的模拟环境。</string>
@@ -405,11 +407,11 @@
     <string name="network_mode_nat_short">NAT</string>
     <string name="network_mode_none_short">无</string>
     <string name="hw_access_disclaimer">从 Droidspaces v6.1.0 版本开始，udevd 可完整接管 USB、块设备、输入设备、串口、网络子系统权限，容器能够直接占用安卓系统正在使用的硬件资源。\n\n若启动容器后，安卓端键盘、SD 卡、USB 外设等设备失效，这并非程序 BUG，是容器抢占占用了硬件资源，属于正常设计行为。\n\n请勿提交因硬件资源冲突、该模式引发内核宕机死机相关的问题反馈。</string>
-    <string name="custom_init_warning">除非你清楚你在做什么，否则不要更改此选项。设定错误的 init 可执行文件路径会导致容器无法启动。</string>
+    <string name="custom_init_warning">除非你很清楚你在做什么，否则不要更改此选项。设定错误的 init 可执行文件路径会导致容器无法启动。</string>
     <string name="custom_init_label">指定 init 可执行文件路径</string>
-    <string name="custom_init_placeholder">/sbin/init（默认）</string>
-    <string name="custom_init_hint">留空以使用默认的 init (/sbin/init)</string>
-    <string name="custom_init_error_absolute">路径必须为绝对路径（以 / 开头）</string>
+    <string name="custom_init_placeholder">/sbin/init (默认)</string>
+    <string name="custom_init_hint">留空则使用默认值 (/sbin/init)</string>
+    <string name="custom_init_error_absolute">路径必须是以 / 开头的绝对路径</string>
     <string name="custom_init_option">自定义 init</string>
     <string name="notification_title">Droidspaces 终端</string>
     <string name="notification_wakelock_on">唤醒锁定：开</string>
@@ -515,4 +517,33 @@
     <string name="accent_color">强调色</string>
     <string name="type_container_name_to_confirm">完整输入容器名称以确认：</string>
     <string name="debugging_section">调试</string>
+    <string name="systemctl_status_section">systemctl 状态</string>
+    <string name="inspect_unit">检查单元</string>
+    <string name="edit_override">编辑覆盖配置</string>
+    <string name="property_description">描述</string>
+    <string name="property_load_state">加载状态</string>
+    <string name="property_active_state">活动状态</string>
+    <string name="property_sub_state">子状态</string>
+    <string name="property_enablement">启用状态</string>
+    <string name="property_unit_file">单元文件</string>
+    <string name="property_drop_ins">Drop-in 配置文件</string>
+    <string name="property_main_pid">主 PID</string>
+    <string name="property_started_at">启动时间</string>
+    <string name="property_restart_policy">重启策略</string>
+    <string name="property_memory">内存</string>
+    <string name="property_cpu_time">CPU 时间 (纳秒)</string>
+    <string name="unit_detail_load_error_title">无法加载单元详细信息</string>
+    <string name="unit_detail_load_error_message">单元可能已不存在，或容器当前无法访问。</string>
+    <string name="properties_section">属性</string>
+    <string name="dependencies_section">依赖关系</string>
+    <string name="override_saved">覆盖配置已保存，重启单元以应用更改。</string>
+    <string name="failed_to_save_override">保存覆盖配置失败</string>
+    <string name="override_removed">覆盖配置已删除。</string>
+    <string name="failed_to_remove_override">删除覆盖配置失败</string>
+    <string name="edit_override_title">编辑覆盖配置 · %1$s</string>
+    <string name="delete_override">删除覆盖配置</string>
+    <string name="save_override">保存覆盖配置</string>
+    <string name="override_placeholder">[Service]\nEnvironment=FOO=bar</string>
+    <string name="saving_override">正在保存覆盖配置…</string>
+    <string name="applying_override">正在应用覆盖配置…</string>
 </resources>

@@ -67,7 +67,7 @@
  * ---------------------------------------------------------------------------*/
 
 #define DS_PROJECT_NAME "Droidspaces"
-#define DS_VERSION "6.4.5"
+#define DS_VERSION "6.5.0"
 #define DS_MIN_KERNEL_MAJOR 3
 #define DS_MIN_KERNEL_MINOR 10
 #define DS_RECOMMENDED_KERNEL_MAJOR 4
@@ -604,6 +604,15 @@ int android_seccomp_setup(int is_systemd, int block_nested_ns,
                           int privileged_mask);
 int ds_seccomp_apply_minimal(int privileged_mask, int userns_allowed);
 
+/* KernelSU container-escape hardening: ask KSU to mark the current thread
+ * (TIF_KSU_DISABLE_ESCAPE_WITH_ROOT via KSU_IOCTL_DISABLE_ESCAPE_TO_ROOT)
+ * so escape_with_root_profile() refuses to escalate it.  Best-effort,
+ * silent no-op on non-KSU kernels.  Must run BEFORE ds_seccomp_apply_minimal,
+ * whose magic-reboot block would otherwise deny the very reboot() this uses
+ * to obtain its fd.  The seccomp block is the load-bearing (tree-wide)
+ * barrier; this is per-thread defense-in-depth. */
+void ds_ksu_neutralize_root_escape(void);
+
 /* SELinux + Termux privilege helpers */
 int get_selinux_context(const char *path, char *buf, size_t size);
 const char *ds_extract_mls(const char *ctx);
@@ -799,12 +808,15 @@ int ds_nl_probe_nat_capability(char *reason, size_t rsz);
  * ---------------------------------------------------------------------------*/
 
 int ds_ipt_ensure_masquerade(const char *src_cidr);
+int ds_ipt_host_rules_present(const char *iface, const char *src_cidr,
+                              int expect_dnat);
 int ds_ipt_ensure_forward_accept(const char *iface);
 int ds_ipt_ensure_input_accept(const char *iface);
 int ds_ipt_ensure_mss_clamp(void);
 int ds_ipt_remove_iface_rules(const char *iface);
 int ds_ipt_remove_ds_rules(void);
-int ds_ipt_add_portforwards(struct ds_config *cfg, const char *container_ip);
+int ds_ipt_add_portforwards(struct ds_port_forward *pfs, int count,
+                            const char *container_ip);
 int ds_ipt_remove_portforwards(struct ds_config *cfg);
 
 /* ---------------------------------------------------------------------------

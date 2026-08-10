@@ -509,4 +509,33 @@
     <string name="repo_custom_url_invalid">Adresa URL musí začínat https://</string>
     <string name="repo_no_custom">Zatím neodebíráte žádné vlastní repozitáře.</string>
     <string name="debugging_section">Ladění</string>
+    <string name="inspect_unit">Prohlédnout jednotku</string>
+    <string name="edit_override">Upravit přepis konfigurace</string>
+    <string name="property_description">Popis</string>
+    <string name="property_load_state">Stav načtení</string>
+    <string name="property_active_state">Aktivní stav</string>
+    <string name="property_sub_state">Dílčí stav</string>
+    <string name="property_enablement">Stav povolení</string>
+    <string name="property_unit_file">Soubor jednotky</string>
+    <string name="property_drop_ins">Doplňkové soubory</string>
+    <string name="property_main_pid">Hlavní PID</string>
+    <string name="property_started_at">Čas spuštění</string>
+    <string name="property_restart_policy">Zásada restartu</string>
+    <string name="property_memory">Paměť</string>
+    <string name="property_cpu_time">Čas CPU (ns)</string>
+    <string name="unit_detail_load_error_title">Podrobnosti jednotky se nepodařilo načíst</string>
+    <string name="unit_detail_load_error_message">Jednotka už možná neexistuje nebo kontejner může být nedostupný.</string>
+    <string name="properties_section">Vlastnosti</string>
+    <string name="dependencies_section">Závislosti</string>
+    <string name="systemctl_status_section">systemctl status</string>
+    <string name="override_saved">Přepis konfigurace byl uložen. Aby se změna projevila, restartujte jednotku.</string>
+    <string name="failed_to_save_override">Přepis konfigurace se nepodařilo uložit</string>
+    <string name="override_removed">Přepis konfigurace byl odstraněn.</string>
+    <string name="failed_to_remove_override">Přepis konfigurace se nepodařilo odstranit</string>
+    <string name="edit_override_title">Upravit přepis konfigurace · %1$s</string>
+    <string name="delete_override">Odstranit přepis konfigurace</string>
+    <string name="save_override">Uložit přepis konfigurace</string>
+    <string name="override_placeholder">[Service]\nEnvironment=FOO=bar</string>
+    <string name="saving_override">Ukládání přepisu konfigurace…</string>
+    <string name="applying_override">Uplatňování přepisu konfigurace…</string>
 </resources>

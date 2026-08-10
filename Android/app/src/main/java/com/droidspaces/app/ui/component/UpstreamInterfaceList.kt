@@ -4,14 +4,19 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,8 +33,10 @@ import com.droidspaces.app.R
 import com.droidspaces.app.util.ContainerManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun UpstreamInterfaceList(
     upstreamInterfaces: List<String>,
@@ -45,21 +52,40 @@ fun UpstreamInterfaceList(
     }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Selected interfaces
-        upstreamInterfaces.forEach { iface ->
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = iface, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                    IconButton(onClick = { onInterfacesChange(upstreamInterfaces - iface) }) {
-                        Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+        // Selected interfaces (drag the handle to reorder; height is bounded since
+        // this LazyColumn sits inside the form's own scrolling Column)
+        val lazyListState = rememberLazyListState()
+        val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
+            onInterfacesChange(upstreamInterfaces.toMutableList().apply { add(to.index, removeAt(from.index)) })
+        }
+        LazyColumn(
+            state = lazyListState,
+            modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(upstreamInterfaces, key = { it }) { iface ->
+                ReorderableItem(reorderableState, key = iface) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.DragHandle,
+                                contentDescription = null,
+                                modifier = Modifier.draggableHandle().padding(end = 12.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(text = iface, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                            IconButton(onClick = { onInterfacesChange(upstreamInterfaces - iface) }) {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
                     }
                 }
             }

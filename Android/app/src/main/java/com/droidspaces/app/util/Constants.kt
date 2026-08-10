@@ -42,6 +42,7 @@ object Constants {
     const val KEY_AMOLED_MODE = "amoled_mode"
     const val KEY_USE_DYNAMIC_COLOR = "use_dynamic_color"
     const val KEY_THEME_PALETTE = "theme_palette"
+    const val KEY_TERMINAL_DARK_THEME = "terminal_dark_theme"
     const val KEY_APP_LOCALE = "app_locale"
     const val KEY_BACKEND_MODE = "backend_mode"
     const val KEY_DAEMON_MODE_ENABLED = "daemon_mode_enabled"
