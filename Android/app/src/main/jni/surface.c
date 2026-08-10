@@ -33,15 +33,6 @@ static void surface_resource_destroy(struct wl_resource *resource) {
         wl_resource_set_user_data(surf->subsurface_res, NULL);
         surf->subsurface_res = NULL;
     }
-    if (surf->layer_surface_res) {
-        wl_resource_destroy(
-            surf->layer_surface_res);
-    }
-
-    /*
-     * GTK shell role.
-     */
-    surf->gtk_surface = NULL;
     
     if (surf->current_buffer && surf->current_buffer->type == BUF_EGL && surf->current_buffer->u.egl)
         surf->current_buffer->u.egl->surf = NULL;
