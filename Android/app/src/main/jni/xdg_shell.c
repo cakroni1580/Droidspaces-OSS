@@ -296,9 +296,9 @@ void send_toplevel_configure(struct compositor_surface *surf) {
 
             if (s_max)
                 *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
-        }
-
-    } else {
+            
+        } 
+        else {
 
             /*
              * ====================================================
