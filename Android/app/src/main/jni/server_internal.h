@@ -454,6 +454,13 @@ bool gtk_shell_apply_tiling_geometry(
         uint32_t *width,
         uint32_t *height);
 
+bool gtk_shell_get_maximized_geometry(
+        struct compositor_surface *surf,
+        int32_t *x,
+        int32_t *y,
+        uint32_t *width,
+        uint32_t *height);
+
 void layer_shell_bind(
         struct wl_client *client,
         void *data,
