@@ -55,6 +55,9 @@
  */
  static uint32_t gtk_surface_get_tiling_state(
         struct compositor_surface *surf);
+bool gtk_shell_get_work_area(
+        struct compositor_surface *surf,
+        struct trierarch_work_area *area);
 /*
  * Keyboard focus bridge.
  *
