@@ -49,7 +49,6 @@ add_library(wayland-compositor SHARED
     gtk-shell.c
     surface.c
     compositor.c
-    xdg_shell.c
     layer_shell.c
     pointer_input.c
 
@@ -62,6 +61,7 @@ add_library(wayland-compositor SHARED
     ${COMPOSITOR_SRC}/linux_dmabuf.c
     ${COMPOSITOR_SRC}/subcompositor.c
     ${COMPOSITOR_SRC}/android_wlegl.c
+    ${COMPOSITOR_SRC}/xdg_shell.c
     ${COMPOSITOR_SRC}/output.c
     ${COMPOSITOR_SRC}/seat.c
     ${COMPOSITOR_SRC}/data_device.c
