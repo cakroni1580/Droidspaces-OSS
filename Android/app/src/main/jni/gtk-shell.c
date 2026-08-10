@@ -111,105 +111,6 @@ static const struct gtk_surface1_interface gtk_surface_impl;
 static const struct gtk_shell1_interface gtk_shell_impl;
 
 
-/* --------------------------------------------------------------- */
-/* wl_surface lifecycle                                             */
-/* --------------------------------------------------------------- */
-/*
- * ================================================================
- * GTK SHELL <-> LAYER-SHELL WORK-AREA BRIDGE
- * ================================================================
- *
- * GTK shell tidak membaca:
- *
- *     layer_surface->exclusive_zone
- *
- * secara langsung.
- *
- * Source of truth work-area tetap berada di layer-shell.c:
- *
- *     layer_shell_get_work_area()
- *
- * API ini sudah menangani:
- *
- *     exclusive_zone
- *     anchor
- *     margin
- *     WM_MODE_DIRECT / WM_MODE_NESTED
- *
- * GTK shell hanya meminta hasil akhirnya.
- *
- * Flow:
- *
- *     layer-shell exclusive_zone
- *              |
- *              v
- *     layer_shell_get_work_area()
- *              |
- *              v
- *       trierarch_work_area
- *              |
- *              v
- *       GTK tiling geometry
- * ================================================================
- */
-
-static bool gtk_shell_get_work_area(
-        struct compositor_surface *surf,
-        struct trierarch_work_area *area)
-{
-    if (!surf ||
-        !surf->srv ||
-        !area)
-        return false;
-
-    /*
-     * CONTEXT:
-     *
-     * layer-shell adalah satu-satunya authority untuk
-     * output work-area yang dipengaruhi exclusive zone.
-     *
-     * GTK shell tidak:
-     *
-     *   - membaca exclusive_zone;
-     *   - membaca anchor layer;
-     *   - menghitung margin layer;
-     *   - menghitung geometry layer surface.
-     *
-     * layer_shell_get_work_area() mengembalikan:
-     *
-     *     output geometry
-     *             -
-     *     seluruh active positive exclusive zones
-     *             =
-     *     usable work-area
-     *
-     * GTK kemudian melakukan tiling hanya di dalam area tersebut.
-     */
-    layer_shell_get_work_area(
-        surf->srv,
-        surf,
-        area);
-
-    /*
-     * Work-area harus mempunyai geometry valid.
-     */
-    if (area->width == 0 ||
-        area->height == 0) {
-        LOGE(
-            "gtk invalid layer-shell work-area "
-            "surface=%p area=%ux%u+%d+%d",
-            (void *)surf,
-            area->width,
-            area->height,
-            area->x,
-            area->y);
-
-        return false;
-    }
-
-    return true;
-}
-
 /*
  * CONTEXT:
  *
@@ -1188,6 +1089,156 @@ uint32_t compositor_surface_get_resize_edges(
         return COMPOSITOR_RESIZE_NONE;
 
     return surf->resize_edges;
+}
+
+/*
+ * ================================================================
+ * GTK SHELL <-> LAYER-SHELL WORK-AREA
+ * ================================================================
+ *
+ * CONTEXT:
+ *
+ * Work-area adalah geometry dasar untuk window-management
+ * WM_MODE_DIRECT.
+ *
+ * Source of truth:
+ *
+ *     layer-shell
+ *          ↓
+ *     exclusive zones
+ *          ↓
+ *     usable work-area
+ *
+ * GTK shell dan XDG shell menggunakan work-area yang sama.
+ *
+ * Penting:
+ *
+ *     gtk-shell protocol TIDAK harus pernah dipanggil client.
+ *
+ * Helper ini adalah compositor-side geometry API.
+ *
+ * Jika:
+ *
+ *     - tidak ada GTK client
+ *     - tidak ada layer-shell surface
+ *
+ * maka layer_shell_get_work_area() tetap mengembalikan
+ * output area normal.
+ * ================================================================
+ */
+bool gtk_shell_get_work_area(
+        struct compositor_surface *surf,
+        struct trierarch_work_area *area)
+{
+    if (!surf ||
+        !surf->srv ||
+        !area)
+        return false;
+
+    /*
+     * CONTEXT:
+     *
+     * layer-shell adalah authority untuk exclusive-zone
+     * reservation.
+     *
+     * GTK/XDG hanya mengonsumsi hasil akhirnya.
+     */
+    layer_shell_get_work_area(
+        surf->srv,
+        surf,
+        area);
+
+    if (area->width == 0 ||
+        area->height == 0) {
+
+        LOGE(
+            "gtk invalid layer-shell work-area "
+            "surface=%p area=%ux%u+%d+%d",
+            (void *)surf,
+            area->width,
+            area->height,
+            area->x,
+            area->y);
+
+        return false;
+    }
+
+    return true;
+}
+
+
+/*
+ * ================================================================
+ * GTK MAXIMIZED GEOMETRY
+ * ================================================================
+ *
+ * CONTEXT:
+ *
+ * WM_MODE_DIRECT maximize harus memakai geometry yang sama
+ * dengan GTK tiling.
+ *
+ * Flow:
+ *
+ *     layer-shell exclusive zone
+ *              ↓
+ *          work-area
+ *              ↓
+ *       GTK geometry policy
+ *              ↓
+ *        XDG maximize
+ *
+ * GTK-shell protocol tidak perlu dibind oleh client.
+ *
+ * Jika tidak ada layer-shell reservation:
+ *
+ *     work-area == output
+ *
+ * sehingga maximize tetap normal.
+ * ================================================================
+ */
+bool gtk_shell_get_maximized_geometry(
+        struct compositor_surface *surf,
+        int32_t *x,
+        int32_t *y,
+        uint32_t *width,
+        uint32_t *height)
+{
+    if (!surf ||
+        !surf->srv ||
+        !x ||
+        !y ||
+        !width ||
+        !height)
+        return false;
+
+    struct trierarch_work_area area;
+
+    if (!gtk_shell_get_work_area(
+            surf,
+            &area))
+        return false;
+
+    /*
+     * MAXIMIZED menggunakan seluruh usable work-area.
+     *
+     * Tidak membagi area seperti tiling LEFT/RIGHT/TOP/BOTTOM.
+     */
+    *x = area.x;
+    *y = area.y;
+    *width = area.width;
+    *height = area.height;
+
+    LOGI(
+        "gtk maximized geometry "
+        "surface=%p "
+        "workarea=%ux%u+%d+%d",
+        (void *)surf,
+        area.width,
+        area.height,
+        area.x,
+        area.y);
+
+    return true;
 }
 
 void gtk_shell_bind(
