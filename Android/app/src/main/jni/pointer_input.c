@@ -56,144 +56,68 @@ void track_input_resource(struct wl_list *list, struct wl_resource *res) {
     wl_list_insert(list, &node->link);
 }
 
-/*
- * Pointer target selection is protocol-agnostic.
+/* Pick the best surface to receive pointer focus.
  *
- * Any compositor_surface with a current buffer may receive pointer
- * input. This includes:
- *
- *   - xdg-shell
- *   - zwlr-layer-shell
- *   - other compositor-managed surfaces
- *
- * xdg_toplevel_res is intentionally NOT used as a pointer eligibility
- * condition. It is only relevant to WM operations such as drag/resize.
+ * NESTED mode: largest-area heuristic (single fullscreen client, no position tracking).
+ * DIRECT mode: hit-test by position + z_order; fallback to topmost if pointer is in a gap.
  */
-static struct compositor_surface *find_pointer_target(
-        struct wayland_server *srv,
-        wl_fixed_t fx,
-        wl_fixed_t fy) {
-
+static struct compositor_surface *find_pointer_target(struct wayland_server *srv,
+        wl_fixed_t fx, wl_fixed_t fy) {
     struct compositor_surface *surf;
 
     if (srv->wm_mode == WM_MODE_DIRECT) {
         float px = (float)wl_fixed_to_double(fx);
         float py = (float)wl_fixed_to_double(fy);
 
-        /*
-         * Pass 1:
-         * Hit-test every visible compositor surface and select the
-         * highest z_order surface under the pointer.
-         */
+        /* Pass 1: hit-test toplevels, pick the one with the highest z_order under the cursor. */
         struct compositor_surface *hit = NULL;
         int32_t hit_z = -1;
-
         wl_list_for_each(surf, &srv->surfaces, link) {
-            /*
-             * Cursor surfaces are rendered by the compositor and must
-             * never become pointer targets.
-             */
-            if (surf->parent || surf->is_cursor)
-                continue;
-
-            /*
-             * A surface without a buffer cannot receive pointer input.
-             *
-             * IMPORTANT:
-             * Do NOT check xdg_toplevel_res here.
-             */
-            if (!surf->current_buffer)
-                continue;
-
-            int32_t sw = 0;
-            int32_t sh = 0;
-
+            if (surf->parent || surf->is_cursor) continue;
+            if (!surf->current_buffer) continue;
+            int32_t sw = 0, sh = 0;
             compositor_surface_get_logical_size(surf, &sw, &sh);
-
-            if (sw <= 0 || sh <= 0)
-                continue;
-
-            /*
-             * wm_x/wm_y are compositor output coordinates.
-             * This is shared by XDG and layer-shell surfaces.
-             */
+            if (sw <= 0 || sh <= 0) continue;
             float x0 = (float)surf->wm_x;
             float y0 = (float)surf->wm_y;
-
-            if (px >= x0 &&
-                px < x0 + (float)sw &&
-                py >= y0 &&
-                py < y0 + (float)sh) {
-
+            if (px >= x0 && px < x0 + (float)sw && py >= y0 && py < y0 + (float)sh) {
                 if (surf->z_order > hit_z) {
                     hit_z = surf->z_order;
                     hit = surf;
                 }
             }
         }
+        if (hit) return hit;
 
-        if (hit)
-            return hit;
-
-        /*
-         * Pass 2:
-         * Pointer is currently in a gap.
-         *
-         * Keep the existing fallback behavior, but make it
-         * protocol-agnostic as well.
-         */
+        /* Pass 2: pointer is in a gap — return the topmost toplevel regardless of position. */
         struct compositor_surface *top = NULL;
         int32_t top_z = -1;
-
         wl_list_for_each(surf, &srv->surfaces, link) {
-            if (surf->parent || surf->is_cursor)
-                continue;
-
-            if (!surf->current_buffer)
-                continue;
-
-            if (surf->z_order > top_z) {
-                top_z = surf->z_order;
-                top = surf;
-            }
+            if (surf->parent || surf->is_cursor) continue;
+            if (surf->z_order > top_z) { top_z = surf->z_order; top = surf; }
         }
-
         return top;
     }
 
-    /*
-     * NESTED mode:
-     *
-     * Choose the largest usable surface.
-     *
-     * There is deliberately NO xdg_toplevel bonus and NO
-     * xdg_toplevel requirement. Layer-shell and XDG are treated
-     * equally for pointer targeting.
-     */
+    /* NESTED mode: largest area + xdg_toplevel bonus (original behaviour). */
     struct compositor_surface *best = NULL;
     int64_t best_score = 0;
-
     wl_list_for_each(surf, &srv->surfaces, link) {
-        if (surf->parent || surf->is_cursor)
+        if (surf->parent || surf->is_cursor) continue;
+        int64_t score = 0;
+        if (surf->current_buffer) {
+            int32_t w = buffer_ref_width(surf->current_buffer);
+            int32_t h = buffer_ref_height(surf->current_buffer);
+            score = (int64_t)w * h;
+        }
+        if (surf->xdg_toplevel_res) score += 100000000LL;
+        if (score < 128 * 128 && wl_list_empty(&surf->children) && !surf->xdg_toplevel_res)
             continue;
-
-        if (!surf->current_buffer)
-            continue;
-
-        int32_t w = buffer_ref_width(surf->current_buffer);
-        int32_t h = buffer_ref_height(surf->current_buffer);
-
-        if (w <= 0 || h <= 0)
-            continue;
-
-        int64_t score = (int64_t)w * h;
-
         if (score > best_score) {
             best_score = score;
             best = surf;
         }
     }
-
     return best;
 }
 
@@ -212,117 +136,47 @@ static void pointer_send_enter(struct wayland_server *srv,
     }
 }
 
-/*
- * Convert compositor/output coordinates into surface-local coordinates.
- *
- * This is protocol-agnostic.
- *
- * In DIRECT mode both XDG and layer-shell surfaces use wm_x/wm_y
- * as their position in the compositor output layout.
- */
-static inline void surface_local_coords(
-        struct wayland_server *srv,
-        struct compositor_surface *surf,
-        wl_fixed_t in_x,
-        wl_fixed_t in_y,
-        wl_fixed_t *out_x,
-        wl_fixed_t *out_y) {
-
-    if (!out_x || !out_y)
-        return;
-
-    if (srv &&
-        srv->wm_mode == WM_MODE_DIRECT &&
-        surf) {
-
-        double dx =
-            wl_fixed_to_double(in_x) -
-            (double)surf->wm_x;
-
-        double dy =
-            wl_fixed_to_double(in_y) -
-            (double)surf->wm_y;
-
+static inline void surface_local_coords(struct wayland_server *srv, struct compositor_surface *surf,
+        wl_fixed_t in_x, wl_fixed_t in_y, wl_fixed_t *out_x, wl_fixed_t *out_y) {
+    if (!out_x || !out_y) return;
+    if (srv && srv->wm_mode == WM_MODE_DIRECT && surf && surf->xdg_toplevel_res) {
+        /* wl_pointer coordinates are surface-local; translate from output coords. */
+        double dx = wl_fixed_to_double(in_x) - (double)surf->wm_x;
+        double dy = wl_fixed_to_double(in_y) - (double)surf->wm_y;
         *out_x = wl_fixed_from_double(dx);
         *out_y = wl_fixed_from_double(dy);
         return;
     }
-
     *out_x = in_x;
     *out_y = in_y;
 }
 
-/*
- * Clamp compositor window coordinates.
- *
- * Keep this helper before wm_apply_move_clamped().
- * wm_x/wm_y are int32_t compositor output coordinates.
- */
-static inline int32_t clamp_i32(
-        int32_t value,
-        int32_t min_value,
-        int32_t max_value) {
-
-    if (value < min_value)
-        return min_value;
-
-    if (value > max_value)
-        return max_value;
-
-    return value;
+static inline int32_t clamp_i32(int32_t v, int32_t lo, int32_t hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
 }
 
-static void wm_apply_move_clamped(
-        struct wayland_server *srv,
-        struct compositor_surface *surf,
-        int32_t new_x,
-        int32_t new_y) {
-
-    if (!srv || !surf)
-        return;
-
-    int32_t sw = 0;
-    int32_t sh = 0;
-
-    compositor_surface_get_logical_size(
-        surf,
-        &sw,
-        &sh);
-
-    if (sw <= 0 ||
-        sh <= 0 ||
-        srv->output_width <= 0 ||
-        srv->output_height <= 0) {
-
+static void wm_apply_move_clamped(struct wayland_server *srv, struct compositor_surface *surf,
+        int32_t new_x, int32_t new_y) {
+    if (!srv || !surf) return;
+    int32_t sw = 0, sh = 0;
+    compositor_surface_get_logical_size(surf, &sw, &sh);
+    if (sw <= 0 || sh <= 0 || srv->output_width <= 0 || srv->output_height <= 0) {
         surf->wm_x = new_x;
         surf->wm_y = new_y;
         return;
     }
-
     /* Keep at least some part of the window visible. */
     int32_t max_x = srv->output_width - 1;
     int32_t max_y = srv->output_height - 1;
-
     int32_t min_x = -(sw - 32);
     int32_t min_y = -(WM_TITLEBAR_HOT_Y - 8);
-
-    if (max_x < 0)
-        max_x = 0;
-
-    if (max_y < 0)
-        max_y = 0;
-
-    surf->wm_x = clamp_i32(
-        new_x,
-        min_x,
-        max_x);
-
-    surf->wm_y = clamp_i32(
-        new_y,
-        min_y,
-        max_y);
+    if (max_x < 0) max_x = 0;
+    if (max_y < 0) max_y = 0;
+    surf->wm_x = clamp_i32(new_x, min_x, max_x);
+    surf->wm_y = clamp_i32(new_y, min_y, max_y);
 }
-
 
 static void wm_apply_resize_clamped(struct wayland_server *srv, struct compositor_surface *surf,
         int32_t new_x, int32_t new_y, int32_t new_w, int32_t new_h) {
@@ -484,30 +338,9 @@ void compositor_pointer_right_click(wayland_server_t *srv_opaque, uint32_t time_
         compositor_raise_surface(srv, surf);
     }
     if (surf && surf->resource) {
-        wl_fixed_t lx = fx;
-        wl_fixed_t ly = fy;
-
-        /*
-         * wl_pointer coordinates are surface-local.
-         * This applies equally to XDG and layer-shell.
-         */
-        surface_local_coords(srv, surf, fx, fy, &lx, &ly);
-
-        pointer_send_motion(srv, surf, time_ms, lx, ly);
-
-        pointer_send_button(
-            srv,
-            surf,
-            time_ms,
-            BTN_RIGHT,
-            WL_POINTER_BUTTON_STATE_PRESSED);
-
-        pointer_send_button(
-            srv,
-            surf,
-            time_ms,
-            BTN_RIGHT,
-            WL_POINTER_BUTTON_STATE_RELEASED);
+        pointer_send_motion(srv, surf, time_ms, fx, fy);
+        pointer_send_button(srv, surf, time_ms, BTN_RIGHT, WL_POINTER_BUTTON_STATE_PRESSED);
+        pointer_send_button(srv, surf, time_ms, BTN_RIGHT, WL_POINTER_BUTTON_STATE_RELEASED);
     }
     pthread_mutex_unlock(&srv->surfaces_mutex);
 }
