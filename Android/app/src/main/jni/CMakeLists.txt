@@ -51,6 +51,7 @@ add_library(wayland-compositor SHARED
     compositor.c
     xdg_shell.c
     layer_shell.c
+    pointer_input.c
 
     # Compositor core — identical set to Android.mk, minus jni_bridge.c
     # renderer.c is included here because WaylandSurface uses EGL rendering
@@ -63,7 +64,6 @@ add_library(wayland-compositor SHARED
     ${COMPOSITOR_SRC}/android_wlegl.c
     ${COMPOSITOR_SRC}/output.c
     ${COMPOSITOR_SRC}/seat.c
-    ${COMPOSITOR_SRC}/pointer_input.c
     ${COMPOSITOR_SRC}/data_device.c
     ${COMPOSITOR_SRC}/single_pixel_buffer.c
     ${COMPOSITOR_SRC}/viewporter.c
