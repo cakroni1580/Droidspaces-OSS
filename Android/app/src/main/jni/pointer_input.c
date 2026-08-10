@@ -252,6 +252,77 @@ static inline void surface_local_coords(
     *out_y = in_y;
 }
 
+/*
+ * Clamp compositor window coordinates.
+ *
+ * Keep this helper before wm_apply_move_clamped().
+ * wm_x/wm_y are int32_t compositor output coordinates.
+ */
+static inline int32_t clamp_i32(
+        int32_t value,
+        int32_t min_value,
+        int32_t max_value) {
+
+    if (value < min_value)
+        return min_value;
+
+    if (value > max_value)
+        return max_value;
+
+    return value;
+}
+
+static void wm_apply_move_clamped(
+        struct wayland_server *srv,
+        struct compositor_surface *surf,
+        int32_t new_x,
+        int32_t new_y) {
+
+    if (!srv || !surf)
+        return;
+
+    int32_t sw = 0;
+    int32_t sh = 0;
+
+    compositor_surface_get_logical_size(
+        surf,
+        &sw,
+        &sh);
+
+    if (sw <= 0 ||
+        sh <= 0 ||
+        srv->output_width <= 0 ||
+        srv->output_height <= 0) {
+
+        surf->wm_x = new_x;
+        surf->wm_y = new_y;
+        return;
+    }
+
+    /* Keep at least some part of the window visible. */
+    int32_t max_x = srv->output_width - 1;
+    int32_t max_y = srv->output_height - 1;
+
+    int32_t min_x = -(sw - 32);
+    int32_t min_y = -(WM_TITLEBAR_HOT_Y - 8);
+
+    if (max_x < 0)
+        max_x = 0;
+
+    if (max_y < 0)
+        max_y = 0;
+
+    surf->wm_x = clamp_i32(
+        new_x,
+        min_x,
+        max_x);
+
+    surf->wm_y = clamp_i32(
+        new_y,
+        min_y,
+        max_y);
+}
+
 static void wm_apply_move_clamped(struct wayland_server *srv, struct compositor_surface *surf,
         int32_t new_x, int32_t new_y) {
     if (!srv || !surf) return;
