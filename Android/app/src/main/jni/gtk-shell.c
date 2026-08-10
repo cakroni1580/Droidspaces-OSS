@@ -158,9 +158,6 @@ static bool gtk_shell_get_tiling_geometry(
     enum compositor_tiling_state tiling =
         compositor_surface_get_tiling(surf);
 
-    if (tiling == COMPOSITOR_TILING_NONE)
-        return false;
-
     struct trierarch_work_area area;
 
     /*
@@ -270,6 +267,8 @@ static bool gtk_shell_get_tiling_geometry(
         break;
 
     case COMPOSITOR_TILING_NONE:
+        break;
+
     default:
         return false;
     }
@@ -849,121 +848,6 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
     .system_bell     = gtk_shell_system_bell,
     .notify_launch   = gtk_shell_notify_launch,
 };
-
-void send_gtk_surface_configure(
-        struct compositor_surface *surf)
-{
-    if (!surf ||
-        !surf->gtk_surface ||
-        !surf->srv)
-        return;
-
-    struct gtk_surface_state *state =
-        surf->gtk_surface;
-
-    if (!state->resource)
-        return;
-
-    enum compositor_tiling_state tiling =
-        compositor_surface_get_tiling(surf);
-
- /*
- * ============================================================
- * CONTEXT:
- *
- * GTK shell hanya melaporkan window-management state GTK.
- *
- * Geometry XDG tidak dikirim melalui gtk-shell.
- *
- * Untuk surface tiled:
- *
- *     layer-shell
- *          ↓
- *     exclusive zones
- *          ↓
- *     usable work-area
- *          ↓
- *     GTK tiling
- *          ↓
- *     XDG toplevel geometry
- *
- * GTK configure di sini hanya membawa:
- *
- *     - tiled state
- *     - resize edge constraints
- *
- * Geometry aktual tetap menjadi bagian dari
- * XDG toplevel configure.
- *
- * Jangan return hanya karena tiling == NONE.
- * NONE adalah floating state yang valid.
- * ============================================================
- */
-
-    struct wl_array states;
-    struct wl_array edges;
-
-    wl_array_init(&states);
-    wl_array_init(&edges);
-
-    uint32_t gtk_state =
-        gtk_surface_get_tiling_state(surf);
-
-    /*
-     * Tiling state hanya dikirim jika memang sedang tiled.
-     *
-     * NONE berarti floating dan tidak memiliki
-     * GTK tiled state.
-     */
-    if (gtk_state != 0) {
-
-        uint32_t *state_id =
-            wl_array_add(
-                &states,
-                sizeof(*state_id));
-
-        if (state_id)
-            *state_id = gtk_state;
-    }
-
-    /*
-     * Resize constraints tetap berasal dari
-     * compositor_surface.
-     */
-    gtk_surface_build_edge_constraints(
-        surf,
-        &edges);
-
-    /*
-     * GTK configure hanya membawa metadata state.
-     *
-     * Geometry XDG tetap dikirim oleh send_toplevel_configure().
-     */
-    gtk_surface1_send_configure(
-        state->resource,
-        &states);
-
-    if (wl_resource_get_version(state->resource) >= 2) {
-
-        gtk_surface1_send_configure_edges(
-            state->resource,
-            &edges);
-    }
-
-    LOGI(
-        "GTK configure "
-        "surface=%p "
-        "tiling=%d "
-        "gtk_state=%u "
-        "resize_edges=0x%x",
-        (void *)surf,
-        tiling,
-        gtk_state,
-        compositor_surface_get_resize_edges(surf));
-
-    wl_array_release(&states);
-    wl_array_release(&edges);
-}
 
 bool gtk_shell_apply_tiling_geometry(
         struct compositor_surface *surf,
