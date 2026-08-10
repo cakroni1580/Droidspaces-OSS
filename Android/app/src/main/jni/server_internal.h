@@ -447,8 +447,6 @@ struct compositor_buffer_ref *buffer_attach_egl_buffer(struct wl_client *client,
 /* android_wlegl.c: Android native buffer support */
 void android_wlegl_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
 void gtk_shell_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
-void send_gtk_surface_configure(
-        struct compositor_surface *surf);
 bool gtk_shell_apply_tiling_geometry(
         struct compositor_surface *surf,
         uint32_t *width,
