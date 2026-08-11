@@ -360,16 +360,34 @@ static void gtk_surface_wl_surface_destroy(
                         surface_destroy_listener);
 
     /*
-     * wl_surface sudah mati.
+     * CONTEXT:
      *
-     * Putuskan seluruh reference agar request GTK berikutnya
-     * tidak pernah mengakses compositor_surface yang sudah tidak
-     * valid.
+     * wl_surface sudah dihancurkan.
+     *
+     * Sebelum reference lokal diputus, bersihkan reverse
+     * attachment pada compositor_surface.
+     *
+     * Ini menjaga:
+     *
+     *     compositor_surface->gtk_surface == NULL
+     *
+     * setelah wl_surface mati.
+     */
+    if (state->surface &&
+        state->surface->gtk_surface == state) {
+
+        state->surface->gtk_surface = NULL;
+    }
+
+    /*
+     * gtk_surface_state tidak lagi boleh mengakses
+     * compositor_surface maupun wl_surface.
      */
     state->wl_surface = NULL;
     state->surface = NULL;
 
-    LOGI("gtk_surface wl_surface destroyed");
+    LOGI(
+        "gtk_surface wl_surface destroyed");
 }
 
 
