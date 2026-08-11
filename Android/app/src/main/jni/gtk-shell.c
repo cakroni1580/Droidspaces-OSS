@@ -694,6 +694,8 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
  * Dengan kontrak ini GTK selalu mendapatkan rectangle usable.
  * ================================================================
  */
+// AFTER
+
 bool gtk_shell_get_work_area(
         struct compositor_surface *surf,
         struct trierarch_work_area *area)
@@ -704,16 +706,37 @@ bool gtk_shell_get_work_area(
         return false;
 
     /*
-     * ------------------------------------------------------------
-     * PRIMARY SOURCE:
+     * ============================================================
+     * WORK-AREA AUTHORITY
+     * ============================================================
      *
-     * layer-shell final work area.
+     * GTK shell bukan geometry authority.
      *
-     * gtk-shell tidak mengetahui bagaimana area tersebut dihitung.
-     * Seluruh exclusive-zone policy tetap berada di layer-shell.c.
+     * layer_shell_get_work_area() adalah provider final work-area.
      *
-     * exclude = NULL karena GTK/XDG bukan layer-shell authority.
-     * ------------------------------------------------------------
+     * Contract layer-shell:
+     *
+     *     initial area
+     *         =
+     *     srv->output_width/height
+     *
+     *     kemudian dikurangi oleh
+     *     valid positive exclusive zones.
+     *
+     * Jadi physical display fallback TIDAK perlu dilakukan
+     * lagi di sini.
+     *
+     * GTK cukup mengonsumsi hasil final tersebut.
+     *
+     * Tidak ada:
+     *
+     *     compositor_get_physical_display_work_area()
+     *     xdg work-area calculation
+     *     exclusive-zone calculation
+     *     geometry subtraction
+     *
+     * di gtk-shell.c.
+     * ============================================================
      */
 
     layer_shell_get_work_area(
@@ -721,76 +744,30 @@ bool gtk_shell_get_work_area(
         NULL,
         area);
 
-    /*
-     * ------------------------------------------------------------
-     * Jika layer-shell menyediakan final work-area yang valid,
-     * langsung konsumsi hasil tersebut.
-     *
-     * TIDAK ADA subtraction exclusive-zone di sini.
-     * ------------------------------------------------------------
-     */
-    if (area->width > 0 &&
-        area->height > 0) {
+    if (area->width == 0 ||
+        area->height == 0) {
 
-        LOGI(
-            "gtk work-area source=layer-shell-final "
+        LOGE(
+            "gtk work-area invalid "
             "surface=%p "
+            "physical-display=%ux%u "
             "area=%ux%u+%d+%d",
             (void *)surf,
+            surf->srv->output_width,
+            surf->srv->output_height,
             area->width,
             area->height,
             area->x,
             area->y);
 
-        return true;
-    }
-
-/*
- * ============================================================
- * FALLBACK: PHYSICAL DISPLAY
- * ============================================================
- *
- * layer_shell_get_work_area() adalah primary source.
- *
- * Jika belum ada layer-shell yang memberikan reservation,
- * atau hasil final work-area tidak valid, GTK fallback
- * langsung ke physical display Trierarch.
- *
- * Physical display authority:
- *
- *     srv->output_width
- *     srv->output_height
- *
- * Tidak ada API tambahan.
- * Tidak ada dependency ke xdg-shell.
- * Tidak ada pembacaan exclusive_zone di GTK.
- */
-    struct wayland_server *srv = surf->srv;
-
-    if (srv->output_width == 0 ||
-        srv->output_height == 0) {
-
-        LOGE(
-            "layershell are unavailable "
-            "surface=%p "
-            "physical-display=%ux%u",
-            (void *)surf,
-            srv->output_width,
-            srv->output_height);
-
         return false;
     }
 
-    area->x = 0;
-    area->y = 0;
-    area->width = srv->output_width;
-    area->height = srv->output_height;
-
     LOGI(
-        "gtk work-area source=physical-display-fallback "
+        "gtk work-area source=layer-shell "
         "surface=%p "
         "area=%ux%u+%d+%d",
-        (void *),
+        (void *)surf,
         area->width,
         area->height,
         area->x,
