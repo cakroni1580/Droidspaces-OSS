@@ -387,47 +387,21 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
     wl_resource_set_implementation(toplevel, &xdg_toplevel_impl, surf, xdg_toplevel_resource_destroy);
 
     /* Assign a cascaded initial position and a unique stacking z_order. */
-    /*
-     * CONTEXT:
-     *
-     * Initial XDG toplevel geometry is established here.
-     *
-     * IMPORTANT:
-     *
-     * layer_shell_get_work_area() is WM-mode neutral.
-     * It only reports the output area remaining after
-     * layer-shell exclusive zones.
-     *
-     * WM_MODE_DIRECT / WM_MODE_NESTED remain global XDG
-     * policy and are intentionally NOT evaluated here.
-     *
-     * At this stage we only establish the initial geometry
-     * relative to the compositor's current usable output area.
-     */
     if (surf->srv) {
-
-        struct trierarch_work_area area;
-
-        /*
-         * CONTEXT:
-         *
-         * Initial XDG position juga harus berada pada geometry
-         * yang sama dengan maximize/tiling.
-         *
-         * Tidak boleh ada geometry path kedua.
-         */
-        if (!xdg_get_layer_work_area(
-                surf,
-                &area)) {
- 
-            LOGE(
-                "xdg get_toplevel: unable to obtain "
-                "layer-shell work-area surface=%p",
-                 (void *)surf);
-
-            return;
-        }
+        surf->wm_x = surf->srv->cascade_x;
+        surf->wm_y = surf->srv->cascade_y;
+        surf->z_order = surf->srv->next_z_order++;
+        surf->srv->cascade_x += 40;
+        surf->srv->cascade_y += 40;
+        /* Wrap cascade within the top-left quarter so windows stay accessible. */
+        int32_t max_x = surf->srv->output_width / 4;
+        int32_t max_y = surf->srv->output_height / 4;
+        if (max_x < 40) max_x = 40;
+        if (max_y < 40) max_y = 40;
+        if (surf->srv->cascade_x >= max_x) surf->srv->cascade_x = 0;
+        if (surf->srv->cascade_y >= max_y) surf->srv->cascade_y = 0;
     }
+
     send_toplevel_configure(surf);
 }
 
