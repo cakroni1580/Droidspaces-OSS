@@ -321,7 +321,7 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         if (surf->wm_resizing) {
             uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
             if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
-        )    
+        }    
         if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
             /* Compositor-driven resize: send requested size (best-effort). */
             w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
