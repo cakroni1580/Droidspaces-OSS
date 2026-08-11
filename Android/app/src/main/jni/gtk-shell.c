@@ -1247,6 +1247,156 @@ bool gtk_shell_get_maximized_geometry(
     return true;
 }
 
+/*
+ * ================================================================
+ * GTK SURFACE CONFIGURE
+ * ================================================================
+ *
+ * CONTEXT:
+ *
+ * output.c adalah trigger geometry/state update.
+ *
+ * gtk-shell.c BUKAN geometry authority.
+ *
+ * Jalur:
+ *
+ *     output.c
+ *          |
+ *          +--> xdg-shell configure
+ *          |
+ *          +--> layer-shell configure
+ *          |
+ *          +--> GTK shell configure
+ *
+ * GTK configure hanya mem-publish state compositor kepada
+ * gtk_surface1.
+ *
+ * Geometry X/Y tidak dihitung ulang di sini.
+ * Geometry XDG tetap berasal dari:
+ *
+ *     compositor_surface
+ *             +
+ *     layer-shell work-area
+ *             +
+ *     GTK tiling policy
+ *
+ * Layer-shell tidak pernah dimodifikasi oleh helper ini.
+ * ================================================================
+ */
+void send_gtk_surface_configure(
+        struct compositor_surface *surf)
+{
+    if (!surf ||
+        !surf->srv ||
+        !surf->gtk_surface ||
+        !surf->gtk_surface->resource)
+        return;
+
+    /*
+     * ============================================================
+     * GTK surface tanpa XDG toplevel
+     * ============================================================
+     *
+     * gtk_surface1 boleh attached ke wl_surface yang bukan
+     * XDG toplevel.
+     *
+     * Tetapi state window-management seperti tiling hanya
+     * berlaku pada XDG toplevel.
+     *
+     * Jangan mengarang GTK geometry untuk layer-shell.
+     */
+    if (!gtk_surface_is_xdg_toplevel(surf)) {
+
+        LOGI(
+            "gtk configure skipped "
+            "surface=%p reason=not-xdg-toplevel "
+            "xdg_surface=%p xdg_toplevel=%p",
+            (void *)surf,
+            (void *)surf->xdg_surface_res,
+            (void *)surf->xdg_toplevel_res);
+
+        return;
+    }
+
+    /*
+     * ============================================================
+     * TILING STATE
+     * ============================================================
+     *
+     * State berasal dari compositor_surface.
+     *
+     * GTK shell hanya menerjemahkannya ke protocol state.
+     */
+    uint32_t state =
+        gtk_surface_get_tiling_state(surf);
+
+    /*
+     * ============================================================
+     * RESIZE EDGES
+     * ============================================================
+     *
+     * Edge constraint juga berasal dari compositor state.
+     *
+     * GTK tidak menentukan sendiri edge yang boleh di-resize.
+     */
+    struct wl_array edges;
+
+    gtk_surface_build_edge_constraints(
+        surf,
+        &edges);
+
+    /*
+     * ============================================================
+     * CONFIGURE SERIAL
+     * ============================================================
+     *
+     * Serial berasal dari display compositor yang sama dengan
+     * xdg-shell dan layer-shell.
+     */
+    uint32_t serial =
+        wl_display_next_serial(
+            surf->srv->display);
+
+    /*
+     * ============================================================
+     * GTK configure
+     * ============================================================
+     *
+     * NOTE:
+     *
+     * Nama/argument event harus mengikuti generated
+     * gtk-shell-server-protocol.h yang digunakan Trierarch.
+     *
+     * State:
+     *
+     *     GTK_SURFACE1_STATE_*
+     *
+     * Edges:
+     *
+     *     GTK_SURFACE1_EDGE_CONSTRAINT_*
+     *
+     * Geometry tidak dihitung oleh GTK shell.
+     */
+    gtk_surface1_send_configure(
+        surf->gtk_surface->resource,
+        serial,
+        state,
+        &edges);
+
+    LOGI(
+        "gtk surface configure "
+        "surface=%p "
+        "serial=%u "
+        "state=0x%x "
+        "edges=%zu",
+        (void *)surf,
+        serial,
+        state,
+        edges.size);
+
+    wl_array_release(&edges);
+}
+
 void gtk_shell_bind(
         struct wl_client *client,
         void *data,
