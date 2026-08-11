@@ -183,24 +183,13 @@ static void layer_surface_set_exclusive_zone(
 
         return;
     }
-
-    /*
-     * IMPORTANT:
-     *
-     * Simpan request apa adanya.
-     *
-     * Jangan mengubah zone berdasarkan WM_MODE.
-     * Jangan mengubah ukuran layer surface di sini.
-     *
-     * Reservation baru dikonsumsi oleh DIRECT work-area
-     * calculation.
-     */
     surf->layer_surface->exclusive_zone = zone;
 
     LOGI(
-        "layer exclusive zone "
-        "surf=%p zone=%d anchor=0x%x "
-        "margin=%d,%d,%d,%d",
+       "layer exclusive reservation changed "
+        "surf=%p zone=%d "
+        "geometry remains independent "
+        "anchor=0x%x margin=%d,%d,%d,%d",
         (void *)surf,
         zone,
         surf->layer_surface->anchor,
@@ -690,22 +679,34 @@ static void layer_shell_get_layer_surface(
          */
         send_layer_surface_configure(surf);
 }
+/* AFTER */
 
 /*
- * Calculate layer-shell geometry.
+ * ================================================================
+ * CONTEXT:
  *
- * Trierarch policy follows the same conceptual model as Phoc:
+ * Layer-shell geometry adalah geometry milik layer surface sendiri.
  *
- *   - requested size is a size hint;
- *   - anchor determines whether an axis is stretched;
- *   - margins reduce the available geometry;
- *   - exclusive_zone reserves output space but does NOT become
- *     the surface size itself;
- *   - wm_x/wm_y contain the final output position used by
- *     compositor_foreach_surface() in DIRECT mode.
+ * Geometry ini TIDAK boleh berasal dari:
+ *
+ *     layer_shell_get_work_area()
+ *     exclusive_zone
+ *     GTK tiling
+ *     XDG geometry
+ *
+ * Sebaliknya, work-area hanya merupakan reservation information
+ * untuk consumer lain.
  *
  * IMPORTANT:
- * layer-shell does not have its own render list.
+ *
+ * layer_surface_calculate_size() tidak lagi menulis:
+ *
+ *     surf->wm_x
+ *     surf->wm_y
+ *
+ * wm_x/wm_y dipakai sebagai geometry compositor/XDG.
+ * Layer-shell hanya menghasilkan geometry protocol configure.
+ * ================================================================
  */
 static void layer_surface_calculate_size(
         struct compositor_surface *surf,
@@ -713,24 +714,32 @@ static void layer_surface_calculate_size(
         uint32_t *height)
 {
     struct layer_surface_state *ls =
-            surf->layer_surface;
+        surf ? surf->layer_surface : NULL;
 
     struct wayland_server *srv =
-            surf->srv;
+        surf ? surf->srv : NULL;
 
-    uint32_t ow =
-            srv->output_width > 0 ?
-            srv->output_width : 1;
+    if (!srv || !width || !height) {
+        if (width)
+            *width = 1;
 
-    uint32_t oh =
-            srv->output_height > 0 ?
-            srv->output_height : 1;
+        if (height)
+            *height = 1;
+
+        return;
+    }
+
+    const uint32_t ow =
+        srv->output_width > 0 ?
+        srv->output_width : 1;
+
+    const uint32_t oh =
+        srv->output_height > 0 ?
+        srv->output_height : 1;
 
     if (!ls) {
         *width = ow;
         *height = oh;
-        surf->wm_x = 0;
-        surf->wm_y = 0;
         return;
     }
 
@@ -753,61 +762,71 @@ static void layer_surface_calculate_size(
     const bool stretch_x = left && right;
     const bool stretch_y = top && bottom;
 
+    /*
+     * ------------------------------------------------------------
+     * X dimension
+     * ------------------------------------------------------------
+     *
+     * exclusive_zone sengaja TIDAK digunakan.
+     *
+     * Reservation tidak mengecilkan layer surface.
+     */
     if (stretch_x) {
         int64_t w =
             (int64_t)ow -
             ls->margin_left -
             ls->margin_right;
-        *width = w > 0 ? (uint32_t)w : 1;
+
+        *width = w > 0 ?
+            (uint32_t)w : 1;
+
     } else if (ls->requested_width > 0) {
+
         *width = ls->requested_width;
+
     } else {
+
         *width = 1;
     }
 
+    /*
+     * ------------------------------------------------------------
+     * Y dimension
+     * ------------------------------------------------------------
+     *
+     * exclusive_zone sengaja TIDAK digunakan.
+     */
     if (stretch_y) {
         int64_t h =
             (int64_t)oh -
             ls->margin_top -
             ls->margin_bottom;
-        *height = h > 0 ? (uint32_t)h : 1;
+
+        *height = h > 0 ?
+            (uint32_t)h : 1;
+
     } else if (ls->requested_height > 0) {
+
         *height = ls->requested_height;
+
     } else {
+
         *height = 1;
     }
-    
-    if (left) {
-        surf->wm_x =
-            ls->margin_left;
 
-    } else if (right) {
-        surf->wm_x =
-            (int32_t)ow -
-            (int32_t)*width -
-            ls->margin_right;
-
-    } else {
-        surf->wm_x =
-            ((int32_t)ow -
-            (int32_t)*width) / 2;
-    }
-
-   if (top) {
-        surf->wm_y =
-            ls->margin_top;
-
-    } else if (bottom) {
-        surf->wm_y =
-            (int32_t)oh -
-            (int32_t)*height -
-            ls->margin_bottom;
-
-    } else {
-        surf->wm_y =
-            ((int32_t)oh -
-             (int32_t)*height) / 2;
-    }
+    /*
+     * ============================================================
+     * IMPORTANT:
+     *
+     * Jangan menulis surf->wm_x / surf->wm_y di sini.
+     *
+     * Layer-shell geometry tidak boleh menjadi geometry authority
+     * XDG/compositor.
+     *
+     * Position layer surface untuk protocol configure dihitung
+     * hanya ketika diperlukan oleh layer-shell sendiri.
+     * ============================================================
+     */
 }
 
 void layer_shell_get_work_area(
@@ -1137,8 +1156,65 @@ bool layer_surface_get_geometry(
             width,
             height);
 
-    *x = surf->wm_x;
-    *y = surf->wm_y;
+    /*
+     * Layer-shell position adalah protocol geometry.
+     * Jangan mengambil geometry XDG/compositor dari wm_x/wm_y.
+     */
+    struct layer_surface_state *ls =
+        surf->layer_surface;
+
+    struct wayland_server *srv =
+        surf->srv;
+
+    const uint32_t ow =
+        srv->output_width > 0 ?
+        srv->output_width : 1;
+
+    const uint32_t oh =
+        srv->output_height > 0 ?
+        srv->output_height : 1;
+
+    const bool left =
+        (ls->anchor &
+         ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) != 0;
+
+    const bool right =
+        (ls->anchor &
+         ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) != 0;
+
+    const bool top =
+        (ls->anchor &
+         ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) != 0;
+
+    const bool bottom =
+        (ls->anchor &
+         ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
+
+    if (left) {
+        *x = ls->margin_left;
+    } else if (right) {
+        *x =
+            (int32_t)ow -
+            (int32_t)*width -
+            ls->margin_right;
+    } else {
+        *x =
+            ((int32_t)ow -
+            (int32_t)*width) / 2;
+    }
+
+    if (top) {
+        *y = ls->margin_top;
+    } else if (bottom) {
+        *y =
+            (int32_t)oh -
+            (int32_t)*height -
+            ls->margin_bottom;
+    } else {
+        *y =
+            ((int32_t)oh -
+             (int32_t)*height) / 2;
+    }
 
     return true;
 }
