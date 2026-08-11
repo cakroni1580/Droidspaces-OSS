@@ -745,70 +745,52 @@ bool gtk_shell_get_work_area(
         return true;
     }
 
-    /*
-     * ------------------------------------------------------------
-     * FALLBACK:
-     *
-     * Layer-shell belum tersedia / belum bind / belum menghasilkan
-     * final work-area.
-     *
-     * GTK TIDAK boleh kehilangan geometry.
-     *
-     * Gunakan PHYSICAL DISPLAY sebagai fallback.
-     *
-     * Catatan:
-     *
-     * Physical display adalah source geometry output.c.
-     * Jangan mengambil wm_x/wm_y/width/height milik surface lain.
-     * ------------------------------------------------------------
-     */
+/*
+ * ============================================================
+ * FALLBACK: PHYSICAL DISPLAY
+ * ============================================================
+ *
+ * layer_shell_get_work_area() adalah primary source.
+ *
+ * Jika belum ada layer-shell yang memberikan reservation,
+ * atau hasil final work-area tidak valid, GTK fallback
+ * langsung ke physical display Trierarch.
+ *
+ * Physical display authority:
+ *
+ *     srv->output_width
+ *     srv->output_height
+ *
+ * Tidak ada API tambahan.
+ * Tidak ada dependency ke xdg-shell.
+ * Tidak ada pembacaan exclusive_zone di GTK.
+ */
+    struct wayland_server *srv = surf->srv;
 
-    /*
-     * Gunakan API physical-display yang sudah menjadi authority
-     * output.c.
-     *
-     * Ganti nama accessor di bawah hanya jika server_internal.h
-     * menggunakan nama API physical-display yang berbeda.
-     */
-    if (!compositor_get_physical_display_work_area(
-            surf->srv,
-            area)) {
+    if (srv->output_width == 0 ||
+        srv->output_height == 0) {
 
         LOGE(
-            "gtk work-area unavailable "
+            "layershell are unavailable "
             "surface=%p "
-            "source=layer-shell+physical-display-fallback",
-            (void *)surf);
-
-        return false;
-    }
-
-    /*
-     * ------------------------------------------------------------
-     * Physical display fallback harus menghasilkan rectangle valid.
-     * ------------------------------------------------------------
-     */
-    if (area->width == 0 ||
-        area->height == 0) {
-
-        LOGE(
-            "gtk physical-display fallback invalid "
-            "surface=%p "
-            "area=%ux%u+%d+%d",
+            "physical-display=%ux%u",
             (void *)surf,
-            area->width,
-            area->height,
-            area->x,
-            area->y);
+            srv->output_width,
+            srv->output_height);
 
         return false;
     }
+
+    area->x = 0;
+    area->y = 0;
+    area->width = srv->output_width;
+    area->height = srv->output_height;
 
     LOGI(
         "gtk work-area source=physical-display-fallback "
         "surface=%p "
         "area=%ux%u+%d+%d",
-        (void *)surf,
+        (void *),
         area->width,
         area->height,
         area->x,
