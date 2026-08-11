@@ -26,6 +26,83 @@ struct positioner_state {
     int32_t offset_x, offset_y;    /* additional x/y offset */
 };
 
+/* AFTER
+ *
+ * CONTEXT:
+ *
+ * XDG dan layer-shell WAJIB memakai geometry output baseline
+ * yang sama.
+ *
+ * layer_shell_get_work_area() adalah satu-satunya authority
+ * untuk:
+ *
+ *     layer surface geometry
+ *             +
+ *     exclusive zone
+ *             +
+ *     usable work-area
+ *
+ * XDG tidak menghitung exclusive_zone sendiri.
+ */
+static bool xdg_get_layer_work_area(
+        struct compositor_surface *surf,
+        struct trierarch_work_area *area)
+{
+    if (!surf ||
+        !surf->srv ||
+        !area)
+        return false;
+
+    /*
+     * IMPORTANT:
+     *
+     * Ini hanya baseline output yang sama dengan layer-shell.
+     *
+     * Jangan gunakan geometry GTK,
+     * jangan gunakan wm_req_w/h,
+     * jangan gunakan geometry XDG sebelumnya.
+     */
+    area->x = 0;
+    area->y = 0;
+
+    area->width =
+        surf->srv->output_width > 0
+            ? surf->srv->output_width
+            : 1;
+
+    area->height =
+        surf->srv->output_height > 0
+            ? surf->srv->output_height
+            : 1;
+
+    /*
+     * layer-shell sekarang mengubah baseline tersebut menjadi
+     * FINAL WORK AREA.
+     *
+     * Semua positive exclusive_zone sudah diterapkan di sini.
+     */
+    layer_shell_get_work_area(
+        surf->srv,
+        surf,
+        area);
+
+    if (area->width == 0 ||
+        area->height == 0)
+        return false;
+
+    LOGI(
+        "xdg layer work-area "
+        "surface=%p "
+        "geometry=%ux%u+%d+%d",
+        (void *)surf,
+        area->width,
+        area->height,
+        area->x,
+        area->y);
+
+    return true;
+}
+
 /* Compute the popup's top-left position in parent-surface-local coords.
  * Follows xdg-shell spec §anchor/gravity logic (simplified: no constraint adjustment). */
 static void positioner_compute_local(const struct positioner_state *p,
@@ -253,111 +330,38 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         if (surf->wm_maximized) {
             struct trierarch_work_area area;
 
-            area.x = 0;
-            area.y = 0;
+           
+           if (xdg_get_layer_work_area(
+                  surf,
+                  &area)) {
 
-            area.width =
-                surf->srv->output_width > 0
-                    ? surf->srv->output_width
-                    : 1;
+              surf->wm_x = area.x;
+              surf->wm_y = area.y;
 
-            area.height =
-                surf->srv->output_height > 0
-                    ? surf->srv->output_height
-                    : 1;
+              w = (int32_t)area.width;
+              h = (int32_t)area.height;
 
-    
-            layer_shell_get_work_area(
-                surf->srv,
-                surf,
-                &area);
+              LOGI(
+                  "xdg maximize final layer geometry "
+                  "surface=%p "
+                  "geometry=%ux%u+%d+%d",
+                  (void *)surf,
+                  area.width,
+                  area.height,
+                  area.x,
+                  area.y);
 
-    
-            surf->wm_x = area.x;
-            surf->wm_y = area.y;
+               uint32_t *s_max =
+                  wl_array_add(
+                     &states,
+                     sizeof(uint32_t));
 
-            w = (int32_t)area.width;
-            h = (int32_t)area.height;
-
-            LOGI(
-                "xdg maximize: layer-shell work-area "
-                "surface=%p "
-                "geometry=%ux%u+%d+%d",
-                (void *)surf,
-                area.width,
-                area.height,
-                area.x,
-                area.y);
-
-            uint32_t *s_max =
-                wl_array_add(
-                    &states,
-                    sizeof(uint32_t));
-
-            if (s_max)
-                *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+              if (s_max)
+                  *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+            }
             
         } 
-        else {
-
-            /*
-             * ====================================================
-             * CONTEXT:
-             *
-             * GTK tiling adalah geometry authority untuk XDG
-             * surface yang memiliki tiling_state.
-             *
-             * Jangan memakai WM_MODE_DIRECT/NESTED sebagai gate.
-             *
-             * Tiling:
-             *
-             *     layer-shell work-area
-             *             ↓
-             *     gtk_shell_apply_tiling_geometry()
-             *             ↓
-             *     wm_x / wm_y + w/h
-             *             ↓
-             *     xdg_toplevel.configure
-             * ====================================================
-             */
-            uint32_t tile_w = 0;
-            uint32_t tile_h = 0;
-
-            if (gtk_shell_apply_tiling_geometry(
-                    surf,
-                    &tile_w,
-                    &tile_h)) {
-
-                w = (int32_t)tile_w;
-                h = (int32_t)tile_h;
-
-                LOGI(
-                    "xdg configure: GTK tiling geometry "
-                    "surface=%p "
-                    "geometry=%ux%u+%d+%d",
-                    (void *)surf,
-                    tile_w,
-                    tile_h,
-                    surf->wm_x,
-                    surf->wm_y);
-
-            } else if (surf->wm_req_w > 0 ||
-                       surf->wm_req_h > 0) {
-
-                /*
-                 * Floating compositor-driven resize.
-                 *
-                 * Hanya dipakai jika tidak ada tiling geometry.
-                 */
-                w = surf->wm_req_w > 0
-                        ? surf->wm_req_w
-                        : 0;
-
-                h = surf->wm_req_h > 0
-                        ? surf->wm_req_h
-                        : 0;
-            }
-        }
+        
     }
 
     xdg_toplevel_send_configure(surf->xdg_toplevel_res, w, h, &states);
@@ -405,165 +409,25 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
         struct trierarch_work_area area;
 
         /*
-         * Start with the complete output.
-         *
-         * layer_shell_get_work_area() then applies every active
-         * layer-shell exclusive reservation.
-         */
-        area.x = 0;
-        area.y = 0;
-
-        area.width =
-            surf->srv->output_width > 0 ?
-            surf->srv->output_width : 1;
-
-        area.height =
-            surf->srv->output_height > 0 ?
-            surf->srv->output_height : 1;
-
-        layer_shell_get_work_area(
-                surf->srv,
-                surf,
-                &area);
-
-        /*
-         * Initial cascade is relative to the usable area,
-         * not the raw output origin.
-         *
-         * Example:
-         *
-         *     output      = 1920x1080
-         *     top panel   = 80px exclusive
-         *
-         *     work-area   = x=0 y=80 1920x1000
-         *
-         * First XDG surface:
-         *
-         *     wm_x = 0
-         *     wm_y = 80
-         */
-        surf->wm_x =
-            area.x +
-            surf->srv->cascade_x;
-
-        surf->wm_y =
-            area.y +
-            surf->srv->cascade_y;
-
-        /*
-         * ========================================================
          * CONTEXT:
          *
-         * Initial XDG position sudah ditentukan berdasarkan
-         * layer-shell work-area.
+         * Initial XDG position juga harus berada pada geometry
+         * yang sama dengan maximize/tiling.
          *
-         * Sekarang beri GTK tiling engine kesempatan untuk
-         * mengganti geometry tersebut jika surface memang
-         * memiliki compositor_tiling_state.
-         *
-         * gtk_shell_apply_tiling_geometry():
-         *
-         *     layer-shell work-area
-         *             ↓
-         *        GTK tiling state
-         *             ↓
-         *        wm_x / wm_y
-         *             ↓
-         *        width / height
-         *
-         * IMPORTANT:
-         *
-         * Jangan gate berdasarkan WM_MODE_DIRECT/NESTED
-         * di sini.
-         *
-         * Tiling state adalah compositor state tersendiri.
-         * ========================================================
+         * Tidak boleh ada geometry path kedua.
          */
-        uint32_t tile_w = 0;
-        uint32_t tile_h = 0;
-
-        if (gtk_shell_apply_tiling_geometry(
+        if (!xdg_get_layer_work_area(
                 surf,
-                &tile_w,
-                &tile_h)) {
+                &area)) {
+ 
+            LOGE(
+                "xdg get_toplevel: unable to obtain "
+                "layer-shell work-area surface=%p",
+                 (void *)surf);
 
-            /*
-             * Geometry position sudah ditulis oleh
-             * gtk_shell_apply_tiling_geometry() ke:
-             *
-             *     surf->wm_x
-             *     surf->wm_y
-             *
-             * Size belum disimpan ke compositor_surface,
-             * sehingga size diteruskan melalui configure.
-             */
-            LOGI(
-                "xdg get_toplevel: GTK tiling applied "
-                "surface=%p "
-                "geometry=%ux%u+%d+%d",
-                (void *)surf,
-                tile_w,
-                tile_h,
-                surf->wm_x,
-                surf->wm_y);
-
-            /*
-             * wm_req_w / wm_req_h menjadi requested configure
-             * untuk initial XDG configure.
-             *
-             * Ini membuat send_toplevel_configure() memakai
-             * hasil GTK tiling pada configure pertama.
-             */
-            surf->wm_req_w = (int32_t)tile_w;
-            surf->wm_req_h = (int32_t)tile_h;
+            return;
         }
-
-        /*
-         * Keep normal XDG stacking policy unchanged.
-         */
-        surf->z_order =
-            surf->srv->next_z_order++;
-
-        /*
-         * Cascade progression hanya digunakan untuk
-         * floating XDG surfaces.
-         *
-         * Surface yang sudah di-tiling tidak perlu menggeser
-         * cascade position berikutnya berdasarkan geometry tile.
-         */
-        if (compositor_surface_get_tiling(surf) ==
-            COMPOSITOR_TILING_NONE) {
-
-            surf->srv->cascade_x += 40;
-            surf->srv->cascade_y += 40;
-        }
-
-        /*
-         * Wrap cascade inside the usable work-area,
-         * rather than the raw output.
-         *
-         * This prevents new windows from progressively
-         * entering the reserved layer-shell region.
-         */
-        int32_t max_x =
-            (int32_t)area.width / 4;
-
-        int32_t max_y =
-            (int32_t)area.height / 4;
-
-        if (max_x < 40)
-            max_x = 40;
-
-        if (max_y < 40)
-            max_y = 40;
-
-        if (surf->srv->cascade_x >= max_x)
-            surf->srv->cascade_x = 0;
-
-        if (surf->srv->cascade_y >= max_y)
-            surf->srv->cascade_y = 0;
     }
-
     send_toplevel_configure(surf);
 }
 
