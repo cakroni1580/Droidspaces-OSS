@@ -866,81 +866,87 @@ void send_gtk_surface_configure(
     uint32_t state =
         gtk_surface_get_tiling_state(surf);
 
-/*
- * ============================================================
- * RESIZE EDGES
- * ============================================================
- */
-
-    struct wl_array edges;
-
-    gtk_surface_build_edge_constraints(
-        surf,
-        &edges);
-
-/*
- * ============================================================
- * CONFIGURE SERIAL
- * ============================================================
- */
-
-    uint32_t serial =
-        wl_display_next_serial(
-            surf->srv->display);
-
-/*
- * ============================================================
- * GTK PROTOCOL CONFIGURE
- * ============================================================
- *
- * gtk-shell protocol hanya membawa:
- *
- *     serial
- *     tiling state
- *     resize edges
- *
- * Work-area TIDAK dikirim sebagai field protocol.
- *
- * Karena itu work-area hanya menjadi compositor-side
- * geometry contract, bukan payload gtk_surface1.configure.
- * ============================================================
- */
-
-    gtk_surface1_send_configure(
-        surf->gtk_surface->resource,
-        &states);
-
     /*
      * CONTEXT:
-     * compositor_surface tidak menyimpan width/height langsung.
-     * Ambil logical surface size dari compositor geometry helper.
+     * 
+     * gtk_surface1.configure() hanya menerima:
+     *
+     *     resource
+     *     states
+     *
+     * Jadi state tiling harus dimasukkan ke wl_array states.
      */
-    int32_t logical_w = 0;
-    int32_t logical_h = 0;
+    struct wl_array states;
 
-    compositor_surface_get_logical_size(
-        surf,
-        &logical_w,
-        &logical_h);
+    wl_array_init(&states);
 
-    LOGI(
-        "GTK configure "
-        "surf=%p "
-        "logical=%dx%d",
-        (void *)surf,
-        logical_w,
-        logical_h);
-        edges.size,
-        work_area.width,
-        work_area.height,
-        work_area.x,
-        work_area.y,
-        surf->width,
-        surf->height,
-        surf->wm_x,
-        surf->wm_y);
+    if (state != 0) {
 
-    wl_array_release(&edges);
+        uint32_t *gtk_state =
+            wl_array_add(
+                &states,
+                sizeof(*gtk_state));
+
+        if (gtk_state)
+            *gtk_state = state;
+    }
+
+/*
+ * CONTEXT:
+ *
+ * Geometry tetap compositor-side.
+ *
+ * GTK shell tidak mengirim:
+ *
+ *     width
+ *     height
+ *     x
+ *     y
+ *
+ * melalui gtk_surface1.configure().
+ *
+ * Geometry dapat dicatat untuk memastikan GTK shell
+ * membaca state compositor yang benar.
+ */
+     int32_t logical_w = 0;
+     int32_t logical_h = 0;
+
+     compositor_surface_get_logical_size(
+         surf,
+         &logical_w,
+         &logical_h);
+
+     LOGI(
+         "GTK configure "
+         "surf=%p "
+         "tiling_state=%u "
+         "logical=%dx%d "
+         "wm=%d,%d "
+         "workarea=%ux%u+%d+%d",
+         (void *)surf,
+         state,
+         logical_w,
+         logical_h,
+         surf->wm_x,
+         surf->wm_y,
+         work_area.width,
+         work_area.height,
+         work_area.x,
+         work_area.y);
+
+     /*
+      * CONTEXT:
+      *
+      * Serial GTK configure.
+      *
+      * Protocol generated GTK shell yang kamu punya
+      * hanya membutuhkan resource + states.
+      */
+     gtk_surface1_send_configure(
+         surf->gtk_surface->resource,
+         &states);
+
+     wl_array_release(&states);
 }
 
 void gtk_shell_bind(
