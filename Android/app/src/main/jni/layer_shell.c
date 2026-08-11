@@ -592,15 +592,26 @@ static void layer_shell_get_layer_surface(
         return;
     }
 
-    /*
-     * One layer-surface role per wl_surface.
+        /*
+     * ================================================================
+     * ROLE OWNERSHIP
+     * ================================================================
      *
-     * Trierarch does not have a generic `surf->role` field.
-     * Existing protocol resources/state are the role markers.
+     * compositor_surface adalah object yang sama dengan yang dibuat
+     * oleh wl_compositor.create_surface() di surface.c.
      *
-     * layer_surface itself prevents creating a second
-     * zwlr_layer_surface_v1 for the same wl_surface.
+     * layer_surface_state hanya dibuat SATU KALI di sini.
      *
+     * Setelah assignment:
+     *
+     *     surf->layer_surface     -> layer_surface_state
+     *     surf->layer_surface_res -> zwlr_layer_surface_v1 resource
+     *
+     * surface.c tidak membuat state baru.
+     * surface.c hanya membaca surf->layer_surface ketika commit.
+     *
+     * Ini menjaga satu wl_surface == satu layer-shell role.
+     */
     if (surf->layer_surface ||
         surf->layer_surface_res) {
 
@@ -608,8 +619,16 @@ static void layer_shell_get_layer_surface(
                 resource,
                 ZWLR_LAYER_SHELL_V1_ERROR_ROLE,
                 "surface already has a layer-shell role");
+
+        LOGE(
+            "layer role rejected: surf=%p already has "
+            "layer_surface=%p layer_res=%p",
+            (void *)surf,
+            (void *)surf->layer_surface,
+            (void *)surf->layer_surface_res);
+
         return;
-    }*/
+    }
 
     struct layer_surface_state *state =
             calloc(1, sizeof(*state));
