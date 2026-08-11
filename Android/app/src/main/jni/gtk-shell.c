@@ -112,33 +112,36 @@ struct gtk_surface_state {
 
 static const struct gtk_surface1_interface gtk_surface_impl;
 static const struct gtk_shell1_interface gtk_shell_impl;
-
-
 /*
  * CONTEXT:
  *
- * GTK shell adalah tiling policy.
+ * GTK shell BUKAN geometry authority.
  *
- * Layer-shell menyediakan usable work-area melalui
- * exclusive-zone calculation.
+ * Layer-shell sudah menentukan:
  *
- * GTK membagi work-area tersebut sesuai tiling state.
+ *     output geometry
+ *          +
+ *     exclusive-zone reservation
+ *          =
+ *     final work-area
  *
- * Setelah fungsi ini:
+ * GTK hanya mengonsumsi work-area tersebut untuk policy
+ * tiling XDG.
  *
- *     surf->wm_x
- *     surf->wm_y
+ * Dengan demikian:
  *
- * adalah posisi FINAL XDG surface.
+ *     layer surface geometry
+ *             !=
+ *     GTK tiling geometry
  *
- * width/height adalah ukuran FINAL yang harus dipakai
- * oleh jalur XDG configure.
+ * dan GTK tidak pernah mengubah geometry layer surface.
  *
- * Penting:
+ * Untuk COMPOSITOR_TILING_NONE:
  *
- * GTK tidak melakukan pengurangan exclusive_zone sendiri.
- * Exclusive zone sudah selesai diproses oleh
- * layer_shell_get_work_area().
+ *     GTK tidak boleh menyentuh geometry existing.
+ *
+ * Ini penting agar WM_MODE_DIRECT dan WM_MODE_NESTED
+ * tetap memiliki geometry contract yang sama.
  */
 static bool gtk_shell_get_tiling_geometry(
         struct compositor_surface *surf,
@@ -158,51 +161,44 @@ static bool gtk_shell_get_tiling_geometry(
     enum compositor_tiling_state tiling =
         compositor_surface_get_tiling(surf);
 
-    struct trierarch_work_area area;
-
     /*
+     * ============================================================
      * CONTEXT:
      *
-     * area adalah geometry FINAL setelah seluruh
-     * layer-shell exclusive zone diterapkan.
+     * Work-area adalah satu-satunya input geometry dari
+     * layer-shell untuk GTK.
      *
-     * Contoh:
-     *
-     * output:
-     *
-     *     1080 x 1920
-     *
-     * top layer:
-     *
-     *     exclusive_zone = 120
-     *
-     * maka:
-     *
-     *     area =
-     *         x      = 0
-     *         y      = 120
-     *         width  = 1080
-     *         height = 1800
-     *
-     * GTK tidak boleh mengurangi 120 lagi.
+     * GTK tidak menghitung exclusive-zone sendiri.
+     * ============================================================
      */
+    struct trierarch_work_area area;
+
     if (!gtk_shell_get_work_area(
             surf,
             &area))
         return false;
 
     /*
-     * GTK tiling selalu dimulai dari usable work-area.
+     * ============================================================
+     * CONTEXT:
      *
-     * Ini membuat geometry GTK/XDG konsisten:
+     * NONE berarti GTK tidak memiliki tiling policy.
      *
-     *     layer-shell exclusive zone
-     *                 ↓
-     *             work-area
-     *                 ↓
-     *           GTK tiling
-     *                 ↓
-     *          XDG geometry
+     * Jangan mengganti geometry surface menjadi work-area.
+     *
+     * Geometry existing tetap menjadi authority.
+     *
+     * Caller harus mempertahankan width/height/x/y yang
+     * sudah dimiliki surface.
+     * ============================================================
+     */
+    if (tiling == COMPOSITOR_TILING_NONE)
+        return false;
+
+    /*
+     * Default:
+     *
+     * seluruh usable work-area.
      */
     *x = area.x;
     *y = area.y;
@@ -212,26 +208,21 @@ static bool gtk_shell_get_tiling_geometry(
     switch (tiling) {
 
     case COMPOSITOR_TILING_ALL:
+        /*
+         * GTK maximize/full tiling:
+         *
+         * gunakan seluruh work-area.
+         */
         break;
 
     case COMPOSITOR_TILING_LEFT:
-        /*
-         * +-------------------+-------------------+
-         * |       LEFT        |                   |
-         * |                   |                   |
-         * +-------------------+-------------------+
-         */
+
         *width = area.width / 2;
 
         break;
 
     case COMPOSITOR_TILING_RIGHT:
-        /*
-         * +-------------------+-------------------+
-         * |                   |      RIGHT        |
-         * |                   |                   |
-         * +-------------------+-------------------+
-         */
+
         *width = area.width -
                  (area.width / 2);
 
@@ -241,23 +232,13 @@ static bool gtk_shell_get_tiling_geometry(
         break;
 
     case COMPOSITOR_TILING_TOP:
-        /*
-         * +--------------------------------------+
-         * |                 TOP                  |
-         * +--------------------------------------+
-         * |                                      |
-         */
+
         *height = area.height / 2;
 
         break;
 
     case COMPOSITOR_TILING_BOTTOM:
-        /*
-         * +--------------------------------------+
-         * |                                      |
-         * +--------------------------------------+
-         * |               BOTTOM                 |
-         */
+
         *height = area.height -
                   (area.height / 2);
 
@@ -267,21 +248,20 @@ static bool gtk_shell_get_tiling_geometry(
         break;
 
     case COMPOSITOR_TILING_NONE:
-        break;
-
     default:
         return false;
     }
 
-    if (*width == 0 || *height == 0)
+    if (*width == 0 ||
+        *height == 0)
         return false;
 
     LOGI(
-        "gtk tiling geometry "
+        "gtk tiling consumer "
         "surface=%p "
         "tiling=%d "
-        "workarea=%ux%u+%d+%d "
-        "geometry=%ux%u+%d+%d",
+        "layer-workarea=%ux%u+%d+%d "
+        "xdg-geometry=%ux%u+%d+%d",
         (void *)surf,
         tiling,
         area.width,
@@ -866,15 +846,26 @@ bool gtk_shell_apply_tiling_geometry(
     /*
      * CONTEXT:
      *
-     * gtk_shell_get_tiling_geometry() mengambil work-area
-     * FINAL dari layer-shell.
+     * Hanya tiling policy GTK yang boleh masuk melalui helper ini.
      *
-     * Work-area tersebut sudah dikurangi oleh seluruh
-     * positive exclusive zone.
+     * Jika tidak ada tiling:
      *
-     * GTK hanya membagi area tersebut berdasarkan
-     * compositor_tiling_state.
+     *     GTK -> tidak melakukan apa-apa
+     *
+     * sehingga geometry yang berasal dari output.c / xdg-shell
+     * tetap utuh.
      */
+    if (compositor_surface_get_tiling(surf) ==
+        COMPOSITOR_TILING_NONE) {
+
+        LOGI(
+            "gtk tiling skipped "
+            "surface=%p reason=no-tiling-policy",
+            (void *)surf);
+
+        return false;
+    }
+
     if (!gtk_shell_get_tiling_geometry(
             surf,
             &x,
@@ -884,15 +875,20 @@ bool gtk_shell_apply_tiling_geometry(
         return false;
 
     /*
-     * Posisi hasil tiling menjadi geometry XDG.
+     * CONTEXT:
      *
-     * Tidak ada pengurangan exclusive_zone lagi di sini.
+     * Hasil di sini adalah geometry XDG FINAL untuk WM_MODE_DIRECT.
+     *
+     * Ini TIDAK pernah ditulis ke layer-shell surface.
+     *
+     * Layer-shell tetap menggunakan geometry hasil
+     * layer_surface_get_geometry().
      */
     surf->wm_x = x;
     surf->wm_y = y;
 
     LOGI(
-        "gtk apply tiling "
+        "gtk applied XDG geometry "
         "surface=%p "
         "geometry=%ux%u+%d+%d",
         (void *)surf,
