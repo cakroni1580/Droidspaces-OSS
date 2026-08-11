@@ -122,15 +122,26 @@ static void layer_surface_set_size(
         return;
 
     /*
-     * Phoc style:
+     * CONTEXT:
      *
-     * Simpan sebagai hint.
-     * Layout compositor tetap menentukan
-     * configure final.
+     * set_size() adalah pending layer-shell state.
+     *
+     * State ini baru menjadi geometry protocol setelah
+     * compositor mengirim configure berikutnya.
+     *
+     * Jangan menyentuh wm_x/wm_y atau work-area di sini.
      */
     surf->layer_surface->requested_width = width;
     surf->layer_surface->requested_height = height;
+
+    LOGI(
+        "layer set_size surf=%p requested=%ux%u",
+        (void *)surf,
+        width,
+        height);
 }
+
+/* AFTER */
 
 static void layer_surface_set_anchor(
         struct wl_client *client,
@@ -138,15 +149,28 @@ static void layer_surface_set_anchor(
         uint32_t anchor)
 {
     (void)client;
-    (void)resource;
 
     struct compositor_surface *surf =
             wl_resource_get_user_data(resource);
 
     if (!surf || !surf->layer_surface)
-            return;
+        return;
 
+    /*
+     * CONTEXT:
+     *
+     * Anchor adalah pending geometry state.
+     * Jangan menghitung work-area di sini.
+     * Jangan mengubah wm_x/wm_y.
+     *
+     * Geometry final dihitung ketika configure dikirim.
+     */
     surf->layer_surface->anchor = anchor;
+
+    LOGI(
+        "layer set_anchor surf=%p anchor=0x%x",
+        (void *)surf,
+        anchor);
 }
 
 static void layer_surface_set_exclusive_zone(
@@ -208,21 +232,35 @@ static void layer_surface_set_margin(
         int32_t left)
 {
     (void)client;
-    (void)resource;
-    (void)top;
-    (void)right;
-    (void)bottom;
-    (void)left;
+
     struct compositor_surface *surf =
             wl_resource_get_user_data(resource);
 
     if (!surf || !surf->layer_surface)
-            return;
+        return;
 
+    /*
+     * CONTEXT:
+     *
+     * Margin adalah bagian dari pending layer geometry.
+     *
+     * Margin tidak mengubah exclusive reservation secara
+     * langsung di sini. Work-area akan membaca state terbaru
+     * ketika consumer meminta work-area.
+     */
     surf->layer_surface->margin_top = top;
     surf->layer_surface->margin_right = right;
     surf->layer_surface->margin_bottom = bottom;
     surf->layer_surface->margin_left = left;
+
+    LOGI(
+        "layer set_margin surf=%p "
+        "top=%d right=%d bottom=%d left=%d",
+        (void *)surf,
+        top,
+        right,
+        bottom,
+        left);
 }
 
 static void layer_surface_set_keyboard_interactivity(
