@@ -448,17 +448,7 @@ struct compositor_buffer_ref *buffer_attach_egl_buffer(struct wl_client *client,
 void android_wlegl_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
 void gtk_shell_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
 void send_gtk_surface_configure(struct compositor_surface *surf);
-bool gtk_shell_apply_tiling_geometry(
-        struct compositor_surface *surf,
-        uint32_t *width,
-        uint32_t *height);
 
-bool gtk_shell_get_maximized_geometry(
-        struct compositor_surface *surf,
-        int32_t *x,
-        int32_t *y,
-        uint32_t *width,
-        uint32_t *height);
 
 void layer_shell_bind(
         struct wl_client *client,
@@ -478,23 +468,6 @@ void layer_shell_get_work_area(
         struct wayland_server *srv,
         struct compositor_surface *exclude,
         struct trierarch_work_area *area);
-
-/*unmanaged api*/
-
-void compositor_surface_set_tiling(
-        struct compositor_surface *surf,
-        enum compositor_tiling_state state);
-enum compositor_tiling_state
-compositor_surface_get_tiling(
-        struct compositor_surface *surf);
-void surface_notify_preferred_buffer_scale_all(
-        struct wayland_server *srv);
-void compositor_surface_set_resize_edges(
-        struct compositor_surface *surf,
-        uint32_t edges);
-
-uint32_t compositor_surface_get_resize_edges(
-        struct compositor_surface *surf);
 
 
 #endif
