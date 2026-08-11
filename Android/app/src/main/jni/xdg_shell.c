@@ -26,23 +26,29 @@ struct positioner_state {
     int32_t offset_x, offset_y;    /* additional x/y offset */
 };
 
-/* AFTER
- *
+/*
  * CONTEXT:
  *
- * XDG dan layer-shell WAJIB memakai geometry output baseline
+ * XDG dan layer-shell harus memakai geometry authority
  * yang sama.
  *
- * layer_shell_get_work_area() adalah satu-satunya authority
+ * layer_shell_get_work_area() adalah authority tunggal
  * untuk:
  *
- *     layer surface geometry
- *             +
- *     exclusive zone
- *             +
- *     usable work-area
+ *     output geometry
+ *          +
+ *     layer-shell exclusive reservation
+ *          =
+ *     final work-area
  *
- * XDG tidak menghitung exclusive_zone sendiri.
+ * XDG tidak boleh menghitung exclusive_zone sendiri.
+ *
+ * exclude=surf:
+ *
+ * Surface XDG yang sedang dihitung bukan layer-surface,
+ * tetapi tetap dilewatkan sebagai exclude agar helper ini
+ * aman dipakai jika caller suatu saat menggunakannya
+ * untuk surface yang juga memiliki layer state.
  */
 static bool xdg_get_layer_work_area(
         struct compositor_surface *surf,
@@ -54,44 +60,31 @@ static bool xdg_get_layer_work_area(
         return false;
 
     /*
-     * IMPORTANT:
+     * CONTEXT:
      *
-     * Ini hanya baseline output yang sama dengan layer-shell.
+     * Jangan membuat baseline geometry sendiri di XDG.
      *
-     * Jangan gunakan geometry GTK,
-     * jangan gunakan wm_req_w/h,
-     * jangan gunakan geometry XDG sebelumnya.
-     */
-    area->x = 0;
-    area->y = 0;
-
-    area->width =
-        surf->srv->output_width > 0
-            ? surf->srv->output_width
-            : 1;
-
-    area->height =
-        surf->srv->output_height > 0
-            ? surf->srv->output_height
-            : 1;
-
-    /*
-     * layer-shell sekarang mengubah baseline tersebut menjadi
-     * FINAL WORK AREA.
+     * layer_shell_get_work_area() selalu membangun area
+     * dari output geometry, bahkan ketika:
      *
-     * Semua positive exclusive_zone sudah diterapkan di sini.
+     *     - zwlr_layer_shell_v1 belum pernah di-bind
+     *     - belum ada layer surface
+     *     - tidak ada exclusive zone
+     *
+     * Dengan demikian XDG dan layer-shell selalu mempunyai
+     * coordinate baseline yang sama.
      */
     layer_shell_get_work_area(
-        surf->srv,
-        surf,
-        area);
+            surf->srv,
+            surf,
+            area);
 
     if (area->width == 0 ||
         area->height == 0)
         return false;
 
     LOGI(
-        "xdg layer work-area "
+        "xdg final work-area "
         "surface=%p "
         "geometry=%ux%u+%d+%d",
         (void *)surf,
