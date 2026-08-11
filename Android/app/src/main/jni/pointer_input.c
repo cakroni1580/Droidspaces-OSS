@@ -157,46 +157,222 @@ static inline int32_t clamp_i32(int32_t v, int32_t lo, int32_t hi) {
     return v;
 }
 
-static void wm_apply_move_clamped(struct wayland_server *srv, struct compositor_surface *surf,
+static void wm_apply_move_clamped(struct wayland_server *srv,
+        struct compositor_surface *surf,
         int32_t new_x, int32_t new_y) {
-    if (!srv || !surf) return;
-    int32_t sw = 0, sh = 0;
-    compositor_surface_get_logical_size(surf, &sw, &sh);
-    if (sw <= 0 || sh <= 0 || srv->output_width <= 0 || srv->output_height <= 0) {
-        surf->wm_x = new_x;
-        surf->wm_y = new_y;
+    if (!srv || !surf)
         return;
-    }
-    /* Keep at least some part of the window visible. */
-    int32_t max_x = srv->output_width - 1;
-    int32_t max_y = srv->output_height - 1;
-    int32_t min_x = -(sw - 32);
-    int32_t min_y = -(WM_TITLEBAR_HOT_Y - 8);
-    if (max_x < 0) max_x = 0;
-    if (max_y < 0) max_y = 0;
-    surf->wm_x = clamp_i32(new_x, min_x, max_x);
-    surf->wm_y = clamp_i32(new_y, min_y, max_y);
+
+    int32_t sw = 0;
+    int32_t sh = 0;
+
+    compositor_surface_get_logical_size(
+        surf,
+        &sw,
+        &sh);
+
+    if (sw <= 0 || sh <= 0)
+        return;
+
+    /*
+     * Get the exact same work-area used by XDG maximize.
+     *
+     * This includes layer-shell exclusive zones.
+     */
+    struct trierarch_work_area area;
+
+    area.x = 0;
+    area.y = 0;
+    area.width =
+        srv->output_width > 0
+            ? srv->output_width
+            : 1;
+    area.height =
+        srv->output_height > 0
+            ? srv->output_height
+            : 1;
+
+    layer_shell_get_work_area(
+        srv,
+        surf,
+        &area);
+
+    if (area.width == 0 || area.height == 0)
+        return;
+
+    /*
+     * Keep at least 32 px of the window horizontally visible.
+     *
+     * The window may extend outside the work-area, but its draggable
+     * portion must remain reachable.
+     */
+    int32_t min_x =
+        area.x - (sw - 32);
+
+    int32_t max_x =
+        area.x + (int32_t)area.width - 32;
+
+    /*
+     * Keep the titlebar reachable vertically.
+     *
+     * Unlike the old output-based calculation, this starts from
+     * area.y, so a top layer-shell exclusive zone is respected.
+     */
+    int32_t min_y =
+        area.y - (WM_TITLEBAR_HOT_Y - 8);
+
+    int32_t max_y =
+        area.y + (int32_t)area.height - WM_TITLEBAR_HOT_Y;
+
+    /*
+     * Defensive handling for very small work-areas.
+     */
+    if (max_x < min_x)
+        max_x = min_x;
+
+    if (max_y < min_y)
+        max_y = min_y;
+
+    surf->wm_x =
+        clamp_i32(new_x, min_x, max_x);
+
+    surf->wm_y =
+        clamp_i32(new_y, min_y, max_y);
 }
 
-static void wm_apply_resize_clamped(struct wayland_server *srv, struct compositor_surface *surf,
-        int32_t new_x, int32_t new_y, int32_t new_w, int32_t new_h) {
-    if (!srv || !surf) return;
-    if (new_w < WM_MIN_W) new_w = WM_MIN_W;
-    if (new_h < WM_MIN_H) new_h = WM_MIN_H;
+static void wm_apply_resize_clamped(struct wayland_server *srv,
+        struct compositor_surface *surf,
+        int32_t new_x, int32_t new_y,
+        int32_t new_w, int32_t new_h) {
+    if (!srv || !surf)
+        return;
 
-    /* Clamp size to output bounds if known. */
-    if (srv->output_width > 0) {
-        if (new_x < 0) { new_w += new_x; new_x = 0; }
-        int32_t maxw = srv->output_width - new_x;
-        if (maxw > 0 && new_w > maxw) new_w = maxw;
+    if (new_w < WM_MIN_W)
+        new_w = WM_MIN_W;
+
+    if (new_h < WM_MIN_H)
+        new_h = WM_MIN_H;
+
+    /*
+     * Same geometry authority as XDG maximize.
+     */
+    struct trierarch_work_area area;
+
+    area.x = 0;
+    area.y = 0;
+
+    area.width =
+        srv->output_width > 0
+            ? srv->output_width
+            : 1;
+
+    area.height =
+        srv->output_height > 0
+            ? srv->output_height
+            : 1;
+
+    layer_shell_get_work_area(
+        srv,
+        surf,
+        &area);
+
+    if (area.width == 0 || area.height == 0)
+        return;
+
+    const int32_t area_right =
+        area.x + (int32_t)area.width;
+
+    const int32_t area_bottom =
+        area.y + (int32_t)area.height;
+
+    /*
+     * LEFT edge resize.
+     *
+     * new_x may move, but it must never cross the work-area.
+     */
+    if (new_x < area.x) {
+        int32_t correction = area.x - new_x;
+
+        new_x = area.x;
+        new_w -= correction;
     }
-    if (srv->output_height > 0) {
-        if (new_y < 0) { new_h += new_y; new_y = 0; }
-        int32_t maxh = srv->output_height - new_y;
-        if (maxh > 0 && new_h > maxh) new_h = maxh;
+
+    /*
+     * TOP edge resize.
+     */
+    if (new_y < area.y) {
+        int32_t correction = area.y - new_y;
+
+        new_y = area.y;
+        new_h -= correction;
     }
-    if (new_w < WM_MIN_W) new_w = WM_MIN_W;
-    if (new_h < WM_MIN_H) new_h = WM_MIN_H;
+
+    /*
+     * Respect right work-area boundary.
+     */
+    if (new_x + new_w > area_right)
+        new_w = area_right - new_x;
+
+    /*
+     * Respect bottom work-area boundary.
+     */
+    if (new_y + new_h > area_bottom)
+        new_h = area_bottom - new_y;
+
+    /*
+     * Re-apply minimum size after boundary corrections.
+     *
+     * If the work-area itself is smaller than WM_MIN_*,
+     * use the available work-area instead of creating an
+     * invalid negative/oversized geometry.
+     */
+    if (new_w < WM_MIN_W) {
+        if ((int32_t)area.width >= WM_MIN_W) {
+            new_w = WM_MIN_W;
+
+            if (new_x + new_w > area_right)
+                new_x = area_right - new_w;
+        } else {
+            new_w = (int32_t)area.width;
+            new_x = area.x;
+        }
+    }
+
+    if (new_h < WM_MIN_H) {
+        if ((int32_t)area.height >= WM_MIN_H) {
+            new_h = WM_MIN_H;
+
+            if (new_y + new_h > area_bottom)
+                new_y = area_bottom - new_h;
+        } else {
+            new_h = (int32_t)area.height;
+            new_y = area.y;
+        }
+    }
+
+    /*
+     * Final defensive clamp.
+     *
+     * At this point the entire resized window is inside
+     * the same work-area used by XDG maximize.
+     */
+    if (new_x < area.x)
+        new_x = area.x;
+
+    if (new_y < area.y)
+        new_y = area.y;
+
+    if (new_x + new_w > area_right)
+        new_w = area_right - new_x;
+
+    if (new_y + new_h > area_bottom)
+        new_h = area_bottom - new_y;
+
+    if (new_w < 1)
+        new_w = 1;
+
+    if (new_h < 1)
+        new_h = 1;
 
     surf->wm_x = new_x;
     surf->wm_y = new_y;
