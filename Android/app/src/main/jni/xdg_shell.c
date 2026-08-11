@@ -322,32 +322,7 @@ void send_toplevel_configure(struct compositor_surface *surf) {
             uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
             if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
         )    
-        struct trierarch_work_area area;
-
-        if (xdg_get_work_area(surf, &area)) {
-            /*
-             * Posisi surface harus mengikuti origin work-area.
-             *
-             * Jangan menggunakan 0,0 karena exclusive zone
-             * dapat membuat work-area dimulai pada offset tertentu.
-             */
-            surf->wm_x = area.x;
-            surf->wm_y = area.y;
-
-            w = (int32_t)area.width;
-            h = (int32_t)area.height;
-
-            LOGI(
-                "xdg maximize "
-                "surface=%p "
-                "work-area=%ux%u+%d+%d",
-                (void *)surf,
-                area.width,
-                area.height,
-                area.x,
-                area.y);
-
-        } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
+        if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
             /* Compositor-driven resize: send requested size (best-effort). */
             w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
             h = surf->wm_req_h > 0 ? surf->wm_req_h : 0;
