@@ -785,31 +785,6 @@ void send_gtk_surface_configure(
         !surf->gtk_surface->resource)
         return;
 
-    /*
-     * ============================================================
-     * GTK SURFACE ROLE
-     * ============================================================
-     *
-     * gtk_surface1 yang bukan XDG toplevel tidak ikut window
-     * tiling desktop.
-     *
-     * Layer-shell tetap memiliki geometry authority sendiri.
-     */
-    if (!gtk_surface_is_xdg_toplevel(surf)) {
-
-        LOGI(
-            "gtk configure skipped "
-            "surface=%p "
-            "reason=not-xdg-toplevel "
-            "xdg_surface=%p "
-            "xdg_toplevel=%p",
-            (void *)surf,
-            (void *)surf->xdg_surface_res,
-            (void *)surf->xdg_toplevel_res);
-
-        return;
-    }
-
 /*
  * ============================================================
  * GEOMETRY CONTRACT
@@ -852,58 +827,84 @@ void send_gtk_surface_configure(
  * ============================================================
  */
 
+    /*
+ * ============================================================
+ * CONTEXT:
+ *
+ * GTK shell hanya consumer dari dua state compositor:
+ *
+ *   1. tiling state
+ *   2. final work-area
+ *
+ * Tiling geometry TIDAK dihitung di sini.
+ *
+ * Work-area authority:
+ *
+ *     layer_shell_get_work_area()
+ *
+ * Geometry authority:
+ *
+ *     compositor / output / xdg-shell
+ * ============================================================
+ */
+
+    struct trierarch_work_area work_area;
+
+    if (!gtk_shell_get_work_area(
+            surf,
+            &work_area)) {
+
+        LOGE(
+            "gtk configure skipped "
+            "reason=work-area-unavailable "
+            "surface=%p",
+            (void *)surf);
+
+        return;
+    }
+
     uint32_t state =
         gtk_surface_get_tiling_state(surf);
 
-    /*
-     * ============================================================
-     * RESIZE EDGES
-     * ============================================================
-     *
-     * Edge constraint tetap berasal dari compositor.
-     */
+/*
+ * ============================================================
+ * RESIZE EDGES
+ * ============================================================
+ */
+
     struct wl_array edges;
 
     gtk_surface_build_edge_constraints(
         surf,
         &edges);
 
-    /*
-     * ============================================================
-     * CONFIGURE SERIAL
-     * ============================================================
-     */
+/*
+ * ============================================================
+ * CONFIGURE SERIAL
+ * ============================================================
+ */
+
     uint32_t serial =
         wl_display_next_serial(
             surf->srv->display);
 
-    /*
-     * ============================================================
-     * GTK CONFIGURE
-     * ============================================================
-     *
-     * Geometry authority:
-     *
-     *     send_toplevel_configure()
-     *
-     * Work-area authority:
-     *
-     *     layer_shell_get_work_area()
-     *
-     * GTK shell:
-     *
-     *     protocol bridge saja.
-     *
-     * Tidak ada perhitungan:
-     *
-     *     physical display
-     *     tiling width
-     *     tiling height
-     *     exclusive-zone
-     *
-     * di fungsi ini.
-     * ============================================================
-     */
+/*
+ * ============================================================
+ * GTK PROTOCOL CONFIGURE
+ * ============================================================
+ *
+ * gtk-shell protocol hanya membawa:
+ *
+ *     serial
+ *     tiling state
+ *     resize edges
+ *
+ * Work-area TIDAK dikirim sebagai field protocol.
+ *
+ * Karena itu work-area hanya menjadi compositor-side
+ * geometry contract, bukan payload gtk_surface1.configure.
+ * ============================================================
+ */
 
     gtk_surface1_send_configure(
         surf->gtk_surface->resource,
@@ -912,16 +913,21 @@ void send_gtk_surface_configure(
         &edges);
 
     LOGI(
-        "gtk surface configure "
+       "gtk surface configure "
         "surface=%p "
         "serial=%u "
         "state=0x%x "
         "edges=%zu "
+        "work-area=%ux%u+%d+%d "
         "geometry=%ux%u+%d+%d",
         (void *)surf,
         serial,
         state,
         edges.size,
+        work_area.width,
+        work_area.height,
+        work_area.x,
+        work_area.y,
         surf->width,
         surf->height,
         surf->wm_x,
