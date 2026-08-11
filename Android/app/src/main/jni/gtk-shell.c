@@ -475,13 +475,14 @@ static void gtk_shell_get_gtk_surface(
  * Implementasinya harus membaca state authority milik
  * compositor_surface.
  */
+// AFTER
 static uint32_t gtk_surface_get_tiling_state(
         struct compositor_surface *surf)
 {
     if (!surf)
         return 0;
 
-    switch (compositor_surface_get_tiling(surf)) {
+    switch (surf->tiling_state) {
 
     case COMPOSITOR_TILING_ALL:
         return GTK_SURFACE1_STATE_TILED;
@@ -531,7 +532,7 @@ static void gtk_surface_build_edge_constraints(
         return;
 
     uint32_t resize_edges =
-        compositor_surface_get_resize_edges(surf);
+        surf->resize_edges;
 
     /*
      * GTK shell protocol menggunakan satu uint32_t
