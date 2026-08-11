@@ -211,33 +211,30 @@ static void xdg_toplevel_set_min_size(struct wl_client *c, struct wl_resource *r
 static void xdg_toplevel_set_maximized(struct wl_client *c, struct wl_resource *r) {
     (void)c;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf) return;
+    if (!surf || !surf->srv)
+        return;
+    if (surf->srv->wm_mode == WM_MODE_DIRECT)
+        return;
     if (!surf->wm_maximized) {
         int32_t sw = 0, sh = 0;
-
-        compositor_surface_get_logical_size(
-                surf, &sw, &sh);
-
+        compositor_surface_get_logical_size(surf, &sw, &sh);
         surf->wm_saved_x = surf->wm_x;
         surf->wm_saved_y = surf->wm_y;
         surf->wm_saved_w = sw;
         surf->wm_saved_h = sh;
-
-        /*
-         * CONTEXT:
-         *
-         * Posisi maximize tidak diset ke 0,0 di sini.
-         * send_toplevel_configure() akan mengambil origin
-         * work-area.
-         */
-         surf->wm_maximized = true;
+        surf->wm_x = 0;
+        surf->wm_y = 0;
+        surf->wm_maximized = true;
     }
     send_toplevel_configure(surf);
 }
 static void xdg_toplevel_unset_maximized(struct wl_client *c, struct wl_resource *r) {
     (void)c;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf) return;
+    if (!surf || !surf->srv)
+        return;
+    if (surf->srv->wm_mode == WM_MODE_DIRECT)
+        return;
     if (surf->wm_maximized) {
         surf->wm_x = surf->wm_saved_x;
         surf->wm_y = surf->wm_saved_y;
@@ -248,7 +245,10 @@ static void xdg_toplevel_unset_maximized(struct wl_client *c, struct wl_resource
 static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource *r, struct wl_resource *o) {
     (void)c;(void)o;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf) return;
+    if (!surf || !surf->srv)
+        return;
+    if (surf->srv->wm_mode == WM_MODE_DIRECT)
+        return;
     if (!surf->wm_maximized) {
         int32_t sw = 0, sh = 0;
         compositor_surface_get_logical_size(surf, &sw, &sh);
@@ -265,7 +265,10 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
 static void xdg_toplevel_unset_fullscreen(struct wl_client *c, struct wl_resource *r) {
     (void)c;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf) return;
+    if (!surf || !surf->srv)
+        return;
+    if (surf->srv->wm_mode == WM_MODE_DIRECT)
+        return;
     if (surf->wm_maximized) {
         surf->wm_x = surf->wm_saved_x;
         surf->wm_y = surf->wm_saved_y;
@@ -318,67 +321,31 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         if (surf->wm_resizing) {
             uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
             if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
-        }
-        /*
-         * CONTEXT:
-         *
-         * wm_maximized bukan berarti fullscreen output.
-         *
-         * XDG maximize harus mengisi WORK AREA:
-         *
-         *     output geometry
-         *          ↓
-         *     layer-shell exclusive zone
-         *          ↓
-         *     work-area
-         *
-         * Output tetap menjadi display coordinate space.
-         */
-        if (surf->wm_maximized) {
-            struct trierarch_work_area area;
+        )    
+        struct trierarch_work_area area;
 
-           if (xdg_get_work_area(surf, &area)) {
-               /*
-                * Posisi surface harus mengikuti origin work-area.
-                *
-                * Jangan menggunakan 0,0 karena exclusive zone
-                * dapat membuat work-area dimulai pada offset tertentu.
-                */
-               surf->wm_x = area.x;
-               surf->wm_y = area.y;
+        if (xdg_get_work_area(surf, &area)) {
+            /*
+             * Posisi surface harus mengikuti origin work-area.
+             *
+             * Jangan menggunakan 0,0 karena exclusive zone
+             * dapat membuat work-area dimulai pada offset tertentu.
+             */
+            surf->wm_x = area.x;
+            surf->wm_y = area.y;
 
-               w = (int32_t)area.width;
-               h = (int32_t)area.height;
+            w = (int32_t)area.width;
+            h = (int32_t)area.height;
 
-               LOGI(
-                   "xdg maximize "
-                   "surface=%p "
-                   "work-area=%ux%u+%d+%d",
-                   (void *)surf,
-                   area.width,
-                   area.height,
-                   area.x,
-                   area.y);
-           } else {
-                /*
-                 * Fallback tetap memakai output geometry.
-                 * Ini menjaga XDG tetap memiliki geometry valid
-                 * apabila work-area belum tersedia.
-                 */
-                w = surf->srv->output_width  > 0
-                        ? surf->srv->output_width : 0;
-                h = surf->srv->output_height > 0
-                        ? surf->srv->output_height : 0;
-
-                surf->wm_x = 0;
-                surf->wm_y = 0;
-            }
-
-            uint32_t *s_max =
-                wl_array_add(&states, sizeof(uint32_t));
-
-            if (s_max)
-                *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+            LOGI(
+                "xdg maximize "
+                "surface=%p "
+                "work-area=%ux%u+%d+%d",
+                (void *)surf,
+                area.width,
+                area.height,
+                area.x,
+                area.y);
 
         } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
             /* Compositor-driven resize: send requested size (best-effort). */
