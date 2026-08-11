@@ -650,48 +650,50 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
     .notify_launch   = gtk_shell_notify_launch,
 };
 
-
 /*
  * ================================================================
- * WORK AREA CONTRACT
+ * GTK FINAL WORK AREA CONSUMER
  * ================================================================
  *
- * gtk_shell_get_work_area() BUKAN sumber geometry tiling.
+ * GEOMETRY AUTHORITY:
  *
- * Geometry flow:
+ *     output.c
+ *         |
+ *         +--> PHYSICAL DISPLAY
+ *                  |
+ *                  v
+ *             send_toplevel_configure()
+ *                  |
+ *                  v
+ *             COMPOSITOR TILING
  *
- *   send_toplevel_configure()
+ * layer-shell.c:
+ *
+ *     PHYSICAL DISPLAY
+ *          -
+ *     exclusive zones
  *          |
  *          v
- *   physical display geometry
- *          |
- *          v
- *   compositor tiling geometry
- *          |
- *          v
- *   layershell.c exclusive-zone subtraction
- *          |
- *          v
- *   gtk_shell_get_work_area()
- *          |
- *          v
- *   final XTK/GTK surface usable geometry
+ *     FINAL WORK AREA
  *
- * Jadi:
+ * gtk-shell.c:
  *
- *   physical display
- *       !=
- *   work area
+ *     hanya CONSUMER FINAL WORK AREA.
  *
- * Work area adalah FINAL usable rectangle setelah seluruh
- * exclusive-zone layer-shell diterapkan.
+ * GTK TIDAK:
  *
- * gtk-shell hanya membaca hasil tersebut.
+ *     - membaca exclusive_zone
+ *     - menghitung exclusive_zone
+ *     - mengurangi exclusive_zone
+ *     - menentukan physical display
+ *     - menentukan tiling geometry
  *
- * jika layershell.c tidak bind = harus fallback ke display geometry*
+ * Jika layer-shell belum menyediakan work-area, GTK fallback
+ * langsung ke PHYSICAL DISPLAY.
+ *
+ * Dengan kontrak ini GTK selalu mendapatkan rectangle usable.
  * ================================================================
  */
-
 bool gtk_shell_get_work_area(
         struct compositor_surface *surf,
         struct trierarch_work_area *area)
@@ -703,68 +705,96 @@ bool gtk_shell_get_work_area(
 
     /*
      * ------------------------------------------------------------
-     * CONTEXT:
+     * PRIMARY SOURCE:
      *
-     * layershell.c adalah authority terhadap exclusive-zone.
+     * layer-shell final work area.
      *
-     * gtk-shell TIDAK menghitung:
+     * gtk-shell tidak mengetahui bagaimana area tersebut dihitung.
+     * Seluruh exclusive-zone policy tetap berada di layer-shell.c.
      *
-     *     exclusive_zone
-     *
-     * dan TIDAK melakukan subtraction sendiri.
-     *
-     * layer_shell_get_work_area() sudah mengembalikan:
-     *
-     *     FINAL WORK AREA
-     *
-     * yaitu rectangle yang siap digunakan oleh XTK/GTK.
-     *
-     * Untuk XDG:
-     *
-     *     exclude = NULL
-     *
-     * karena XDG surface bukan bagian dari exclusive-zone
-     * layer-shell.
-     *
-     * Untuk layer-shell:
-     *
-     *     exclude = surf
-     *
-     * agar surface tersebut tidak menghitung dirinya sendiri
-     * sebagai obstacle/exclusive-zone.
+     * exclude = NULL karena GTK/XDG bukan layer-shell authority.
      * ------------------------------------------------------------
      */
 
-    struct compositor_surface *exclude = NULL;
-
-    if (!gtk_surface_is_xdg_toplevel(surf))
-        exclude = surf;
-
     layer_shell_get_work_area(
         surf->srv,
-        exclude,
+        NULL,
         area);
 
     /*
      * ------------------------------------------------------------
-     * IMPORTANT:
+     * Jika layer-shell menyediakan final work-area yang valid,
+     * langsung konsumsi hasil tersebut.
      *
-     * area sekarang adalah FINAL usable geometry.
+     * TIDAK ADA subtraction exclusive-zone di sini.
+     * ------------------------------------------------------------
+     */
+    if (area->width > 0 &&
+        area->height > 0) {
+
+        LOGI(
+            "gtk work-area source=layer-shell-final "
+            "surface=%p "
+            "area=%ux%u+%d+%d",
+            (void *)surf,
+            area->width,
+            area->height,
+            area->x,
+            area->y);
+
+        return true;
+    }
+
+    /*
+     * ------------------------------------------------------------
+     * FALLBACK:
      *
-     * Jangan mengurangi exclusive-zone lagi di sini.
+     * Layer-shell belum tersedia / belum bind / belum menghasilkan
+     * final work-area.
      *
-     * Jangan menggunakan area ini untuk menghitung ukuran
-     * physical display atau menentukan tiling geometry.
+     * GTK TIDAK boleh kehilangan geometry.
+     *
+     * Gunakan PHYSICAL DISPLAY sebagai fallback.
+     *
+     * Catatan:
+     *
+     * Physical display adalah source geometry output.c.
+     * Jangan mengambil wm_x/wm_y/width/height milik surface lain.
      * ------------------------------------------------------------
      */
 
+    /*
+     * Gunakan API physical-display yang sudah menjadi authority
+     * output.c.
+     *
+     * Ganti nama accessor di bawah hanya jika server_internal.h
+     * menggunakan nama API physical-display yang berbeda.
+     */
+    if (!compositor_get_physical_display_work_area(
+            surf->srv,
+            area)) {
+
+        LOGE(
+            "gtk work-area unavailable "
+            "surface=%p "
+            "source=layer-shell+physical-display-fallback",
+            (void *)surf);
+
+        return false;
+    }
+
+    /*
+     * ------------------------------------------------------------
+     * Physical display fallback harus menghasilkan rectangle valid.
+     * ------------------------------------------------------------
+     */
     if (area->width == 0 ||
         area->height == 0) {
 
         LOGE(
-            "gtk invalid final work-area "
+            "gtk physical-display fallback invalid "
             "surface=%p "
-            "work_area=%ux%u+%d+%d",
+            "area=%ux%u+%d+%d",
             (void *)surf,
             area->width,
             area->height,
@@ -775,7 +805,7 @@ bool gtk_shell_get_work_area(
     }
 
     LOGI(
-        "gtk final work-area "
+        "gtk work-area source=physical-display-fallback "
         "surface=%p "
         "area=%ux%u+%d+%d",
         (void *)surf,
@@ -786,7 +816,6 @@ bool gtk_shell_get_work_area(
 
     return true;
 }
-
 
 void send_gtk_surface_configure(
         struct compositor_surface *surf)
@@ -822,31 +851,47 @@ void send_gtk_surface_configure(
         return;
     }
 
-    /*
-     * ============================================================
-     * GEOMETRY CONTRACT
-     * ============================================================
-     *
-     * JANGAN memanggil gtk_shell_get_work_area() untuk menentukan
-     * physical tiling geometry di sini.
-     *
-     * Physical display geometry sudah ditentukan oleh:
-     *
-     *     send_toplevel_configure()
-     *
-     * dan dari geometry tersebut compositor menentukan tiling:
-     *
-     *     compositor_surface->wm_x
-     *     compositor_surface->wm_y
-     *     compositor_surface->width
-     *     compositor_surface->height
-     *
-     * gtk-shell hanya mengirim STATE/EDGE protocol.
-     *
-     * Final GTK usable area diperoleh client melalui window
-     * management geometry yang berasal dari compositor.
-     * ============================================================
-     */
+/*
+ * ============================================================
+ * GEOMETRY CONTRACT
+ * ============================================================
+ *
+ * send_gtk_surface_configure() BUKAN geometry authority.
+ *
+ * Urutan authority:
+ *
+ *     output.c
+ *       |
+ *       +--> PHYSICAL DISPLAY
+ *                |
+ *                v
+ *       send_toplevel_configure()
+ *                |
+ *                v
+ *       COMPOSITOR TILING
+ *                |
+ *                +--> wm_x
+ *                +--> wm_y
+ *                +--> width
+ *                +--> height
+ *
+ * gtk-shell hanya mengonsumsi state hasil compositor.
+ *
+ * Work-area:
+ *
+ *     gtk_shell_get_work_area()
+ *
+ * adalah FINAL WORK AREA untuk consumer GTK.
+ *
+ * Work-area tersebut:
+ *
+ *     layer-shell final area
+ *          atau
+ *     physical display fallback
+ *
+ * Work-area TIDAK dipakai untuk menghitung tiling.
+ * ============================================================
+ */
 
     uint32_t state =
         gtk_surface_get_tiling_state(surf);
