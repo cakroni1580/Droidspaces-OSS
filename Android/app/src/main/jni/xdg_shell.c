@@ -316,16 +316,98 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
         if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
     } else {
-        /* Direct mode: let the client choose its own size (w=0, h=0 per xdg-shell spec).
-         * If explicitly maximized, fill the output and advertise MAXIMIZED. */
+        /*
+         * CONTEXT:
+         *
+         * WM_MODE_DIRECT tidak menggunakan
+         * XDG_TOPLEVEL_STATE_FULLSCREEN maupun
+         * XDG_TOPLEVEL_STATE_MAXIMIZED sebagai
+         * geometry mechanism.
+         *
+         * Geometry DIRECT ditentukan compositor dari
+         * layer-shell work-area.
+         *
+         * output_width/output_height hanya merupakan
+         * output coordinate space, bukan usable window area.
+         */
+        struct trierarch_work_area area;
+
         if (surf->wm_resizing) {
             uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
-            if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
-        }    
-        if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
-            /* Compositor-driven resize: send requested size (best-effort). */
+            if (s_rz)
+                *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
+        }
+
+        /*
+         * Work-area adalah batas geometry DIRECT.
+         *
+         * Jangan gunakan wm_req_w/wm_req_h sebagai ukuran
+         * final jika nilainya berasal dari output geometry.
+         */
+        if (xdg_get_work_area(surf, &area)) {
+            int32_t req_w = surf->wm_req_w;
+            int32_t req_h = surf->wm_req_h;
+
+            /*
+             * Requested size hanya dipakai sebagai preferred size.
+             *
+             * Work-area tetap menjadi hard limit.
+             */
+            if (req_w > 0)
+                w = req_w;
+            else
+                w = (int32_t)area.width;
+
+            if (req_h > 0)
+                h = req_h;
+            else
+                h = (int32_t)area.height;
+
+            if (w > (int32_t)area.width)
+                w = (int32_t)area.width;
+
+            if (h > (int32_t)area.height)
+                h = (int32_t)area.height;
+
+            /*
+             * Jangan pernah mengirim ukuran di luar work-area.
+             */
+            if (w < 1)
+                w = 1;
+
+            if (h < 1)
+                h = 1;
+
+            LOGI(
+                "xdg DIRECT configure "
+                "surf=%p "
+                "request=%dx%d "
+                "workarea=%ux%u+%d+%d "
+                "configure=%dx%d",
+                (void *)surf,
+                req_w,
+                req_h,
+                area.width,
+                area.height,
+                area.x,
+                area.y,
+                w,
+                h);
+        } else {
+            /*
+             * Fallback hanya jika work-area belum tersedia.
+             */
             w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
             h = surf->wm_req_h > 0 ? surf->wm_req_h : 0;
+
+            LOGI(
+                "xdg DIRECT configure "
+                "surf=%p "
+                "workarea unavailable "
+                "configure=%dx%d",
+                (void *)surf,
+                w,
+                h);
         }
     }
 
