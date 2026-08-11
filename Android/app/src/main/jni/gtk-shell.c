@@ -908,21 +908,28 @@ void send_gtk_surface_configure(
 
     gtk_surface1_send_configure(
         surf->gtk_surface->resource,
-        serial,
-        state,
-        &edges);
+        &states);
+
+    /*
+     * CONTEXT:
+     * compositor_surface tidak menyimpan width/height langsung.
+     * Ambil logical surface size dari compositor geometry helper.
+     */
+    int32_t logical_w = 0;
+    int32_t logical_h = 0;
+
+    compositor_surface_get_logical_size(
+        surf,
+        &logical_w,
+        &logical_h);
 
     LOGI(
-       "gtk surface configure "
-        "surface=%p "
-        "serial=%u "
-        "state=0x%x "
-        "edges=%zu "
-        "work-area=%ux%u+%d+%d "
-        "geometry=%ux%u+%d+%d",
+        "GTK configure "
+        "surf=%p "
+        "logical=%dx%d",
         (void *)surf,
-        serial,
-        state,
+        logical_w,
+        logical_h);
         edges.size,
         work_area.width,
         work_area.height,
