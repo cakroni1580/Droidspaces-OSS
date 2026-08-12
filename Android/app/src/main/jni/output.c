@@ -156,7 +156,10 @@ void compositor_set_output_user_scale(wayland_server_t *srv_opaque, int32_t scal
         if (surf->xdg_toplevel_res)
             send_toplevel_configure(surf);
             /*layer_shell.c*/
+        if (surf->layer_surface_res)
             send_layer_surface_configure(surf);
+
+        if (surf->gtk_surface)
             send_gtk_surface_configure(surf);
             
     }
