@@ -722,6 +722,16 @@ bool gtk_shell_get_work_area(
         !area)
         return false;
 
+        /*
+     * NEW WORKAREA SEMANTIC:
+     *
+     * Work-area dimiliki oleh compositor/output.
+     * layer-shell bukan lagi source geometry langsung bagi XDG.
+     */
+    layer_shell_get_work_area(
+            surf->srv,
+            area);
+
     if (area->width == 0 ||
         area->height == 0) {
 
