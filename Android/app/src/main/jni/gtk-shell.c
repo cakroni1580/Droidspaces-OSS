@@ -1011,7 +1011,7 @@ bool gtk_shell_get_maximized_geometry(
      * POSITION
      * ============================================================
      *
-     * wm_x / wm_y adalah geometry position milik compositor.
+     * Position tetap membaca geometry authority compositor.
      */
     *x = surf->wm_x;
     *y = surf->wm_y;
@@ -1021,35 +1021,53 @@ bool gtk_shell_get_maximized_geometry(
      * SIZE
      * ============================================================
      *
-     * Jangan membaca surf->width / surf->height karena field
-     * tersebut memang tidak ada pada compositor_surface.
+     * compositor_surface tidak mempunyai:
      *
-     * Gunakan API geometry compositor yang menjadi source size.
+     *     surf->width
+     *     surf->height
+     *
+     * Gunakan API logical-size.
+     *
+     * API ini:
+     *
+     *     void compositor_surface_get_logical_size(
+     *         surf,
+     *         int32_t *w,
+     *         int32_t *h);
+     *
+     * Jadi jangan menggunakan return value sebagai boolean.
      */
-    if (!compositor_surface_get_logical_size(
-            surf,
-            width,
-            height)) {
+    int32_t logical_width = 0;
+    int32_t logical_height = 0;
+
+    compositor_surface_get_logical_size(
+        surf,
+        &logical_width,
+        &logical_height);
+
+    /*
+     * Validasi masih dalam signed domain sebelum cast
+     * ke uint32_t.
+     */
+    if (logical_width <= 0 ||
+        logical_height <= 0) {
 
         LOGI(
             "gtk maximized geometry unavailable "
-            "surface=%p",
-            (void *)surf);
-
-        return false;
-    }
-
-    if (*width == 0 || *height == 0) {
-
-        LOGI(
-            "gtk maximized geometry invalid "
-            "surface=%p geometry=%ux%u",
+            "surface=%p logical=%dx%d",
             (void *)surf,
-            *width,
-            *height);
+            logical_width,
+            logical_height);
 
         return false;
     }
+
+    /*
+     * Sekarang aman dikonversi karena sudah dipastikan
+     * nilainya > 0.
+     */
+    *width = (uint32_t)logical_width;
+    *height = (uint32_t)logical_height;
 
     LOGI(
         "gtk maximized follows XDG "
