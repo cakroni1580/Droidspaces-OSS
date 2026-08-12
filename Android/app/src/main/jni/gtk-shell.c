@@ -76,7 +76,7 @@ extern void keyboard_focus_update(
  * Output usable-area selalu tersedia, bahkan ketika tidak ada
  * client yang pernah bind zwlr_layer_shell_v1.
  */
-extern bool compositor_get_work_area(
+extern void layer_shell_get_work_area(
         struct wayland_server *srv,
         struct compositor_surface *exclude,
         struct trierarch_work_area *area);
@@ -730,6 +730,7 @@ bool gtk_shell_get_work_area(
      */
     layer_shell_get_work_area(
             surf->srv,
+            exclude,
             area);
 
     if (area->width == 0 ||
