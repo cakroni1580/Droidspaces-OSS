@@ -145,52 +145,18 @@ struct layer_surface_state {
 };
 
 /*
- * CONTEXT NOTE:
+ * CONTEXT:
+ * Layer-shell exclusive zones menyediakan usable output area
+ * untuk WM_MODE_DIRECT.
  *
- * Work-area adalah output layout state milik compositor.
- *
- * State ini TIDAK dimiliki oleh:
- *
- *   - zwlr_layer_shell_v1
- *   - xdg-shell
- *   - GTK
- *   - role tertentu
- *
- * Layer-shell hanya menjadi salah satu producer reservation.
- * XDG dan GTK menjadi consumer geometry.
- *
- * Semantic mengikuti Phoc:
- *
- *     output -> usable_area
- *
- * bukan:
- *
- *     layer-shell bind -> work-area
+ * xdg-shell menggunakan hasil ini untuk maximized/fullscreen
+ * geometry dan tidak menghitung exclusive zone sendiri.
  */
 struct trierarch_work_area {
     int32_t x;
     int32_t y;
     uint32_t width;
     uint32_t height;
-};
-
-struct trierarch_output_layout {
-    struct trierarch_work_area work_area;
-
-    /*
-     * Full physical output geometry.
-     * Tidak pernah berasal dari GTK/XDG/layer-shell.
-     */
-    uint32_t output_width;
-    uint32_t output_height;
-
-    /*
-     * Cached reservation yang membentuk usable_area.
-     */
-    int32_t exclusive_top;
-    int32_t exclusive_right;
-    int32_t exclusive_bottom;
-    int32_t exclusive_left;
 };
 /*
  * ================================================================
@@ -301,7 +267,6 @@ struct input_resource_node {
 
 /* Opaque server struct; full definition in compositor.c */
 struct wayland_server {
-    struct trierarch_output_layout output_layout;
     struct wl_display *display;
     struct wl_event_loop *loop;
     char *runtime_dir;
@@ -482,15 +447,23 @@ struct compositor_buffer_ref *buffer_attach_egl_buffer(struct wl_client *client,
 /* android_wlegl.c: Android native buffer support */
 void android_wlegl_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
 void gtk_shell_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
-void send_gtk_surface_configure(struct compositor_surface *surf);
+bool gtk_shell_apply_tiling_geometry(
+        struct compositor_surface *surf,
+        uint32_t *width,
+        uint32_t *height);
 
+bool gtk_shell_get_maximized_geometry(
+        struct compositor_surface *surf,
+        int32_t *x,
+        int32_t *y,
+        uint32_t *width,
+        uint32_t *height);
 
 void layer_shell_bind(
         struct wl_client *client,
         void *data,
         uint32_t version,
         uint32_t id);
-void send_layer_surface_configure(struct compositor_surface *surf);
 /*
  * layer-shell geometry update.
  *
@@ -503,6 +476,27 @@ void layer_shell_get_work_area(
         struct wayland_server *srv,
         struct compositor_surface *exclude,
         struct trierarch_work_area *area);
+
+/*unmanaged api*/
+
+void compositor_surface_set_tiling(
+        struct compositor_surface *surf,
+        enum compositor_tiling_state state);
+
+enum compositor_tiling_state
+compositor_surface_get_tiling(
+        struct compositor_surface *surf);
+
+
+void send_layer_surface_configure(struct compositor_surface *surf);
+void surface_notify_preferred_buffer_scale_all(
+        struct wayland_server *srv);
+void compositor_surface_set_resize_edges(
+        struct compositor_surface *surf,
+        uint32_t edges);
+
+uint32_t compositor_surface_get_resize_edges(
+        struct compositor_surface *surf);
 
 
 #endif
