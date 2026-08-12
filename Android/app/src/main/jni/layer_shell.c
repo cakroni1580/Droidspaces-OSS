@@ -41,6 +41,8 @@
 #define TRIERARCH_LAYER_Z_OVERLAY      (30000)
 
 
+void trierarch_output_layout_reset(
+        struct wayland_server *srv);
 /* ------------------------------------------------------------------------- */
 /* layer_surface resource                                                    */
 /* ------------------------------------------------------------------------- */
@@ -866,13 +868,14 @@ static void layer_shell_get_layer_surface(
                 "surface already has a layer-shell role");
 
         LOGE(
-            "layer role rejected: surf=%p already has "
-            "layer_surface=%p layer_res=%p",
-            (void *)surf,
-            (void *)surf->layer_surface,
-            (void *)surf->layer_surface_res,
-            (void *)surf->xdg_surface_res,
-            (void *)surf->xdg_toplevel_res);
+           "layer role rejected: surf=%p "
+           "layer_surface=%p layer_res=%p "
+           "xdg_surface=%p xdg_toplevel=%p",
+           (void *)surf,
+           (void *)surf->layer_surface,
+           (void *)surf->layer_surface_res,
+           (void *)surf->xdg_surface_res,
+           (void *)surf->xdg_toplevel_res);
 
         return;
     }
