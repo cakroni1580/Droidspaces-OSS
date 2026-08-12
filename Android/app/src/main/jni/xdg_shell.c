@@ -76,27 +76,23 @@ static void positioner_compute_local(const struct positioner_state *p,
     *out_x = px + p->offset_x;
     *out_y = py + p->offset_y;
 }
+
 /*
  * CONTEXT:
  *
- * Output geometry tetap menjadi coordinate authority untuk SEMUA WM mode.
+ * XDG memakai output geometry yang sama dengan WM_MODE_NESTED.
  *
- * WM_MODE_NESTED:
- *     output_width/output_height langsung dipakai oleh existing path.
+ * output_width/output_height tetap merupakan ukuran display penuh.
  *
- * WM_MODE_DIRECT:
- *     output_width/output_height tetap menjadi coordinate space,
- *     sedangkan compositor-owned work-area menjadi batas area
- *     penempatan dan ukuran app window.
+ * Work-area hanya dipakai untuk:
  *
- * Work-area bukan lagi semantic milik layer-shell.
- * Layer-shell hanya menyumbang reservation/exclusive-zone ke
- * output-owned work-area.
+ *     - posisi window XDG
+ *     - batas ukuran window
+ *     - maximize
  *
- * Karena itu work-area tetap tersedia walaupun tidak ada client
- * yang bind zwlr_layer_shell_v1.
- *
- * Helper ini HANYA dipakai oleh DIRECT path.
+ * Dengan demikian exclusive zone layer-shell tidak mengubah
+ * ukuran output yang dilihat XDG, tetapi menentukan area tempat
+ * aplikasi XDG boleh ditempatkan.
  */
 static bool xdg_get_work_area(
         struct compositor_surface *surf,
@@ -107,31 +103,28 @@ static bool xdg_get_work_area(
         !area)
         return false;
 
+    /*
+     * CONTEXT:
+     *
+     * layer_shell_get_work_area() adalah geometry authority
+     * untuk reservation layer-shell.
+     *
+     * Helper ini harus tetap mengembalikan output geometry
+     * walaupun layer-shell belum pernah di-bind.
+     */
     layer_shell_get_work_area(
             surf->srv,
             surf,
             area);
 
-    /*
-     * CONTEXT NOTE:
-     *
-     * `area` adalah virtual display / work-area.
-     *
-     * Jangan mengambil width/height dari:
-     *
-     *     srv->output_width
-     *     srv->output_height
-     *
-     * karena physical output tetap menjadi display authority.
-     */
     if (area->width == 0 ||
         area->height == 0)
         return false;
 
     LOGI(
-        "xdg DIRECT work-area "
+        "xdg work-area "
         "surface=%p "
-        "area=%ux%u+%d+%d "
+        "geometry=%ux%u+%d+%d "
         "output=%ux%u",
         (void *)surf,
         area->width,
@@ -142,83 +135,6 @@ static bool xdg_get_work_area(
         surf->srv->output_height);
 
     return true;
-}
-
-/*
- * CONTEXT:
- *
- * DIRECT app window wajib berada sepenuhnya di dalam work-area.
- *
- * Coordinate space tetap output coordinate space:
- *
- *     output 0,0
- *        |
- *        +---- work-area.x/y
- *
- * Jadi helper ini hanya melakukan constraint terhadap wm_x/wm_y.
- *
- * Tidak dipanggil oleh WM_MODE_NESTED.
- */
-static void xdg_direct_clamp_position(
-        struct compositor_surface *surf,
-        const struct trierarch_work_area *area,
-        int32_t width,
-        int32_t height)
-{
-    if (!surf || !area)
-        return;
-
-    int32_t min_x = area->x;
-    int32_t min_y = area->y;
-
-    int32_t max_x =
-        area->x +
-        (int32_t)area->width -
-        width;
-
-    int32_t max_y =
-        area->y +
-        (int32_t)area->height -
-        height;
-
-    /*
-     * Window lebih besar daripada work-area sudah dipotong
-     * oleh send_toplevel_configure().
-     *
-     * Tetap defensive agar position constraint tidak menghasilkan
-     * batas terbalik.
-     */
-    if (max_x < min_x)
-        max_x = min_x;
-
-    if (max_y < min_y)
-        max_y = min_y;
-
-    if (surf->wm_x < min_x)
-        surf->wm_x = min_x;
-    else if (surf->wm_x > max_x)
-        surf->wm_x = max_x;
-
-    if (surf->wm_y < min_y)
-        surf->wm_y = min_y;
-    else if (surf->wm_y > max_y)
-        surf->wm_y = max_y;
-
-    LOGI(
-        "xdg DIRECT position clamp "
-        "surf=%p "
-        "size=%dx%d "
-        "work-area=%ux%u+%d+%d "
-        "position=%d,%d",
-        (void *)surf,
-        width,
-        height,
-        area->width,
-        area->height,
-        area->x,
-        area->y,
-        surf->wm_x,
-        surf->wm_y);
 }
 
 static void wm_base_resource_destroy(struct wl_listener *listener, void *data) {
@@ -295,30 +211,33 @@ static void xdg_toplevel_set_min_size(struct wl_client *c, struct wl_resource *r
 static void xdg_toplevel_set_maximized(struct wl_client *c, struct wl_resource *r) {
     (void)c;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf || !surf->srv)
-        return;
-    if (surf->srv->wm_mode == WM_MODE_DIRECT)
-        return;
+    if (!surf) return;
     if (!surf->wm_maximized) {
         int32_t sw = 0, sh = 0;
-        compositor_surface_get_logical_size(surf, &sw, &sh);
+
+        compositor_surface_get_logical_size(
+                surf, &sw, &sh);
+
         surf->wm_saved_x = surf->wm_x;
         surf->wm_saved_y = surf->wm_y;
         surf->wm_saved_w = sw;
         surf->wm_saved_h = sh;
-        surf->wm_x = 0;
-        surf->wm_y = 0;
-        surf->wm_maximized = true;
+
+        /*
+         * CONTEXT:
+         *
+         * Posisi maximize tidak diset ke 0,0 di sini.
+         * send_toplevel_configure() akan mengambil origin
+         * work-area.
+         */
+         surf->wm_maximized = true;
     }
     send_toplevel_configure(surf);
 }
 static void xdg_toplevel_unset_maximized(struct wl_client *c, struct wl_resource *r) {
     (void)c;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf || !surf->srv)
-        return;
-    if (surf->srv->wm_mode == WM_MODE_DIRECT)
-        return;
+    if (!surf) return;
     if (surf->wm_maximized) {
         surf->wm_x = surf->wm_saved_x;
         surf->wm_y = surf->wm_saved_y;
@@ -329,10 +248,7 @@ static void xdg_toplevel_unset_maximized(struct wl_client *c, struct wl_resource
 static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource *r, struct wl_resource *o) {
     (void)c;(void)o;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf || !surf->srv)
-        return;
-    if (surf->srv->wm_mode == WM_MODE_DIRECT)
-        return;
+    if (!surf) return;
     if (!surf->wm_maximized) {
         int32_t sw = 0, sh = 0;
         compositor_surface_get_logical_size(surf, &sw, &sh);
@@ -349,10 +265,7 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
 static void xdg_toplevel_unset_fullscreen(struct wl_client *c, struct wl_resource *r) {
     (void)c;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf || !surf->srv)
-        return;
-    if (surf->srv->wm_mode == WM_MODE_DIRECT)
-        return;
+    if (!surf) return;
     if (surf->wm_maximized) {
         surf->wm_x = surf->wm_saved_x;
         surf->wm_y = surf->wm_saved_y;
@@ -400,123 +313,77 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
         if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
     } else {
-        /*
-         * ============================================================
-         * WM_MODE_DIRECT ONLY
-         * ============================================================
-         *
-         * output_width/output_height tetap menjadi sumber coordinate
-         * space yang sama dengan WM_MODE_NESTED.
-         *
-         * Layer-shell work-area hanya menjadi HARD CONSTRAINT untuk
-         * app window DIRECT.
-         *
-         * Jangan mengubah Nested path di atas.
-         */
-        struct trierarch_work_area area;
-
+        /* Direct mode: let the client choose its own size (w=0, h=0 per xdg-shell spec).
+         * If explicitly maximized, fill the output and advertise MAXIMIZED. */
         if (surf->wm_resizing) {
-            uint32_t *s_rz =
+            uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
+            if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
+        }
+        /*
+         * CONTEXT:
+         *
+         * wm_maximized bukan berarti fullscreen output.
+         *
+         * XDG maximize harus mengisi WORK AREA:
+         *
+         *     output geometry
+         *          ↓
+         *     layer-shell exclusive zone
+         *          ↓
+         *     work-area
+         *
+         * Output tetap menjadi display coordinate space.
+         */
+        if (surf->wm_maximized) {
+            struct trierarch_work_area area;
+
+           if (xdg_get_work_area(surf, &area)) {
+               /*
+                * Posisi surface harus mengikuti origin work-area.
+                *
+                * Jangan menggunakan 0,0 karena exclusive zone
+                * dapat membuat work-area dimulai pada offset tertentu.
+                */
+               surf->wm_x = area.x;
+               surf->wm_y = area.y;
+
+               w = (int32_t)area.width;
+               h = (int32_t)area.height;
+
+               LOGI(
+                   "xdg maximize "
+                   "surface=%p "
+                   "work-area=%ux%u+%d+%d",
+                   (void *)surf,
+                   area.width,
+                   area.height,
+                   area.x,
+                   area.y);
+           } else {
+                /*
+                 * Fallback tetap memakai output geometry.
+                 * Ini menjaga XDG tetap memiliki geometry valid
+                 * apabila work-area belum tersedia.
+                 */
+                w = surf->srv->output_width  > 0
+                        ? surf->srv->output_width : 0;
+                h = surf->srv->output_height > 0
+                        ? surf->srv->output_height : 0;
+
+                surf->wm_x = 0;
+                surf->wm_y = 0;
+            }
+
+            uint32_t *s_max =
                 wl_array_add(&states, sizeof(uint32_t));
 
-            if (s_rz)
-                *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
-        }
+            if (s_max)
+                *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
 
-        if (xdg_get_work_area(surf, &area)) {
-
-            int32_t req_w = surf->wm_req_w;
-            int32_t req_h = surf->wm_req_h;
-
-            /*
-             * Requested size tetap menjadi preferred size.
-             *
-             * Work-area adalah hard limit.
-             */
-            if (req_w > 0)
-                w = req_w;
-            else
-                w = (int32_t)area.width;
-
-            if (req_h > 0)
-                h = req_h;
-            else
-                h = (int32_t)area.height;
-
-            /*
-             * DIRECT window tidak boleh lebih besar daripada
-             * usable work-area.
-             */
-            if (w > (int32_t)area.width)
-                w = (int32_t)area.width;
-
-            if (h > (int32_t)area.height)
-                h = (int32_t)area.height;
-
-            if (w < 1)
-                w = 1;
-
-            if (h < 1)
-                h = 1;
-
-            /*
-             * ========================================================
-             * POSITION CONSTRAINT
-             * ========================================================
-             *
-             * Geometry source tetap wm_x/wm_y dalam output space.
-             *
-             * Work-area hanya membatasi posisi DIRECT.
-             *
-             * Nested TIDAK masuk ke helper ini.
-             */
-            xdg_direct_clamp_position(
-                surf,
-                &area,
-                w,
-                h);
-
-            LOGI(
-                "xdg DIRECT configure "
-                "surf=%p "
-                "request=%dx%d "
-                "work-area=%ux%u+%d+%d "
-                "position=%d,%d "
-                "configure=%dx%d",
-                (void *)surf,
-                req_w,
-                req_h,
-                area.width,
-                area.height,
-                area.x,
-                area.y,
-                surf->wm_x,
-                surf->wm_y,
-                w,
-                h);
-
-        } else {
-
-            /*
-             * Fallback hanya untuk DIRECT ketika work-area helper
-             * tidak dapat menghasilkan area.
-             *
-             * Tidak mengubah Nested behavior.
-             */
-            w = surf->wm_req_w > 0 ?
-                surf->wm_req_w : 0;
-
-            h = surf->wm_req_h > 0 ?
-                surf->wm_req_h : 0;
-
-            LOGI(
-                "xdg DIRECT configure "
-                "surf=%p "
-                "work-area unavailable "
-                "configure=%dx%d",
-                (void *)surf,
-                w,
-                h);
+        } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
+            /* Compositor-driven resize: send requested size (best-effort). */
+            w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
+            h = surf->wm_req_h > 0 ? surf->wm_req_h : 0;
         }
     }
 
@@ -554,31 +421,14 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
          * bukan dari 0,0 output.
          */
         if (xdg_get_work_area(surf, &area)) {
+            surf->wm_x = area.x + surf->srv->cascade_x;
+            surf->wm_y = area.y + surf->srv->cascade_y;
 
             /*
-             * ========================================================
-             * DIRECT INITIAL PLACEMENT
-             * ========================================================
-             *
-             * Coordinate source tetap output coordinate space.
-             * Work-area hanya menentukan boundary placement.
+             * Cascade hanya boleh bergerak di dalam work-area.
              */
-            surf->wm_x =
-                area.x +
-                surf->srv->cascade_x;
-
-            surf->wm_y =
-                area.y +
-                surf->srv->cascade_y;
-
-            /*
-             * Cascade tetap menggunakan work-area, bukan output.
-             */
-            int32_t max_x =
-                (int32_t)area.width / 4;
-
-            int32_t max_y =
-                (int32_t)area.height / 4;
+            int32_t max_x = (int32_t)area.width / 4;
+            int32_t max_y = (int32_t)area.height / 4;
 
             if (max_x < 40)
                 max_x = 40;
@@ -594,62 +444,18 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
 
             if (surf->srv->cascade_y >= max_y)
                 surf->srv->cascade_y = 0;
-
-            /*
-             * Initial requested size juga harus tunduk pada
-             * work-area.
-             *
-             * Ini hanya constraint DIRECT.
-             */
-            int32_t initial_w =
-                surf->wm_req_w > 0 ?
-                surf->wm_req_w :
-                (int32_t)area.width;
-
-            int32_t initial_h =
-                surf->wm_req_h > 0 ?
-                surf->wm_req_h :
-                (int32_t)area.height;
-
-            if (initial_w > (int32_t)area.width)
-                initial_w = (int32_t)area.width;
-
-            if (initial_h > (int32_t)area.height)
-                initial_h = (int32_t)area.height;
-
-            if (initial_w < 1)
-                initial_w = 1;
-
-            if (initial_h < 1)
-                initial_h = 1;
-
-            xdg_direct_clamp_position(
-                surf,
-                &area,
-                initial_w,
-                initial_h);
-
         } else {
-
             /*
-             * DIRECT fallback:
-             *
-             * tetap menggunakan output coordinate space.
-             *
-             * Ini bukan perubahan behavior Nested.
+             * Fallback ke output geometry.
              */
-            surf->wm_x =
-                surf->srv->cascade_x;
-
-            surf->wm_y =
-                surf->srv->cascade_y;
+            surf->wm_x = surf->srv->cascade_x;
+            surf->wm_y = surf->srv->cascade_y;
 
             surf->srv->cascade_x += 40;
             surf->srv->cascade_y += 40;
         }
 
-        surf->z_order =
-            surf->srv->next_z_order++;
+        surf->z_order = surf->srv->next_z_order++;
     }
 
     send_toplevel_configure(surf);
@@ -834,24 +640,6 @@ static void xdg_wm_base_get_xdg_surface(struct wl_client *client, struct wl_reso
     }
     if (surf->xdg_surface_res) {
         wl_resource_post_error(wm_res, XDG_WM_BASE_ERROR_ROLE, "surface already has xdg_surface");
-        return;
-    }
-
-    if (surf->layer_surface ||
-        surf->layer_surface_res) {
-
-        wl_resource_post_error(
-                wm_res,
-                XDG_WM_BASE_ERROR_ROLE,
-                "surface already has a shell role");
-
-        LOGE(
-            "xdg role rejected: surf=%p "
-             "layer_surface=%p layer_res=%p",
-            (void *)surf,
-            (void *)surf->layer_surface,
-            (void *)surf->layer_surface_res);
-
         return;
     }
     struct wl_resource *xdg_surf = wl_resource_create(client, &xdg_surface_interface,
