@@ -613,7 +613,9 @@ static void layer_shell_get_layer_surface(
      * Ini menjaga satu wl_surface == satu layer-shell role.
      */
     if (surf->layer_surface ||
-        surf->layer_surface_res) {
+        surf->layer_surface_res ||
+        surf->xdg_surface_res ||
+        surf->xdg_toplevel_res) {
 
         wl_resource_post_error(
                 resource,
@@ -625,7 +627,9 @@ static void layer_shell_get_layer_surface(
             "layer_surface=%p layer_res=%p",
             (void *)surf,
             (void *)surf->layer_surface,
-            (void *)surf->layer_surface_res);
+            (void *)surf->layer_surface_res,
+            (void *)surf->xdg_surface_res,
+            (void *)surf->xdg_toplevel_res);
 
         return;
     }
