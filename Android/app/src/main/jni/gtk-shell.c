@@ -47,18 +47,36 @@ extern void keyboard_focus_update(
         struct compositor_surface *surface);
 
 /*
- * Layer-shell adalah authority untuk usable output area.
+ * ================================================================
+ * PHOC SEMANTIC: OUTPUT USABLE AREA
+ * ================================================================
  *
- * GTK shell TIDAK membaca:
+ * Work-area bukan milik layer-shell.
  *
- *     layer_surface->exclusive_zone
+ * Work-area adalah state geometry milik compositor output.
  *
- * secara langsung.
+ * Layer-shell hanya salah satu contributor yang dapat mengurangi
+ * usable area melalui positive exclusive-zone reservation.
  *
- * Hasil dari layer_shell_get_work_area() adalah final work-area
- * setelah seluruh layer-shell exclusive zone diterapkan.
+ * Consumer seperti:
+ *
+ *     - XDG
+ *     - GTK shell
+ *     - tiling
+ *     - popup placement
+ *
+ * hanya membaca hasil final dari output.
+ *
+ * Penting:
+ *
+ *     zwlr_layer_shell_v1 bind
+ *         !=
+ *     work-area availability
+ *
+ * Output usable-area selalu tersedia, bahkan ketika tidak ada
+ * client yang pernah bind zwlr_layer_shell_v1.
  */
-extern void layer_shell_get_work_area(
+extern bool compositor_get_work_area(
         struct wayland_server *srv,
         struct compositor_surface *exclude,
         struct trierarch_work_area *area);
@@ -651,52 +669,50 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
     .notify_launch   = gtk_shell_notify_launch,
 };
 
+
+
 /*
  * ================================================================
- * GTK FINAL WORK AREA CONSUMER
+ * GTK WORK-AREA CONSUMER
  * ================================================================
  *
- * GEOMETRY AUTHORITY:
+ * PHOC SEMANTIC:
  *
- *     output.c
- *         |
- *         +--> PHYSICAL DISPLAY
- *                  |
- *                  v
- *             send_toplevel_configure()
- *                  |
- *                  v
- *             COMPOSITOR TILING
+ * GTK tidak mengetahui siapa yang menghasilkan usable-area.
  *
- * layer-shell.c:
+ * GTK hanya meminta current output work-area.
  *
- *     PHYSICAL DISPLAY
- *          -
- *     exclusive zones
- *          |
- *          v
- *     FINAL WORK AREA
+ * Provider:
  *
- * gtk-shell.c:
+ *     compositor output
  *
- *     hanya CONSUMER FINAL WORK AREA.
+ * Contributors:
  *
- * GTK TIDAK:
+ *     layer-shell exclusive zones
+ *     output policy
+ *     future compositor reservations
  *
- *     - membaca exclusive_zone
- *     - menghitung exclusive_zone
- *     - mengurangi exclusive_zone
- *     - menentukan physical display
- *     - menentukan tiling geometry
+ * BUKAN:
  *
- * Jika layer-shell belum menyediakan work-area, GTK fallback
- * langsung ke PHYSICAL DISPLAY.
+ *     gtk-shell
+ *     xdg-shell
+ *     zwlr_layer_shell_v1 bind state
  *
- * Dengan kontrak ini GTK selalu mendapatkan rectangle usable.
- * ================================================================
+ * Dengan semantic ini:
+ *
+ *     no layer-shell bind
+ *         -> full physical output
+ *
+ *     layer-shell exists but no exclusive zone
+ *         -> full physical output
+ *
+ *     layer-shell exclusive zone exists
+ *         -> reduced usable area
+ *
+ *     layer-shell surface destroyed
+ *         -> reservation disappears
+ *         -> usable area recomputed
  */
-// AFTER
-
 bool gtk_shell_get_work_area(
         struct compositor_surface *surf,
         struct trierarch_work_area *area)
@@ -706,44 +722,18 @@ bool gtk_shell_get_work_area(
         !area)
         return false;
 
-    /*
-     * ============================================================
-     * WORK-AREA AUTHORITY
-     * ============================================================
-     *
-     * GTK shell bukan geometry authority.
-     *
-     * layer_shell_get_work_area() adalah provider final work-area.
-     *
-     * Contract layer-shell:
-     *
-     *     initial area
-     *         =
-     *     srv->output_width/height
-     *
-     *     kemudian dikurangi oleh
-     *     valid positive exclusive zones.
-     *
-     * Jadi physical display fallback TIDAK perlu dilakukan
-     * lagi di sini.
-     *
-     * GTK cukup mengonsumsi hasil final tersebut.
-     *
-     * Tidak ada:
-     *
-     *     compositor_get_physical_display_work_area()
-     *     xdg work-area calculation
-     *     exclusive-zone calculation
-     *     geometry subtraction
-     *
-     * di gtk-shell.c.
-     * ============================================================
-     */
+    if (!compositor_get_work_area(
+            surf->srv,
+            NULL,
+            area)) {
 
-    layer_shell_get_work_area(
-        surf->srv,
-        NULL,
-        area);
+        LOGE(
+            "gtk work-area unavailable "
+            "surface=%p",
+            (void *)surf);
+
+        return false;
+    }
 
     if (area->width == 0 ||
         area->height == 0) {
@@ -751,7 +741,7 @@ bool gtk_shell_get_work_area(
         LOGE(
             "gtk work-area invalid "
             "surface=%p "
-            "physical-display=%ux%u "
+            "output=%ux%u "
             "area=%ux%u+%d+%d",
             (void *)surf,
             surf->srv->output_width,
@@ -765,7 +755,8 @@ bool gtk_shell_get_work_area(
     }
 
     LOGI(
-        "gtk work-area source=layer-shell "
+        "gtk work-area "
+        "source=compositor-output "
         "surface=%p "
         "area=%ux%u+%d+%d",
         (void *)surf,
