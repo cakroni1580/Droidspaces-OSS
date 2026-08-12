@@ -1301,85 +1301,14 @@ void send_layer_surface_configure(struct compositor_surface *surf)
      * Android sudah memberikan physical display geometry
      * melalui srv->output_width / srv->output_height.
      */
-    uint32_t width =
-        srv->output_width > 0 ?
-        srv->output_width : 1;
+    uint32_t width = 1;
+    uint32_t height = 1;
 
-    uint32_t height =
-        srv->output_height > 0 ?
-        srv->output_height : 1;
-
-    /*
-     * Layer-shell requested size tetap dihormati apabila
-     * client tidak meminta stretch pada edge tertentu.
-     *
-     * Untuk surface fullscreen/edge-anchored, ukuran display
-     * tetap berasal dari Android.
-     */
-    struct layer_surface_state *ls =
-        surf->layer_surface;
-
-    const bool left =
-        (ls->anchor &
-         ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) != 0;
-
-    const bool right =
-        (ls->anchor &
-         ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) != 0;
-
-    const bool top =
-        (ls->anchor &
-         ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) != 0;
-
-    const bool bottom =
-        (ls->anchor &
-         ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
-
-    /*
-     * Horizontal stretch:
-     *
-     * LEFT + RIGHT
-     *
-     * berarti layer mengikuti lebar Android display.
-     */
-    if (left && right) {
-        int64_t w =
-            (int64_t)width -
-            ls->margin_left -
-            ls->margin_right;
-
-        width = w > 0 ? (uint32_t)w : 1;
-
-    } else if (ls->requested_width > 0) {
-
-        width = ls->requested_width;
-    }
-
-    /*
-     * Vertical stretch:
-     *
-     * TOP + BOTTOM
-     *
-     * berarti layer mengikuti tinggi Android display.
-     */
-    if (top && bottom) {
-        int64_t h =
-            (int64_t)height -
-            ls->margin_top -
-            ls->margin_bottom;
-
-        height = h > 0 ? (uint32_t)h : 1;
-
-    } else if (ls->requested_height > 0) {
-
-        height = ls->requested_height;
-    }
-
-    /*
-     * Configure serial hanya protocol serial.
-     *
-     * Tidak digunakan sebagai buffer gate.
-     */
+    layer_surface_calculate_size(
+            surf,
+            &width,
+            &height);
+    
     uint32_t serial =
         wl_display_next_serial(srv->display);
 
