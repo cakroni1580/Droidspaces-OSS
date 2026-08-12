@@ -108,15 +108,28 @@ static bool xdg_get_work_area(
         return false;
 
     /*
-     * NEW WORKAREA SEMANTIC:
+     * CONTEXT NOTE:
      *
-     * Work-area dimiliki oleh compositor/output.
-     * layer-shell bukan lagi source geometry langsung bagi XDG.
-     */
+     * XDG window-management geometry menggunakan virtual display
+     * yang dibentuk oleh layer-shell exclusive zones.
+     *
+     * Physical output tetap:
+     *
+     *     srv->output_width
+     *     srv->output_height
+     *
+     * Work-area hanya menjadi coordinate space untuk XDG.
+    */
     layer_shell_get_work_area(
             surf->srv,
             surf,
             area);
+
+    int32_t x = work_area.x;
+    int32_t y = work_area.y;
+
+    uint32_t width = work_area.width;
+    uint32_t height = work_area.height;
 
     if (area->width == 0 ||
         area->height == 0)
