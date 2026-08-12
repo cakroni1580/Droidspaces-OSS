@@ -115,6 +115,7 @@ static bool xdg_get_work_area(
      */
     layer_shell_get_work_area(
             surf->srv,
+            exclude,
             area);
 
     if (area->width == 0 ||
