@@ -1226,24 +1226,30 @@ static void layer_surface_calculate_size(
 /*
  * CONTEXT NOTE:
  *
- * Public geometry accessor.
+ * Physical output dan work-area adalah dua semantic space berbeda.
  *
- * Fungsi ini hanya membaca output layout authority.
+ * Physical output:
  *
- * Tidak:
+ *     srv->output_width
+ *     srv->output_height
  *
- *   - scan layer surfaces
- *   - scan XDG surfaces
- *   - membaca GTK
- *   - menghitung exclusive zone
- *   - bergantung pada zwlr_layer_shell_v1 bind
+ * adalah display authority Android.
  *
- * `exclude` tetap dipertahankan untuk compatibility API,
- * tetapi tidak lagi dipakai sebagai source geometry.
+ * Work-area:
  *
- * Jika caller membutuhkan preview layout tanpa surface tertentu,
- * gunakan explicit layout transaction/recompute API, bukan
- * mengubah semantic global accessor ini.
+ *     srv->output_layout.work_area
+ *
+ * hanyalah child usable-area di dalam physical output.
+ *
+ * Fungsi ini TIDAK BOLEH:
+ *
+ *     - mengubah srv->output_width/height
+ *     - mengubah output mode
+ *     - mengubah Surface size
+ *     - menjadi source untuk apply_output_size()
+ *     - membuat work-area menjadi output baru
+ *
+ * Jika layout belum dihitung, usable area == physical output.
  */
 void layer_shell_get_work_area(
         struct wayland_server *srv,
@@ -1255,60 +1261,62 @@ void layer_shell_get_work_area(
     if (!srv || !area)
         return;
 
-    /*
- * CONTEXT NOTE:
- *
- * Physical output adalah baseline yang selalu valid.
- *
- * layer_shell_get_work_area() tidak bergantung pada:
- *
- *     - zwlr_layer_shell_v1 bind
- *     - keberadaan layer surface
- *     - XDG
- *     - GTK
- *
- * Work-area adalah derived state di dalam physical output.
- *
- * Jika layout belum pernah dihitung, physical output tetap
- * menjadi usable-area default.
- */
-    const uint32_t physical_width =
+    const uint32_t ow =
         srv->output_width > 0 ?
         srv->output_width : 1;
 
-    const uint32_t physical_height =
+    const uint32_t oh =
         srv->output_height > 0 ?
         srv->output_height : 1;
 
+    /*
+     * Physical output selalu menjadi containment boundary.
+     *
+     * Work-area tidak boleh keluar dari physical output.
+     */
     if (srv->output_layout.output_width == 0 ||
         srv->output_layout.output_height == 0) {
 
         area->x = 0;
         area->y = 0;
-        area->width = physical_width;
-        area->height = physical_height;
+        area->width = ow;
+        area->height = oh;
 
         return;
     }
 
-    /*
-     * Layout sudah valid.
-     *
-     * Ini hanya membaca derived work-area.
-     * Physical output tetap tidak berubah.
-     */
     *area = srv->output_layout.work_area;
 
-    if (area->width == 0 ||
-        area->height == 0) {
-
+    /*
+     * Defensive containment.
+     *
+     * Ini hanya memperbaiki derived child area.
+     * Physical output TIDAK disentuh.
+     */
+    if (area->x < 0)
         area->x = 0;
-        area->y = 0;
-        area->width = physical_width;
-        area->height = physical_height;
-    }
-}
 
+    if (area->y < 0)
+        area->y = 0;
+
+    if ((uint32_t)area->x >= ow)
+        area->x = (int32_t)(ow - 1);
+
+    if ((uint32_t)area->y >= oh)
+        area->y = (int32_t)(oh - 1);
+
+    if (area->width > ow - (uint32_t)area->x)
+        area->width = ow - (uint32_t)area->x;
+
+    if (area->height > oh - (uint32_t)area->y)
+        area->height = oh - (uint32_t)area->y;
+
+    if (area->width == 0)
+        area->width = 1;
+
+    if (area->height == 0)
+        area->height = 1;
+}
 /* layer_shell interface                                                     */
 /* ------------------------------------------------------------------------- */
 
