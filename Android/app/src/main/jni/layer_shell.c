@@ -377,20 +377,6 @@ static void layer_surface_resource_destroy(
         free(surf->layer_surface);
         surf->layer_surface = NULL;
     }
-
-    /*
-     * Layer-shell role sudah benar-benar hilang.
-     * Recompute dilakukan setelah state dibersihkan.
-     */
-    if (srv) {
-        pthread_mutex_lock(&srv->surfaces_mutex);
-
-        trierarch_output_layout_recompute(
-            srv,
-            NULL);
-
-        pthread_mutex_unlock(&srv->surfaces_mutex);
-    }
 }
 
 
@@ -434,36 +420,6 @@ static void layer_surface_set_size(
     surf->layer_surface->requested_width = width;
     surf->layer_surface->requested_height = height;
 
-    /*
-     * CONTEXT NOTE:
-     *
-     * set_size() mengubah protocol geometry state.
-     *
-     * Trierarch contract tidak menggunakan wlroots pending-state
-     * gate, sehingga geometry/configure harus langsung mengikuti
-     * state terbaru.
-     *
-     * Work-area sendiri tetap dihitung dari seluruh layer reservation.
-     */
-    if (surf->srv) {
-
-        pthread_mutex_lock(
-            &surf->srv->surfaces_mutex);
-
-        trierarch_output_layout_recompute(
-            surf->srv,
-            NULL);
-
-        /*
-         * Reconfigure layer surface setelah geometry berubah.
-         */
-        if (surf->layer_surface_res)
-            send_layer_surface_configure(surf);
-
-        pthread_mutex_unlock(
-            &surf->srv->surfaces_mutex);
-    }
-
     LOGI(
         "layer set_size surf=%p requested=%ux%u",
         (void *)surf,
@@ -494,22 +450,6 @@ static void layer_surface_set_anchor(
      * berubah.
      */
     surf->layer_surface->anchor = anchor;
-
-    if (surf->srv) {
-        pthread_mutex_lock(&surf->srv->surfaces_mutex);
-
-        trierarch_output_layout_recompute(
-            surf->srv,
-            NULL);
-        /*
-         * Anchor/margin/exclusive zone dapat mengubah geometry
-         * yang harus dipublish kepada layer client.
-         */
-        if (surf->layer_surface_res)
-            send_layer_surface_configure(surf);
-
-        pthread_mutex_unlock(&surf->srv->surfaces_mutex);
-    }
 
     LOGI(
         "layer set_anchor surf=%p anchor=0x%x",
@@ -561,19 +501,6 @@ static void layer_surface_set_exclusive_zone(
      */
     surf->layer_surface->exclusive_zone = zone;
 
-    if (surf->srv) {
-        pthread_mutex_lock(&surf->srv->surfaces_mutex);
-
-        trierarch_output_layout_recompute(
-            surf->srv,
-            NULL);
-     
-       if (surf->layer_surface_res)
-           send_layer_surface_configure(surf);
-
-        pthread_mutex_unlock(&surf->srv->surfaces_mutex);
-    }
-
     LOGI(
         "layer exclusive reservation changed "
         "surf=%p zone=%d",
@@ -607,19 +534,6 @@ static void layer_surface_set_margin(
     surf->layer_surface->margin_right = right;
     surf->layer_surface->margin_bottom = bottom;
     surf->layer_surface->margin_left = left;
-
-    if (surf->srv) {
-        pthread_mutex_lock(&surf->srv->surfaces_mutex);
-
-        trierarch_output_layout_recompute(
-            surf->srv,
-            NULL);
-     
-        if (surf->layer_surface_res)
-            send_layer_surface_configure(surf);
-
-        pthread_mutex_unlock(&surf->srv->surfaces_mutex);
-    }
 
     LOGI(
         "layer set_margin surf=%p "
