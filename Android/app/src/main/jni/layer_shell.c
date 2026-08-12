@@ -48,6 +48,208 @@ extern void keyboard_focus_update(
         struct wayland_server *srv,
         struct compositor_surface *surface);
 
+/*
+ * CONTEXT NOTE:
+ *
+ * exclusive_zone adalah reservation request.
+ *
+ * reservation -> output layout
+ *
+ * bukan:
+ *
+ * layer_surface -> langsung mengubah geometry XDG.
+ *
+ * Dengan model ini seluruh consumer membaca hasil yang sama.
+ */
+static void trierarch_output_layout_recompute(
+        struct wayland_server *srv,
+        struct compositor_surface *exclude)
+{
+    if (!srv)
+        return;
+
+    trierarch_output_layout_reset(srv);
+
+    struct trierarch_output_layout *layout =
+        &srv->output_layout;
+
+    struct compositor_surface *surf;
+
+    wl_list_for_each(
+            surf,
+            &srv->surfaces,
+            link) {
+
+        if (surf == exclude)
+            continue;
+
+        /*
+         * Hanya surface yang benar-benar memiliki
+         * layer-shell reservation yang dapat menjadi
+         * producer exclusive zone.
+         *
+         * Ini TIDAK berarti work-area bergantung
+         * pada layer-shell bind.
+         *
+         * Tanpa producer:
+         *
+         *     usable_area == full output
+         */
+        struct layer_surface_state *ls =
+            surf->layer_surface;
+
+        if (!ls)
+            continue;
+
+        if (ls->exclusive_zone <= 0)
+            continue;
+
+        const bool left =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) != 0;
+
+        const bool right =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) != 0;
+
+        const bool top =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) != 0;
+
+        const bool bottom =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
+
+        /*
+         * Phoc-style edge reservation:
+         *
+         * TOP    / TOP+LEFT+RIGHT
+         * BOTTOM / BOTTOM+LEFT+RIGHT
+         * LEFT   / LEFT+TOP+BOTTOM
+         * RIGHT  / RIGHT+TOP+BOTTOM
+         */
+        const bool valid_top =
+            top && !bottom && (left == right);
+
+        const bool valid_bottom =
+            bottom && !top && (left == right);
+
+        const bool valid_left =
+            left && !right && (top == bottom);
+
+        const bool valid_right =
+            right && !left && (top == bottom);
+
+        int32_t reservation;
+
+        if (valid_top) {
+
+            reservation =
+                ls->exclusive_zone +
+                ls->margin_top;
+
+            if (reservation < 0)
+                reservation = 0;
+
+            if (reservation > layout->exclusive_top)
+                layout->exclusive_top = reservation;
+
+            continue;
+        }
+
+        if (valid_bottom) {
+
+            reservation =
+                ls->exclusive_zone +
+                ls->margin_bottom;
+
+            if (reservation < 0)
+                reservation = 0;
+
+            if (reservation > layout->exclusive_bottom)
+                layout->exclusive_bottom = reservation;
+
+            continue;
+        }
+
+        if (valid_left) {
+
+            reservation =
+                ls->exclusive_zone +
+                ls->margin_left;
+
+            if (reservation < 0)
+                reservation = 0;
+
+            if (reservation > layout->exclusive_left)
+                layout->exclusive_left = reservation;
+
+            continue;
+        }
+
+        if (valid_right) {
+
+            reservation =
+                ls->exclusive_zone +
+                ls->margin_right;
+
+            if (reservation < 0)
+                reservation = 0;
+
+            if (reservation > layout->exclusive_right)
+                layout->exclusive_right = reservation;
+
+            continue;
+        }
+    }
+
+    /*
+     * Convert reservations into the universal usable area.
+     *
+     * Clamp each side independently so malformed/multiple
+     * reservations can never produce unsigned underflow.
+     */
+    int32_t x = layout->exclusive_left;
+    int32_t y = layout->exclusive_top;
+
+    int32_t width =
+        (int32_t)layout->output_width -
+        layout->exclusive_left -
+        layout->exclusive_right;
+
+    int32_t height =
+        (int32_t)layout->output_height -
+        layout->exclusive_top -
+        layout->exclusive_bottom;
+
+    if (width < 1)
+        width = 1;
+
+    if (height < 1)
+        height = 1;
+
+    layout->work_area.x = x;
+    layout->work_area.y = y;
+    layout->work_area.width = (uint32_t)width;
+    layout->work_area.height = (uint32_t)height;
+
+    LOGI(
+        "output layout recompute "
+        "output=%ux%u "
+        "exclusive=%d,%d,%d,%d "
+        "work=%ux%u@%d,%d",
+        layout->output_width,
+        layout->output_height,
+        layout->exclusive_top,
+        layout->exclusive_right,
+        layout->exclusive_bottom,
+        layout->exclusive_left,
+        layout->work_area.width,
+        layout->work_area.height,
+        layout->work_area.x,
+        layout->work_area.y);
+}
+
 static void layer_surface_resource_destroy(
         struct wl_resource *resource)
 {
@@ -73,13 +275,18 @@ static void layer_surface_resource_destroy(
 
 
     /*
-     * CONTEXT:
-     * Resource layer-shell sudah dihancurkan.
-     * Surface tidak lagi memiliki layer role.
+     * CONTEXT NOTE:
      *
-     * Geometry lama tidak boleh dianggap sebagai geometry
-     * aktif jika surface nanti dipakai kembali oleh role lain.
+     * Destroying a layer role removes its reservation producer.
+     *
+     * Karena work-area adalah output-global state, setelah
+     * role hilang layout harus direcompute.
+     *
+     * Ini juga menjamin XDG/GTK tidak membaca exclusive zone
+     * dari role yang sudah mati.
      */
+    struct wayland_server *srv = surf->srv;
+
     surf->layer_surface_res = NULL;
 
     if (surf->layer_surface) {
@@ -87,10 +294,20 @@ static void layer_surface_resource_destroy(
         free(surf->layer_surface);
         surf->layer_surface = NULL;
     }
+
     /*
-     * layer_surface/layer_surface_res are cleared below.
-     * Trierarch has no generic surface role enum.
+     * Layer-shell role sudah benar-benar hilang.
+     * Recompute dilakukan setelah state dibersihkan.
      */
+    if (srv) {
+        pthread_mutex_lock(&srv->surfaces_mutex);
+
+        trierarch_output_layout_recompute(
+            srv,
+            NULL);
+
+        pthread_mutex_unlock(&srv->surfaces_mutex);
+    }
 }
 
 
@@ -157,15 +374,23 @@ static void layer_surface_set_anchor(
         return;
 
     /*
-     * CONTEXT:
+     * CONTEXT NOTE:
      *
-     * Anchor adalah pending geometry state.
-     * Jangan menghitung work-area di sini.
-     * Jangan mengubah wm_x/wm_y.
-     *
-     * Geometry final dihitung ketika configure dikirim.
+     * Anchor dapat mengubah edge yang menjadi reservation producer.
+     * Karena itu output usable-area harus direcompute setelah state
+     * berubah.
      */
     surf->layer_surface->anchor = anchor;
+
+    if (surf->srv) {
+        pthread_mutex_lock(&surf->srv->surfaces_mutex);
+
+        trierarch_output_layout_recompute(
+            surf->srv,
+            NULL);
+
+        pthread_mutex_unlock(&surf->srv->surfaces_mutex);
+    }
 
     LOGI(
         "layer set_anchor surf=%p anchor=0x%x",
@@ -207,20 +432,31 @@ static void layer_surface_set_exclusive_zone(
 
         return;
     }
+    /*
+     * CONTEXT NOTE:
+     *
+     * Protocol state berubah -> output layout harus dihitung ulang.
+     *
+     * Namun fungsi ini tetap tidak menghitung geometry XDG.
+     * Ia hanya invalidates/recomputes output usable-area state.
+     */
     surf->layer_surface->exclusive_zone = zone;
 
+    if (surf->srv) {
+        pthread_mutex_lock(&surf->srv->surfaces_mutex);
+
+        trierarch_output_layout_recompute(
+            surf->srv,
+            NULL);
+
+        pthread_mutex_unlock(&surf->srv->surfaces_mutex);
+    }
+
     LOGI(
-       "layer exclusive reservation changed "
-        "surf=%p zone=%d "
-        "geometry remains independent "
-        "anchor=0x%x margin=%d,%d,%d,%d",
+        "layer exclusive reservation changed "
+        "surf=%p zone=%d",
         (void *)surf,
-        zone,
-        surf->layer_surface->anchor,
-        surf->layer_surface->margin_top,
-        surf->layer_surface->margin_right,
-        surf->layer_surface->margin_bottom,
-        surf->layer_surface->margin_left);
+        zone);
 }
 
 static void layer_surface_set_margin(
@@ -240,18 +476,25 @@ static void layer_surface_set_margin(
         return;
 
     /*
-     * CONTEXT:
+     * CONTEXT NOTE:
      *
-     * Margin adalah bagian dari pending layer geometry.
-     *
-     * Margin tidak mengubah exclusive reservation secara
-     * langsung di sini. Work-area akan membaca state terbaru
-     * ketika consumer meminta work-area.
+     * Margin adalah bagian dari reservation geometry.
+     * Perubahan margin harus memicu recompute output layout.
      */
     surf->layer_surface->margin_top = top;
     surf->layer_surface->margin_right = right;
     surf->layer_surface->margin_bottom = bottom;
     surf->layer_surface->margin_left = left;
+
+    if (surf->srv) {
+        pthread_mutex_lock(&surf->srv->surfaces_mutex);
+
+        trierarch_output_layout_recompute(
+            surf->srv,
+            NULL);
+
+        pthread_mutex_unlock(&surf->srv->surfaces_mutex);
+    }
 
     LOGI(
         "layer set_margin surf=%p "
@@ -854,299 +1097,39 @@ static void layer_surface_calculate_size(
     }
 }
 
-
+/*
+ * CONTEXT NOTE:
+ *
+ * Public geometry accessor.
+ *
+ * Fungsi ini hanya membaca output layout authority.
+ *
+ * Tidak:
+ *
+ *   - scan layer surfaces
+ *   - scan XDG surfaces
+ *   - membaca GTK
+ *   - menghitung exclusive zone
+ *   - bergantung pada zwlr_layer_shell_v1 bind
+ *
+ * `exclude` tetap dipertahankan untuk compatibility API,
+ * tetapi tidak lagi dipakai sebagai source geometry.
+ *
+ * Jika caller membutuhkan preview layout tanpa surface tertentu,
+ * gunakan explicit layout transaction/recompute API, bukan
+ * mengubah semantic global accessor ini.
+ */
 void layer_shell_get_work_area(
         struct wayland_server *srv,
         struct compositor_surface *exclude,
         struct trierarch_work_area *area)
 {
+    (void)exclude;
+
     if (!srv || !area)
         return;
 
-    const uint32_t ow =
-        srv->output_width > 0 ?
-        srv->output_width : 1;
-
-    const uint32_t oh =
-        srv->output_height > 0 ?
-        srv->output_height : 1;
-
-    /*
-     * ================================================================
-     * CONTEXT:
-     *
-     * Work-area selalu dimulai dari full output.
-     *
-     * Layer-shell surface sendiri tetap menggunakan full output
-     * coordinate space. Fungsi ini hanya menghitung reservation
-     * yang harus dikurangi dari output untuk consumer geometry lain.
-     *
-     * Tidak ada dependency terhadap xdg-shell.
-     * ================================================================
-     */
-    area->x = 0;
-    area->y = 0;
-    area->width = ow;
-    area->height = oh;
-
-    struct compositor_surface *surf;
-
-    wl_list_for_each(
-            surf,
-            &srv->surfaces,
-            link) {
-
-        if (surf == exclude)
-            continue;
-
-        struct layer_surface_state *ls =
-            surf->layer_surface;
-
-        if (!ls)
-            continue;
-
-        /*
-         * ============================================================
-         * Exclusive zone:
-         *
-         *   > 0  -> reservation
-         *    0  -> no reservation
-         *   -1  -> no reservation
-         *
-         * Hanya positive exclusive zone yang mempengaruhi work-area.
-         * ============================================================
-         */
-        if (ls->exclusive_zone <= 0)
-            continue;
-
-        const bool top =
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) != 0;
-
-        const bool bottom =
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
-
-        const bool left =
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) != 0;
-
-        const bool right =
-            (ls->anchor &
-             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) != 0;
-
-        /*
-         * ============================================================
-         * CONTEXT:
-         *
-         * Exclusive reservation hanya valid apabila ada tepat satu
-         * exclusive edge.
-         *
-         * Valid:
-         *
-         *   TOP
-         *   TOP + LEFT + RIGHT
-         *
-         *   BOTTOM
-         *   BOTTOM + LEFT + RIGHT
-         *
-         *   LEFT
-         *   LEFT + TOP + BOTTOM
-         *
-         *   RIGHT
-         *   RIGHT + TOP + BOTTOM
-         *
-         * Corner-only anchor seperti:
-         *
-         *   TOP + LEFT
-         *
-         * tidak mempunyai exclusive edge yang unik.
-         *
-         * Begitu juga:
-         *
-         *   TOP + BOTTOM
-         *   LEFT + RIGHT
-         *   ALL FOUR
-         *
-         * ============================================================
-         */
-
-        const bool valid_top =
-            top &&
-            !bottom &&
-            (left == right);
-
-        const bool valid_bottom =
-            bottom &&
-            !top &&
-            (left == right);
-
-        const bool valid_left =
-            left &&
-            !right &&
-            (top == bottom);
-
-        const bool valid_right =
-            right &&
-            !left &&
-            (top == bottom);
-
-        int32_t reservation =
-            ls->exclusive_zone;
-
-        /*
-         * ============================================================
-         * TOP
-         * ============================================================
-         */
-        if (valid_top) {
-
-            reservation += ls->margin_top;
-
-            if (reservation < 0)
-                reservation = 0;
-
-            if (reservation > (int32_t)area->height)
-                reservation = (int32_t)area->height;
-
-            area->y += reservation;
-            area->height -= (uint32_t)reservation;
-
-            LOGI(
-                "exclusive TOP surf=%p "
-                "zone=%d margin=%d "
-                "usable=%ux%u@%d,%d",
-                (void *)surf,
-                ls->exclusive_zone,
-                ls->margin_top,
-                area->width,
-                area->height,
-                area->x,
-                area->y);
-
-            continue;
-        }
-
-        /*
-         * ============================================================
-         * BOTTOM
-         * ============================================================
-         */
-        if (valid_bottom) {
-
-            reservation += ls->margin_bottom;
-
-            if (reservation < 0)
-                reservation = 0;
-
-            if (reservation > (int32_t)area->height)
-                reservation = (int32_t)area->height;
-
-            area->height -= (uint32_t)reservation;
-
-            LOGI(
-                "exclusive BOTTOM surf=%p "
-                "zone=%d margin=%d "
-                "usable=%ux%u@%d,%d",
-                (void *)surf,
-                ls->exclusive_zone,
-                ls->margin_bottom,
-                area->width,
-                area->height,
-                area->x,
-                area->y);
-
-            continue;
-        }
-
-        /*
-         * ============================================================
-         * LEFT
-         * ============================================================
-         */
-        if (valid_left) {
-
-            reservation += ls->margin_left;
-
-            if (reservation < 0)
-                reservation = 0;
-
-            if (reservation > (int32_t)area->width)
-                reservation = (int32_t)area->width;
-
-            area->x += reservation;
-            area->width -= (uint32_t)reservation;
-
-            LOGI(
-                "exclusive LEFT surf=%p "
-                "zone=%d margin=%d "
-                "usable=%ux%u@%d,%d",
-                (void *)surf,
-                ls->exclusive_zone,
-                ls->margin_left,
-                area->width,
-                area->height,
-                area->x,
-                area->y);
-
-            continue;
-        }
-
-        /*
-         * ============================================================
-         * RIGHT
-         * ============================================================
-         */
-        if (valid_right) {
-
-            reservation += ls->margin_right;
-
-            if (reservation < 0)
-                reservation = 0;
-
-            if (reservation > (int32_t)area->width)
-                reservation = (int32_t)area->width;
-
-            area->width -= (uint32_t)reservation;
-
-            LOGI(
-                "exclusive RIGHT surf=%p "
-                "zone=%d margin=%d "
-                "usable=%ux%u@%d,%d",
-                (void *)surf,
-                ls->exclusive_zone,
-                ls->margin_right,
-                area->width,
-                area->height,
-                area->x,
-                area->y);
-
-            continue;
-        }
-
-        /*
-         * Invalid/corner anchor:
-         *
-         * The layer remains a normal layer surface, but its
-         * exclusive zone cannot be associated with one unique edge.
-         *
-         * Therefore it does not modify the work-area.
-         */
-        LOGI(
-            "exclusive ignored: invalid edge "
-            "surf=%p zone=%d anchor=0x%x",
-            (void *)surf,
-            ls->exclusive_zone,
-            ls->anchor);
-    }
-
-    LOGI(
-        "layer work-area "
-        "x=%d y=%d size=%ux%u",
-        area->x,
-        area->y,
-        area->width,
-        area->height);
+    *area = srv->output_layout.work_area;
 }
 
 /* layer_shell interface                                                     */
@@ -1453,6 +1436,52 @@ void layer_surface_notify_output_change(
             &srv->surfaces_mutex);
 }
 
+/*
+ * CONTEXT NOTE:
+ *
+ * Ini adalah equivalent semantic dari:
+ *
+ *     PhocOutput.usable_area
+ *
+ * Work-area selalu valid walaupun:
+ *
+ *     - zwlr_layer_shell_v1 belum bind
+ *     - tidak ada layer surface
+ *     - XDG belum bind
+ *     - GTK belum start
+ *
+ * Bind protocol tidak menciptakan output layout.
+ */
+void trierarch_output_layout_reset(
+        struct wayland_server *srv)
+{
+    if (!srv)
+        return;
+
+    struct trierarch_output_layout *layout =
+        &srv->output_layout;
+
+    const uint32_t ow =
+        srv->output_width > 0 ?
+        srv->output_width : 1;
+
+    const uint32_t oh =
+        srv->output_height > 0 ?
+        srv->output_height : 1;
+
+    layout->output_width = ow;
+    layout->output_height = oh;
+
+    layout->exclusive_top = 0;
+    layout->exclusive_right = 0;
+    layout->exclusive_bottom = 0;
+    layout->exclusive_left = 0;
+
+    layout->work_area.x = 0;
+    layout->work_area.y = 0;
+    layout->work_area.width = ow;
+    layout->work_area.height = oh;
+}
 
 void layer_shell_bind(
         struct wl_client *client,
