@@ -301,6 +301,7 @@ struct input_resource_node {
 
 /* Opaque server struct; full definition in compositor.c */
 struct wayland_server {
+    struct trierarch_output_layout output_layout;
     struct wl_display *display;
     struct wl_event_loop *loop;
     char *runtime_dir;
