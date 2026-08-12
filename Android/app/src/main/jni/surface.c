@@ -15,8 +15,16 @@
  * wl_buffer with NULL user_data cannot be attached — every frame is dropped. */
 static uint64_t g_wl_buffer_dropped_no_egl_import;
 
-static void xdg_surface_resource_destroy(struct wl_resource *resource);
-static void xdg_toplevel_resource_destroy(struct wl_resource *resource);
+/*
+ * CONTEXT:
+ *
+ * wl_surface lifecycle tidak memiliki dependency terhadap
+ * XDG maupun layer-shell.
+ *
+ * Role-specific resource cleanup dilakukan oleh protocol
+ * masing-masing. surface.c hanya memutus association ketika
+ * wl_surface dihancurkan.
+ */
 
 static void surface_resource_destroy(struct wl_resource *resource) {
     struct compositor_surface *surf = wl_resource_get_user_data(resource);
@@ -29,6 +37,18 @@ static void surface_resource_destroy(struct wl_resource *resource) {
         wl_resource_set_user_data(surf->xdg_surface_res, NULL);
         surf->xdg_surface_res = NULL;
     }
+    /*
+     * CONTEXT:
+     *
+     * Layer-shell adalah role yang sama levelnya dengan XDG.
+     * wl_surface destructor tidak boleh meninggalkan resource
+     * layer-shell yang masih menunjuk ke compositor_surface.
+     */
+    if (surf->layer_surface_res) {
+        wl_resource_set_user_data(surf->layer_surface_res, NULL);
+        surf->layer_surface_res = NULL;
+    }
+
     if (surf->subsurface_res) {
         wl_resource_set_user_data(surf->subsurface_res, NULL);
         surf->subsurface_res = NULL;
@@ -251,11 +271,14 @@ static void surface_commit(struct wl_client *client, struct wl_resource *resourc
 
     if (surf->current_buffer) {
         /*
-         * Layer-shell keyboard focus.
+         * CONTEXT:
          *
-         * Phoc behavior:
-         * keyboard diberikan setelah surface
-         * mempunyai buffer aktif.
+         * current_buffer sudah menjadi state aktif.
+         * Role protocol tidak menentukan apakah buffer boleh
+         * menjadi current.
+         *
+         * Layer-shell hanya menggunakan commit ini sebagai
+         * trigger focus policy setelah surface mempunyai buffer.
          */
         if (surf->layer_surface &&
             surf->layer_surface->keyboard_interactive &&
