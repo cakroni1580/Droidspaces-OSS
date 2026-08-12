@@ -113,7 +113,7 @@ static bool xdg_get_work_area(
      * Work-area dimiliki oleh compositor/output.
      * layer-shell bukan lagi source geometry langsung bagi XDG.
      */
-    trierarch_work_area(
+    layer_shell_get_work_area(
             surf->srv,
             area);
 
