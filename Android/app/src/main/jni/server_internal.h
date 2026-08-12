@@ -145,18 +145,52 @@ struct layer_surface_state {
 };
 
 /*
- * CONTEXT:
- * Layer-shell exclusive zones menyediakan usable output area
- * untuk WM_MODE_DIRECT.
+ * CONTEXT NOTE:
  *
- * xdg-shell menggunakan hasil ini untuk maximized/fullscreen
- * geometry dan tidak menghitung exclusive zone sendiri.
+ * Work-area adalah output layout state milik compositor.
+ *
+ * State ini TIDAK dimiliki oleh:
+ *
+ *   - zwlr_layer_shell_v1
+ *   - xdg-shell
+ *   - GTK
+ *   - role tertentu
+ *
+ * Layer-shell hanya menjadi salah satu producer reservation.
+ * XDG dan GTK menjadi consumer geometry.
+ *
+ * Semantic mengikuti Phoc:
+ *
+ *     output -> usable_area
+ *
+ * bukan:
+ *
+ *     layer-shell bind -> work-area
  */
 struct trierarch_work_area {
     int32_t x;
     int32_t y;
     uint32_t width;
     uint32_t height;
+};
+
+struct trierarch_output_layout {
+    struct trierarch_work_area work_area;
+
+    /*
+     * Full physical output geometry.
+     * Tidak pernah berasal dari GTK/XDG/layer-shell.
+     */
+    uint32_t output_width;
+    uint32_t output_height;
+
+    /*
+     * Cached reservation yang membentuk usable_area.
+     */
+    int32_t exclusive_top;
+    int32_t exclusive_right;
+    int32_t exclusive_bottom;
+    int32_t exclusive_left;
 };
 /*
  * ================================================================
