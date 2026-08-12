@@ -76,8 +76,6 @@ static void positioner_compute_local(const struct positioner_state *p,
     *out_x = px + p->offset_x;
     *out_y = py + p->offset_y;
 }
-/* AFTER */
-
 /*
  * CONTEXT:
  *
@@ -88,8 +86,15 @@ static void positioner_compute_local(const struct positioner_state *p,
  *
  * WM_MODE_DIRECT:
  *     output_width/output_height tetap menjadi coordinate space,
- *     sedangkan layer_shell_get_work_area() menjadi batas area
+ *     sedangkan compositor-owned work-area menjadi batas area
  *     penempatan dan ukuran app window.
+ *
+ * Work-area bukan lagi semantic milik layer-shell.
+ * Layer-shell hanya menyumbang reservation/exclusive-zone ke
+ * output-owned work-area.
+ *
+ * Karena itu work-area tetap tersedia walaupun tidak ada client
+ * yang bind zwlr_layer_shell_v1.
  *
  * Helper ini HANYA dipakai oleh DIRECT path.
  */
@@ -102,9 +107,14 @@ static bool xdg_get_work_area(
         !area)
         return false;
 
-    layer_shell_get_work_area(
+    /*
+     * NEW WORKAREA SEMANTIC:
+     *
+     * Work-area dimiliki oleh compositor/output.
+     * layer-shell bukan lagi source geometry langsung bagi XDG.
+     */
+    compositor_get_work_area(
             surf->srv,
-            surf,
             area);
 
     if (area->width == 0 ||
@@ -126,7 +136,6 @@ static bool xdg_get_work_area(
 
     return true;
 }
-
 
 /*
  * CONTEXT:
