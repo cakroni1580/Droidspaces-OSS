@@ -420,28 +420,6 @@ void send_toplevel_configure(struct compositor_surface *surf) {
 static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resource *xdg_surface_res, uint32_t id) {
     struct compositor_surface *surf = wl_resource_get_user_data(xdg_surface_res);
     if (!surf) return;
-    if (surf->xdg_surface_res ||
-        surf->xdg_toplevel_res ||
-        surf->layer_surface ||
-        surf->layer_surface_res) {
-
-        wl_resource_post_error(
-                wm_res,
-                XDG_WM_BASE_ERROR_ROLE,
-                "surface already has a shell role");
-
-        LOGE(
-            "xdg role rejected: surf=%p "
-            "xdg_surface=%p xdg_toplevel=%p "
-             "layer_surface=%p layer_res=%p",
-            (void *)surf,
-            (void *)surf->xdg_surface_res,
-            (void *)surf->xdg_toplevel_res,
-            (void *)surf->layer_surface,
-            (void *)surf->layer_surface_res);
-
-        return;
-    }
     struct wl_resource *toplevel = wl_resource_create(client, &xdg_toplevel_interface,
             wl_resource_get_version(xdg_surface_res), id);
     if (!toplevel) {
@@ -682,6 +660,24 @@ static void xdg_wm_base_get_xdg_surface(struct wl_client *client, struct wl_reso
     }
     if (surf->xdg_surface_res) {
         wl_resource_post_error(wm_res, XDG_WM_BASE_ERROR_ROLE, "surface already has xdg_surface");
+        return;
+    }
+
+    if (surf->layer_surface ||
+        surf->layer_surface_res) {
+
+        wl_resource_post_error(
+                wm_res,
+                XDG_WM_BASE_ERROR_ROLE,
+                "surface already has a shell role");
+
+        LOGE(
+            "xdg role rejected: surf=%p "
+             "layer_surface=%p layer_res=%p",
+            (void *)surf,
+            (void *)surf->layer_surface,
+            (void *)surf->layer_surface_res);
+
         return;
     }
     struct wl_resource *xdg_surf = wl_resource_create(client, &xdg_surface_interface,
