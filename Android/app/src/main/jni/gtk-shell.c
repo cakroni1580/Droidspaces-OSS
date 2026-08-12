@@ -722,19 +722,6 @@ bool gtk_shell_get_work_area(
         !area)
         return false;
 
-    if (!layer_shell_get_work_area(
-            surf->srv,
-            NULL,
-            area)) {
-
-        LOGE(
-            "gtk work-area unavailable "
-            "surface=%p",
-            (void *)surf);
-
-        return false;
-    }
-
     if (area->width == 0 ||
         area->height == 0) {
 
