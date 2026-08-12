@@ -107,30 +107,23 @@ static bool xdg_get_work_area(
         !area)
         return false;
 
-    /*
-     * CONTEXT NOTE:
-     *
-     * XDG window-management geometry menggunakan virtual display
-     * yang dibentuk oleh layer-shell exclusive zones.
-     *
-     * Physical output tetap:
-     *
-     *     srv->output_width
-     *     srv->output_height
-     *
-     * Work-area hanya menjadi coordinate space untuk XDG.
-    */
     layer_shell_get_work_area(
             surf->srv,
             surf,
             area);
 
-    int32_t x = work_area.x;
-    int32_t y = work_area.y;
-
-    uint32_t width = work_area.width;
-    uint32_t height = work_area.height;
-
+    /*
+     * CONTEXT NOTE:
+     *
+     * `area` adalah virtual display / work-area.
+     *
+     * Jangan mengambil width/height dari:
+     *
+     *     srv->output_width
+     *     srv->output_height
+     *
+     * karena physical output tetap menjadi display authority.
+     */
     if (area->width == 0 ||
         area->height == 0)
         return false;
