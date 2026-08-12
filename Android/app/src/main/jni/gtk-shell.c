@@ -722,7 +722,7 @@ bool gtk_shell_get_work_area(
         !area)
         return false;
 
-    if (!trierarch_work_area(
+    if (!layer_shell_get_work_area(
             surf->srv,
             NULL,
             area)) {
