@@ -998,28 +998,58 @@ bool gtk_shell_get_maximized_geometry(
         return false;
 
     /*
-     * GTK maximized state hanya valid untuk XDG toplevel.
+     * GTK window-management policy hanya berlaku
+     * untuk XDG toplevel.
+     *
+     * Layer-shell tidak boleh masuk jalur ini.
      */
     if (!gtk_surface_is_xdg_toplevel(surf))
         return false;
 
     /*
-     * SOURCE OF TRUTH:
+     * ============================================================
+     * POSITION
+     * ============================================================
      *
-     * XDG/output.c telah menentukan geometry final.
+     * wm_x / wm_y adalah geometry position milik compositor.
      */
     *x = surf->wm_x;
     *y = surf->wm_y;
 
     /*
-     * Gunakan size XDG final dari compositor_surface.
-     * Sesuaikan nama field size dengan struktur aktual.
+     * ============================================================
+     * SIZE
+     * ============================================================
+     *
+     * Jangan membaca surf->width / surf->height karena field
+     * tersebut memang tidak ada pada compositor_surface.
+     *
+     * Gunakan API geometry compositor yang menjadi source size.
      */
-    *width = surf->width;
-    *height = surf->height;
+    if (!compositor_surface_get_logical_size(
+            surf,
+            width,
+            height)) {
 
-    if (*width == 0 || *height == 0)
+        LOGI(
+            "gtk maximized geometry unavailable "
+            "surface=%p",
+            (void *)surf);
+
         return false;
+    }
+
+    if (*width == 0 || *height == 0) {
+
+        LOGI(
+            "gtk maximized geometry invalid "
+            "surface=%p geometry=%ux%u",
+            (void *)surf,
+            *width,
+            *height);
+
+        return false;
+    }
 
     LOGI(
         "gtk maximized follows XDG "
