@@ -13,7 +13,73 @@
 #define COMPOSITOR_RESIZE_RIGHT  (1u << 1)
 #define COMPOSITOR_RESIZE_BOTTOM (1u << 2)
 #define COMPOSITOR_RESIZE_LEFT   (1u << 3)
-
+/*
+ * ================================================================
+ * GTK SHELL ARCHITECTURE
+ * ================================================================
+ *
+ * gtk-shell.c TIDAK memiliki authority terhadap:
+ *
+ *   - surface geometry
+ *   - wm_x / wm_y
+ *   - output size
+ *   - maximize/fullscreen
+ *   - configure serial
+ *   - xdg_toplevel.configure
+ *   - gtk_surface1.configure
+ *
+ * Semua geometry/state diproses oleh compositor/output.c.
+ *
+ * gtk-shell.c hanya menjadi protocol bridge antara GTK client
+ * dengan compositor_surface.
+ *
+ * Flow:
+ *
+ *   GTK client
+ *       |
+ *       +--> gtk_shell1
+ *       |
+ *       +--> gtk_surface1
+ *               |
+ *               v
+ *        compositor_surface
+ *               |
+ *               v
+ *            output.c
+ *               |
+ *        +------+------+
+ *        |             |
+ *      xdg-shell    gtk-shell
+ *
+ * ================================================================
+ */
+ /*
+ * ================================================================
+ * CONTEXT: GTK DEFAULT SURFACE AUTHORITY
+ * ================================================================
+ *
+ * GTK shell boleh attached ke wl_surface yang juga merupakan
+ * layer-shell surface, tetapi GTK window-management policy hanya
+ * berlaku pada XDG toplevel.
+ *
+ * Default desktop application:
+ *
+ *     wl_surface
+ *          |
+ *          +--> xdg_surface
+ *                  |
+ *                  +--> xdg_toplevel   <-- GTK geometry authority
+ *
+ * Layer-shell tetap valid:
+ *
+ *     wl_surface
+ *          |
+ *          +--> zwlr_layer_surface_v1
+ *
+ * tetapi GTK TIDAK mengambil alih geometry layer-shell.
+ *
+ * ================================================================
+ */
 static bool gtk_surface_is_xdg_toplevel(
         struct compositor_surface *surf)
 {
@@ -47,34 +113,16 @@ extern void keyboard_focus_update(
         struct compositor_surface *surface);
 
 /*
- * ================================================================
- * PHOC SEMANTIC: OUTPUT USABLE AREA
- * ================================================================
+ * Layer-shell adalah authority untuk usable output area.
  *
- * Work-area bukan milik layer-shell.
+ * GTK shell TIDAK membaca:
  *
- * Work-area adalah state geometry milik compositor output.
+ *     layer_surface->exclusive_zone
  *
- * Layer-shell hanya salah satu contributor yang dapat mengurangi
- * usable area melalui positive exclusive-zone reservation.
+ * secara langsung.
  *
- * Consumer seperti:
- *
- *     - XDG
- *     - GTK shell
- *     - tiling
- *     - popup placement
- *
- * hanya membaca hasil final dari output.
- *
- * Penting:
- *
- *     zwlr_layer_shell_v1 bind
- *         !=
- *     work-area availability
- *
- * Output usable-area selalu tersedia, bahkan ketika tidak ada
- * client yang pernah bind zwlr_layer_shell_v1.
+ * Hasil dari layer_shell_get_work_area() adalah final work-area
+ * setelah seluruh layer-shell exclusive zone diterapkan.
  */
 extern void layer_shell_get_work_area(
         struct wayland_server *srv,
@@ -108,7 +156,199 @@ struct gtk_surface_state {
 
 static const struct gtk_surface1_interface gtk_surface_impl;
 static const struct gtk_shell1_interface gtk_shell_impl;
-        
+/*
+ * CONTEXT:
+ *
+ * GTK shell BUKAN geometry authority.
+ *
+ * Layer-shell sudah menentukan:
+ *
+ *     output geometry
+ *          +
+ *     exclusive-zone reservation
+ *          =
+ *     final work-area
+ *
+ * GTK hanya mengonsumsi work-area tersebut untuk policy
+ * tiling XDG.
+ *
+ * Dengan demikian:
+ *
+ *     layer surface geometry
+ *             !=
+ *     GTK tiling geometry
+ *
+ * dan GTK tidak pernah mengubah geometry layer surface.
+ *
+ * Untuk COMPOSITOR_TILING_NONE:
+ *
+ *     GTK tidak boleh menyentuh geometry existing.
+ *
+ * Ini penting agar WM_MODE_DIRECT dan WM_MODE_NESTED
+ * tetap memiliki geometry contract yang sama.
+ */
+static bool gtk_shell_get_tiling_geometry(
+        struct compositor_surface *surf,
+        int32_t *x,
+        int32_t *y,
+        uint32_t *width,
+        uint32_t *height)
+{
+    if (!surf ||
+        !surf->srv ||
+        !x ||
+        !y ||
+        !width ||
+        !height)
+        return false;
+
+    /*
+     * ============================================================
+     * CONTEXT:
+     * GTK WM geometry hanya berlaku untuk XDG toplevel.
+     *
+     * Jangan pernah menggunakan gtk tiling policy untuk:
+     *
+     *     zwlr_layer_surface_v1
+     *
+     * Layer-shell mempunyai geometry authority sendiri.
+     *
+     * Dengan check ini:
+     *
+     *     XDG toplevel  -> GTK tiling boleh diterapkan
+     *     layer-shell   -> geometry dibiarkan apa adanya
+     * ============================================================
+     */
+    if (!gtk_surface_is_xdg_toplevel(surf)) {
+        LOGI(
+            "gtk tiling skipped "
+            "surface=%p reason=not-xdg-toplevel "
+            "xdg_surface=%p xdg_toplevel=%p",
+            (void *)surf,
+            (void *)surf->xdg_surface_res,
+            (void *)surf->xdg_toplevel_res);
+
+        return false;
+    }
+
+    enum compositor_tiling_state tiling =
+        compositor_surface_get_tiling(surf);
+
+    /*
+     * ============================================================
+     * CONTEXT:
+     *
+     * Work-area adalah satu-satunya input geometry dari
+     * layer-shell untuk GTK.
+     *
+     * GTK tidak menghitung exclusive-zone sendiri.
+     * ============================================================
+     */
+    struct trierarch_work_area area;
+
+    if (!gtk_shell_get_work_area(
+            surf,
+            &area))
+        return false;
+
+    /*
+     * ============================================================
+     * CONTEXT:
+     *
+     * NONE berarti GTK tidak memiliki tiling policy.
+     *
+     * Jangan mengganti geometry surface menjadi work-area.
+     *
+     * Geometry existing tetap menjadi authority.
+     *
+     * Caller harus mempertahankan width/height/x/y yang
+     * sudah dimiliki surface.
+     * ============================================================
+     */
+    if (tiling == COMPOSITOR_TILING_NONE)
+        return false;
+
+    /*
+     * Default:
+     *
+     * seluruh usable work-area.
+     */
+    *x = area.x;
+    *y = area.y;
+    *width = area.width;
+    *height = area.height;
+
+    switch (tiling) {
+
+    case COMPOSITOR_TILING_ALL:
+        /*
+         * GTK maximize/full tiling:
+         *
+         * gunakan seluruh work-area.
+         */
+        break;
+
+    case COMPOSITOR_TILING_LEFT:
+
+        *width = area.width / 2;
+
+        break;
+
+    case COMPOSITOR_TILING_RIGHT:
+
+        *width = area.width -
+                 (area.width / 2);
+
+        *x = area.x +
+             (int32_t)(area.width / 2);
+
+        break;
+
+    case COMPOSITOR_TILING_TOP:
+
+        *height = area.height / 2;
+
+        break;
+
+    case COMPOSITOR_TILING_BOTTOM:
+
+        *height = area.height -
+                  (area.height / 2);
+
+        *y = area.y +
+             (int32_t)(area.height / 2);
+
+        break;
+
+    case COMPOSITOR_TILING_NONE:
+    default:
+        return false;
+    }
+
+    if (*width == 0 ||
+        *height == 0)
+        return false;
+
+    LOGI(
+        "gtk tiling consumer "
+        "surface=%p "
+        "tiling=%d "
+        "layer-workarea=%ux%u+%d+%d "
+        "xdg-geometry=%ux%u+%d+%d",
+        (void *)surf,
+        tiling,
+        area.width,
+        area.height,
+        area.x,
+        area.y,
+        *width,
+        *height,
+        *x,
+        *y);
+
+    return true;
+}
+
 static void gtk_surface_wl_surface_destroy(
         struct wl_listener *listener,
         void *data)
@@ -120,34 +360,16 @@ static void gtk_surface_wl_surface_destroy(
                         surface_destroy_listener);
 
     /*
-     * CONTEXT:
+     * wl_surface sudah mati.
      *
-     * wl_surface sudah dihancurkan.
-     *
-     * Sebelum reference lokal diputus, bersihkan reverse
-     * attachment pada compositor_surface.
-     *
-     * Ini menjaga:
-     *
-     *     compositor_surface->gtk_surface == NULL
-     *
-     * setelah wl_surface mati.
-     */
-    if (state->surface &&
-        state->surface->gtk_surface == state) {
-
-        state->surface->gtk_surface = NULL;
-    }
-
-    /*
-     * gtk_surface_state tidak lagi boleh mengakses
-     * compositor_surface maupun wl_surface.
+     * Putuskan seluruh reference agar request GTK berikutnya
+     * tidak pernah mengakses compositor_surface yang sudah tidak
+     * valid.
      */
     state->wl_surface = NULL;
     state->surface = NULL;
 
-    LOGI(
-        "gtk_surface wl_surface destroyed");
+    LOGI("gtk_surface wl_surface destroyed");
 }
 
 
@@ -493,14 +715,13 @@ static void gtk_shell_get_gtk_surface(
  * Implementasinya harus membaca state authority milik
  * compositor_surface.
  */
-// AFTER
 static uint32_t gtk_surface_get_tiling_state(
         struct compositor_surface *surf)
 {
     if (!surf)
         return 0;
 
-    switch (surf->tiling_state) {
+    switch (compositor_surface_get_tiling(surf)) {
 
     case COMPOSITOR_TILING_ALL:
         return GTK_SURFACE1_STATE_TILED;
@@ -550,7 +771,7 @@ static void gtk_surface_build_edge_constraints(
         return;
 
     uint32_t resize_edges =
-        surf->resize_edges;
+        compositor_surface_get_resize_edges(surf);
 
     /*
      * GTK shell protocol menggunakan satu uint32_t
@@ -669,49 +890,184 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
     .notify_launch   = gtk_shell_notify_launch,
 };
 
+bool gtk_shell_apply_tiling_geometry(
+        struct compositor_surface *surf,
+        uint32_t *width,
+        uint32_t *height)
+{
+    if (!surf ||
+        !surf->srv ||
+        !width ||
+        !height)
+        return false;
 
+    /*
+     * ============================================================
+     * CONTEXT:
+     *
+     * gtk_shell_apply_tiling_geometry() adalah geometry policy
+     * untuk XDG desktop windows.
+     *
+     * Layer-shell TIDAK BOLEH masuk ke sini.
+     *
+     * Jadi walaupun layer-shell surface mempunyai:
+     *
+     *     surf->gtk_surface
+     *
+     * GTK tetap tidak boleh mengubah wm_x/wm_y miliknya.
+     * ============================================================
+     */
+    if (!gtk_surface_is_xdg_toplevel(surf)) {
+        LOGI(
+            "gtk apply tiling skipped "
+            "surface=%p reason=not-xdg-toplevel",
+            (void *)surf);
+
+        return false;
+    }
+
+    int32_t x = 0;
+    int32_t y = 0;
+
+    /*
+     * CONTEXT:
+     *
+     * Hanya tiling policy GTK yang boleh masuk melalui helper ini.
+     *
+     * Jika tidak ada tiling:
+     *
+     *     GTK -> tidak melakukan apa-apa
+     *
+     * sehingga geometry yang berasal dari output.c / xdg-shell
+     * tetap utuh.
+     */
+    if (compositor_surface_get_tiling(surf) ==
+        COMPOSITOR_TILING_NONE) {
+
+        LOGI(
+            "gtk tiling skipped "
+            "surface=%p reason=no-tiling-policy",
+            (void *)surf);
+
+        return false;
+    }
+
+    if (!gtk_shell_get_tiling_geometry(
+            surf,
+            &x,
+            &y,
+            width,
+            height))
+        return false;
+
+    /*
+     * CONTEXT:
+     *
+     * Hasil di sini adalah geometry XDG FINAL untuk WM_MODE_DIRECT.
+     *
+     * Ini TIDAK pernah ditulis ke layer-shell surface.
+     *
+     * Layer-shell tetap menggunakan geometry hasil
+     * layer_surface_get_geometry().
+     */
+    surf->wm_x = x;
+    surf->wm_y = y;
+
+    LOGI(
+        "gtk applied XDG geometry "
+        "surface=%p "
+        "geometry=%ux%u+%d+%d",
+        (void *)surf,
+        *width,
+        *height,
+        surf->wm_x,
+        surf->wm_y);
+
+    return true;
+}
+
+void compositor_surface_set_tiling(
+        struct compositor_surface *surf,
+        enum compositor_tiling_state state)
+{
+    if (!surf)
+        return;
+
+    surf->tiling_state = state;
+
+    LOGI(
+        "set tiling "
+        "surface=%p "
+        "state=%d",
+        (void *)surf,
+        state);
+
+}
+
+enum compositor_tiling_state
+compositor_surface_get_tiling(
+        struct compositor_surface *surf)
+{
+    if (!surf)
+        return COMPOSITOR_TILING_NONE;
+
+    return surf->tiling_state;
+}
+
+
+void compositor_surface_set_resize_edges(
+        struct compositor_surface *surf,
+        uint32_t edges)
+{
+    if (!surf)
+        return;
+
+    surf->resize_edges = edges;
+}
+
+uint32_t compositor_surface_get_resize_edges(
+        struct compositor_surface *surf)
+{
+    if (!surf)
+        return COMPOSITOR_RESIZE_NONE;
+
+    return surf->resize_edges;
+}
 
 /*
  * ================================================================
- * GTK WORK-AREA CONSUMER
+ * GTK SHELL <-> LAYER-SHELL WORK-AREA
  * ================================================================
  *
- * PHOC SEMANTIC:
+ * CONTEXT:
  *
- * GTK tidak mengetahui siapa yang menghasilkan usable-area.
+ * Work-area adalah geometry dasar untuk window-management
+ * WM_MODE_DIRECT.
  *
- * GTK hanya meminta current output work-area.
+ * Source of truth:
  *
- * Provider:
+ *     layer-shell
+ *          ↓
+ *     exclusive zones
+ *          ↓
+ *     usable work-area
  *
- *     compositor output
+ * GTK shell dan XDG shell menggunakan work-area yang sama.
  *
- * Contributors:
+ * Penting:
  *
- *     layer-shell exclusive zones
- *     output policy
- *     future compositor reservations
+ *     gtk-shell protocol TIDAK harus pernah dipanggil client.
  *
- * BUKAN:
+ * Helper ini adalah compositor-side geometry API.
  *
- *     gtk-shell
- *     xdg-shell
- *     zwlr_layer_shell_v1 bind state
+ * Jika:
  *
- * Dengan semantic ini:
+ *     - tidak ada GTK client
+ *     - tidak ada layer-shell surface
  *
- *     no layer-shell bind
- *         -> full physical output
- *
- *     layer-shell exists but no exclusive zone
- *         -> full physical output
- *
- *     layer-shell exclusive zone exists
- *         -> reduced usable area
- *
- *     layer-shell surface destroyed
- *         -> reservation disappears
- *         -> usable area recomputed
+ * maka layer_shell_get_work_area() tetap mengembalikan
+ * output area normal.
+ * ================================================================
  */
 bool gtk_shell_get_work_area(
         struct compositor_surface *surf,
@@ -722,28 +1078,44 @@ bool gtk_shell_get_work_area(
         !area)
         return false;
 
-        /*
-     * NEW WORKAREA SEMANTIC:
+    /*
+     * ============================================================
+     * CONTEXT:
      *
-     * Work-area dimiliki oleh compositor/output.
-     * layer-shell bukan lagi source geometry langsung bagi XDG.
+     * layer-shell tetap menjadi authority exclusive-zone.
+     *
+     * Namun surface XDG bukan layer surface, sehingga tidak boleh
+     * diperlakukan sebagai layer-shell object yang perlu di-exclude.
+     *
+     * Untuk XDG:
+     *
+     *     exclude = NULL
+     *
+     * Untuk layer-shell:
+     *
+     *     exclude = surf
+     *
+     * Dengan demikian GTK/XDG membaca work-area yang sama tanpa
+     * mengambil alih geometry layer-shell.
+     * ============================================================
      */
+    struct compositor_surface *exclude = NULL;
+
+    if (!gtk_surface_is_xdg_toplevel(surf))
+        exclude = surf;
+
     layer_shell_get_work_area(
-            surf->srv,
-            surf,
-            area);
+        surf->srv,
+        exclude,
+        area);
 
     if (area->width == 0 ||
         area->height == 0) {
 
         LOGE(
-            "gtk work-area invalid "
-            "surface=%p "
-            "output=%ux%u "
-            "area=%ux%u+%d+%d",
+            "gtk invalid layer-shell work-area "
+            "surface=%p area=%ux%u+%d+%d",
             (void *)surf,
-            surf->srv->output_width,
-            surf->srv->output_height,
             area->width,
             area->height,
             area->x,
@@ -752,191 +1124,109 @@ bool gtk_shell_get_work_area(
         return false;
     }
 
-    LOGI(
-        "gtk work-area "
-        "source=compositor-output "
-        "surface=%p "
-        "area=%ux%u+%d+%d",
-        (void *)surf,
-        area->width,
-        area->height,
-        area->x,
-        area->y);
-
     return true;
 }
 
-void send_gtk_surface_configure(
-        struct compositor_surface *surf)
+
+/*
+ * ================================================================
+ * GTK MAXIMIZED GEOMETRY
+ * ================================================================
+ *
+ * CONTEXT:
+ *
+ * WM_MODE_DIRECT maximize harus memakai geometry yang sama
+ * dengan GTK tiling.
+ *
+ * Flow:
+ *
+ *     layer-shell exclusive zone
+ *              ↓
+ *          work-area
+ *              ↓
+ *       GTK geometry policy
+ *              ↓
+ *        XDG maximize
+ *
+ * GTK-shell protocol tidak perlu dibind oleh client.
+ *
+ * Jika tidak ada layer-shell reservation:
+ *
+ *     work-area == output
+ *
+ * sehingga maximize tetap normal.
+ * ================================================================
+ */
+bool gtk_shell_get_maximized_geometry(
+        struct compositor_surface *surf,
+        int32_t *x,
+        int32_t *y,
+        uint32_t *width,
+        uint32_t *height)
 {
     if (!surf ||
         !surf->srv ||
-        !surf->gtk_surface ||
-        !surf->gtk_surface->resource)
-        return;
-
-/*
- * ============================================================
- * GEOMETRY CONTRACT
- * ============================================================
- *
- * send_gtk_surface_configure() BUKAN geometry authority.
- *
- * Urutan authority:
- *
- *     output.c
- *       |
- *       +--> PHYSICAL DISPLAY
- *                |
- *                v
- *       send_toplevel_configure()
- *                |
- *                v
- *       COMPOSITOR TILING
- *                |
- *                +--> wm_x
- *                +--> wm_y
- *                +--> width
- *                +--> height
- *
- * gtk-shell hanya mengonsumsi state hasil compositor.
- *
- * Work-area:
- *
- *     gtk_shell_get_work_area()
- *
- * adalah FINAL WORK AREA untuk consumer GTK.
- *
- * Work-area tersebut:
- *
- *     layer-shell final area
- *          atau
- *     physical display fallback
- *
- * Work-area TIDAK dipakai untuk menghitung tiling.
- * ============================================================
- */
+        !x ||
+        !y ||
+        !width ||
+        !height)
+        return false;
 
     /*
- * ============================================================
- * CONTEXT:
- *
- * GTK shell hanya consumer dari dua state compositor:
- *
- *   1. tiling state
- *   2. final work-area
- *
- * Tiling geometry TIDAK dihitung di sini.
- *
- * Work-area authority:
- *
- *     layer_shell_get_work_area()
- *
- * Geometry authority:
- *
- *     compositor / output / xdg-shell
- * ============================================================
- */
+     * ============================================================
+     * CONTEXT:
+     *
+     * MAXIMIZED adalah state window XDG.
+     *
+     * Layer-shell tidak boleh menerima geometry maximize dari
+     * gtk-shell.
+     *
+     * Layer-shell tetap mengikuti:
+     *
+     *     layer_surface_get_geometry()
+     *
+     * sedangkan XDG mengikuti:
+     *
+     *     gtk_shell_get_maximized_geometry()
+     * ============================================================
+     */
+    if (!gtk_surface_is_xdg_toplevel(surf)) {
+        LOGI(
+            "gtk maximized geometry skipped "
+            "surface=%p reason=not-xdg-toplevel",
+            (void *)surf);
 
-    struct trierarch_work_area work_area;
+        return false;
+    }
+
+    struct trierarch_work_area area;
 
     if (!gtk_shell_get_work_area(
             surf,
-            &work_area)) {
-
-        LOGE(
-            "gtk configure skipped "
-            "reason=work-area-unavailable "
-            "surface=%p",
-            (void *)surf);
-
-        return;
-    }
-
-    uint32_t state =
-        gtk_surface_get_tiling_state(surf);
+            &area))
+        return false;
 
     /*
-     * CONTEXT:
-     * 
-     * gtk_surface1.configure() hanya menerima:
+     * MAXIMIZED menggunakan seluruh usable work-area.
      *
-     *     resource
-     *     states
-     *
-     * Jadi state tiling harus dimasukkan ke wl_array states.
+     * Tidak membagi area seperti tiling LEFT/RIGHT/TOP/BOTTOM.
      */
-    struct wl_array states;
+    *x = area.x;
+    *y = area.y;
+    *width = area.width;
+    *height = area.height;
 
-    wl_array_init(&states);
+    LOGI(
+        "gtk maximized geometry "
+        "surface=%p "
+        "workarea=%ux%u+%d+%d",
+        (void *)surf,
+        area.width,
+        area.height,
+        area.x,
+        area.y);
 
-    if (state != 0) {
-
-        uint32_t *gtk_state =
-            wl_array_add(
-                &states,
-                sizeof(*gtk_state));
-
-        if (gtk_state)
-            *gtk_state = state;
-    }
-
-/*
- * CONTEXT:
- *
- * Geometry tetap compositor-side.
- *
- * GTK shell tidak mengirim:
- *
- *     width
- *     height
- *     x
- *     y
- *
- * melalui gtk_surface1.configure().
- *
- * Geometry dapat dicatat untuk memastikan GTK shell
- * membaca state compositor yang benar.
- */
-     int32_t logical_w = 0;
-     int32_t logical_h = 0;
-
-     compositor_surface_get_logical_size(
-         surf,
-         &logical_w,
-         &logical_h);
-
-     LOGI(
-         "GTK configure "
-         "surf=%p "
-         "tiling_state=%u "
-         "logical=%dx%d "
-         "wm=%d,%d "
-         "workarea=%ux%u+%d+%d",
-         (void *)surf,
-         state,
-         logical_w,
-         logical_h,
-         surf->wm_x,
-         surf->wm_y,
-         work_area.width,
-         work_area.height,
-         work_area.x,
-         work_area.y);
-
-     /*
-      * CONTEXT:
-      *
-      * Serial GTK configure.
-      *
-      * Protocol generated GTK shell yang kamu punya
-      * hanya membutuhkan resource + states.
-      */
-     gtk_surface1_send_configure(
-         surf->gtk_surface->resource,
-         &states);
-
-     wl_array_release(&states);
+    return true;
 }
 
 void gtk_shell_bind(
