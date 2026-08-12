@@ -730,7 +730,7 @@ bool gtk_shell_get_work_area(
      */
     layer_shell_get_work_area(
             surf->srv,
-            exclude,
+            surf,
             area);
 
     if (area->width == 0 ||
