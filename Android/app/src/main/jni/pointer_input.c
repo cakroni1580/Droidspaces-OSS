@@ -74,7 +74,7 @@ static struct compositor_surface *find_pointer_target(struct wayland_server *srv
         int32_t hit_z = -1;
         wl_list_for_each(surf, &srv->surfaces, link) {
             if (surf->parent || surf->is_cursor) continue;
-            if (!surf->current_buffer) continue;
+            if (!surf->xdg_toplevel_res || !surf->layer_surface_res || !surf->current_buffer) continue;
             int32_t sw = 0, sh = 0;
             compositor_surface_get_logical_size(surf, &sw, &sh);
             if (sw <= 0 || sh <= 0) continue;
@@ -93,7 +93,7 @@ static struct compositor_surface *find_pointer_target(struct wayland_server *srv
         struct compositor_surface *top = NULL;
         int32_t top_z = -1;
         wl_list_for_each(surf, &srv->surfaces, link) {
-            if (surf->parent || surf->is_cursor) continue;
+            if (surf->parent || surf->is_cursor || !surf->xdg_toplevel_res|| !surf->layer_surface_res) continue;
             if (surf->z_order > top_z) { top_z = surf->z_order; top = surf; }
         }
         return top;
