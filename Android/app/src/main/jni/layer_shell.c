@@ -47,6 +47,11 @@
 extern void keyboard_focus_update(
         struct wayland_server *srv,
         struct compositor_surface *surface);
+static void layer_surface_calculate_size(
+        struct compositor_surface *surf,
+        uint32_t *width,
+        uint32_t *height);
+
 
 static void layer_surface_resource_destroy(
         struct wl_resource *resource)
