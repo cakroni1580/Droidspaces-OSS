@@ -1255,20 +1255,57 @@ void layer_shell_get_work_area(
     if (!srv || !area)
         return;
 
+    /*
+ * CONTEXT NOTE:
+ *
+ * Physical output adalah baseline yang selalu valid.
+ *
+ * layer_shell_get_work_area() tidak bergantung pada:
+ *
+ *     - zwlr_layer_shell_v1 bind
+ *     - keberadaan layer surface
+ *     - XDG
+ *     - GTK
+ *
+ * Work-area adalah derived state di dalam physical output.
+ *
+ * Jika layout belum pernah dihitung, physical output tetap
+ * menjadi usable-area default.
+ */
+    const uint32_t physical_width =
+        srv->output_width > 0 ?
+        srv->output_width : 1;
+
+    const uint32_t physical_height =
+        srv->output_height > 0 ?
+        srv->output_height : 1;
+
+    if (srv->output_layout.output_width == 0 ||
+        srv->output_layout.output_height == 0) {
+
+        area->x = 0;
+        area->y = 0;
+        area->width = physical_width;
+        area->height = physical_height;
+
+        return;
+    }
+
+    /*
+     * Layout sudah valid.
+     *
+     * Ini hanya membaca derived work-area.
+     * Physical output tetap tidak berubah.
+     */
     *area = srv->output_layout.work_area;
+
     if (area->width == 0 ||
         area->height == 0) {
 
         area->x = 0;
         area->y = 0;
-
-        area->width =
-            srv->output_width > 0 ?
-            srv->output_width : 1;
-
-        area->height =
-            srv->output_height > 0 ?
-            srv->output_height : 1;
+        area->width = physical_width;
+        area->height = physical_height;
     }
 }
 
@@ -1411,9 +1448,6 @@ void send_layer_surface_configure(struct compositor_surface *surf)
         return;
 
     struct wayland_server *srv = surf->srv;
-    trierarch_output_layout_recompute(
-        srv,
-        NULL);
 
     /*
      * ============================================================
