@@ -420,6 +420,10 @@ void send_toplevel_configure(struct compositor_surface *surf) {
 static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resource *xdg_surface_res, uint32_t id) {
     struct compositor_surface *surf = wl_resource_get_user_data(xdg_surface_res);
     if (!surf) return;
+    if (surf->xdg_toplevel_res) {
+        wl_resource_post_error(xdg_surface_res, XDG_WM_BASE_ERROR_ROLE, "surface already has role");
+        return;
+    }
     struct wl_resource *toplevel = wl_resource_create(client, &xdg_toplevel_interface,
             wl_resource_get_version(xdg_surface_res), id);
     if (!toplevel) {
