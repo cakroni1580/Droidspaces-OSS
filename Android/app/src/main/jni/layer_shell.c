@@ -49,34 +49,56 @@ void trierarch_output_layout_reset(
 extern void keyboard_focus_update(
         struct wayland_server *srv,
         struct compositor_surface *surface);
-
 static void trierarch_output_layout_recompute(
-        struct wayland_server *srv,
-        struct compositor_surface *exclude)
+        struct wayland_server *srv)
 {
     if (!srv)
         return;
 
+    struct trierarch_output_layout *layout =
+        &srv->output_layout;
+
     /*
-     * CONTEXT NOTE:
+     * CONTEXT:
      *
-     * Physical Android Surface adalah satu-satunya output authority.
+     * Physical output adalah root coordinate space Trierarch.
      *
-     * Jangan pernah mempertahankan output_width/output_height lama
-     * ketika physical output sudah berubah.
-     *
-     * reset() mengambil ulang:
+     * Layer-shell tidak pernah mengubah:
      *
      *     srv->output_width
      *     srv->output_height
      *
-     * sehingga seluruh reservation dihitung ulang terhadap output
-     * physical terbaru.
+     * Kita hanya membentuk derived work-area di dalamnya.
      */
-    trierarch_output_layout_reset(srv);
+    const uint32_t ow =
+        srv->output_width > 0 ?
+        srv->output_width : 1;
 
-    struct trierarch_output_layout *layout =
-        &srv->output_layout;
+    const uint32_t oh =
+        srv->output_height > 0 ?
+        srv->output_height : 1;
+
+    layout->output_width = ow;
+    layout->output_height = oh;
+
+    /*
+     * Reset reservation setiap kali layout dihitung.
+     *
+     * Ini penting:
+     *
+     *     layer add
+     *     layer remove
+     *     anchor change
+     *     exclusive-zone change
+     *     margin change
+     *
+     * semuanya menghasilkan layout baru dari source-of-truth
+     * yang sama: srv->surfaces.
+     */
+    layout->exclusive_top = 0;
+    layout->exclusive_right = 0;
+    layout->exclusive_bottom = 0;
+    layout->exclusive_left = 0;
 
     struct compositor_surface *surf;
 
@@ -85,9 +107,6 @@ static void trierarch_output_layout_recompute(
             &srv->surfaces,
             link) {
 
-        if (surf == exclude)
-            continue;
-
         struct layer_surface_state *ls =
             surf->layer_surface;
 
@@ -95,11 +114,11 @@ static void trierarch_output_layout_recompute(
             continue;
 
         /*
-         * exclusive_zone:
+         * Hanya positive exclusive zone yang menghasilkan
+         * reservation.
          *
-         *   > 0 : producer usable-area reservation
-         *    0  : no reservation
-         *   -1  : exclusive layer, but no area reservation
+         *  0  = overlay/non-exclusive
+         * -1  = exclusive layer tetapi tidak reserve area
          */
         if (ls->exclusive_zone <= 0)
             continue;
@@ -121,39 +140,25 @@ static void trierarch_output_layout_recompute(
              ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
 
         /*
-         * Phoc-style edge reservation.
+         * Positive exclusive reservation hanya valid
+         * untuk satu primary edge:
+         *
+         * TOP    + optional LEFT/RIGHT
+         * BOTTOM + optional LEFT/RIGHT
+         * LEFT   + optional TOP/BOTTOM
+         * RIGHT  + optional TOP/BOTTOM
          */
-        const bool valid_top =
-            top && !bottom && (left == right);
+        if (top && !bottom && (left == right)) {
 
-        const bool valid_bottom =
-            bottom && !top && (left == right);
-
-        const bool valid_left =
-            left && !right && (top == bottom);
-
-        const bool valid_right =
-            right && !left && (top == bottom);
-
-        int64_t reservation;
-
-        if (valid_top) {
-
-            reservation =
+            int64_t reservation =
                 (int64_t)ls->exclusive_zone +
                 (int64_t)ls->margin_top;
 
             if (reservation < 0)
                 reservation = 0;
 
-            /*
-             * Reservation tidak boleh melebihi physical output.
-             */
-            if (reservation >
-                (int64_t)layout->output_height)
-
-                reservation =
-                    layout->output_height;
+            if (reservation > (int64_t)oh)
+                reservation = oh;
 
             if (reservation >
                 layout->exclusive_top)
@@ -164,20 +169,17 @@ static void trierarch_output_layout_recompute(
             continue;
         }
 
-        if (valid_bottom) {
+        if (bottom && !top && (left == right)) {
 
-            reservation =
+            int64_t reservation =
                 (int64_t)ls->exclusive_zone +
                 (int64_t)ls->margin_bottom;
 
             if (reservation < 0)
                 reservation = 0;
 
-            if (reservation >
-                (int64_t)layout->output_height)
-
-                reservation =
-                    layout->output_height;
+            if (reservation > (int64_t)oh)
+                reservation = oh;
 
             if (reservation >
                 layout->exclusive_bottom)
@@ -188,20 +190,17 @@ static void trierarch_output_layout_recompute(
             continue;
         }
 
-        if (valid_left) {
+        if (left && !right && (top == bottom)) {
 
-            reservation =
+            int64_t reservation =
                 (int64_t)ls->exclusive_zone +
                 (int64_t)ls->margin_left;
 
             if (reservation < 0)
                 reservation = 0;
 
-            if (reservation >
-                (int64_t)layout->output_width)
-
-                reservation =
-                    layout->output_width;
+            if (reservation > (int64_t)ow)
+                reservation = ow;
 
             if (reservation >
                 layout->exclusive_left)
@@ -212,117 +211,80 @@ static void trierarch_output_layout_recompute(
             continue;
         }
 
-        if (valid_right) {
+        if (right && !left && (top == bottom)) {
 
-            reservation =
+            int64_t reservation =
                 (int64_t)ls->exclusive_zone +
                 (int64_t)ls->margin_right;
 
             if (reservation < 0)
                 reservation = 0;
 
-            if (reservation >
-                (int64_t)layout->output_width)
-
-                reservation =
-                    layout->output_width;
+            if (reservation > (int64_t)ow)
+                reservation = ow;
 
             if (reservation >
                 layout->exclusive_right)
 
                 layout->exclusive_right =
                     (int32_t)reservation;
-
-            continue;
         }
     }
 
     /*
-     * ================================================================
+     * ============================================================
      * PHYSICAL OUTPUT -> WORK AREA
-     * ================================================================
+     * ============================================================
      *
-     * Work area selalu berada di dalam:
+     * Work-area adalah rectangle turunan.
      *
-     *     [0, output_width)
-     *     [0, output_height)
-     *
-     * Bahkan jika dua exclusive reservation saling bertabrakan.
+     * Physical output TIDAK pernah diperkecil.
      */
-    int32_t width =
-        (int32_t)layout->output_width -
-        layout->exclusive_left -
-        layout->exclusive_right;
-
-    int32_t height =
-        (int32_t)layout->output_height -
-        layout->exclusive_top -
-        layout->exclusive_bottom;
-
-    if (width < 1)
-        width = 1;
-
-    if (height < 1)
-        height = 1;
-
-    int32_t x =
+    int64_t x =
         layout->exclusive_left;
 
-    int32_t y =
+    int64_t y =
         layout->exclusive_top;
 
-    /*
-     * Jangan biarkan origin keluar dari physical output.
-     */
-    if (x < 0)
-        x = 0;
+    int64_t right =
+        (int64_t)ow -
+        layout->exclusive_right;
 
-    if (y < 0)
-        y = 0;
-
-    if (x >= (int32_t)layout->output_width)
-        x = (int32_t)layout->output_width - 1;
-
-    if (y >= (int32_t)layout->output_height)
-        y = (int32_t)layout->output_height - 1;
+    int64_t bottom =
+        (int64_t)oh -
+        layout->exclusive_bottom;
 
     /*
-     * Pastikan width/height tidak melewati boundary physical output.
+     * Jika reservation saling bertabrakan, usable area boleh
+     * menjadi kosong.
+     *
+     * Jangan mengubahnya menjadi 1 pixel hanya agar terlihat
+     * "valid". Empty work-area berbeda dengan invalid output.
      */
-    if (width >
-        (int32_t)layout->output_width - x)
+    if (right < x)
+        right = x;
 
-        width =
-            (int32_t)layout->output_width - x;
+    if (bottom < y)
+        bottom = y;
 
-    if (height >
-        (int32_t)layout->output_height - y)
+    layout->work_area.x =
+        (int32_t)x;
 
-        height =
-            (int32_t)layout->output_height - y;
-
-    if (width < 1)
-        width = 1;
-
-    if (height < 1)
-        height = 1;
-
-    layout->work_area.x = x;
-    layout->work_area.y = y;
+    layout->work_area.y =
+        (int32_t)y;
 
     layout->work_area.width =
-        (uint32_t)width;
+        (uint32_t)(right - x);
 
     layout->work_area.height =
-        (uint32_t)height;
+        (uint32_t)(bottom - y);
 
     LOGI(
-        "output layout recompute "
-        "physical=%ux%u "
+        "layout recompute physical=%ux%u "
         "exclusive[top=%d right=%d bottom=%d left=%d] "
         "work=%ux%u@%d,%d",
-        layout->output_width,
-        layout->output_height,
+        ow,
+        oh,
         layout->exclusive_top,
         layout->exclusive_right,
         layout->exclusive_bottom,
@@ -332,6 +294,7 @@ static void trierarch_output_layout_recompute(
         layout->work_area.x,
         layout->work_area.y);
 }
+    
 
 static void layer_surface_resource_destroy(
         struct wl_resource *resource)
@@ -450,6 +413,8 @@ static void layer_surface_set_anchor(
      * berubah.
      */
     surf->layer_surface->anchor = anchor;
+    trierarch_output_layout_recompute(
+        surf->srv);
 
     LOGI(
         "layer set_anchor surf=%p anchor=0x%x",
@@ -500,6 +465,8 @@ static void layer_surface_set_exclusive_zone(
      * Ia hanya invalidates/recomputes output usable-area state.
      */
     surf->layer_surface->exclusive_zone = zone;
+    trierarch_output_layout_recompute(
+        surf->srv);
 
     LOGI(
         "layer exclusive reservation changed "
@@ -534,6 +501,8 @@ static void layer_surface_set_margin(
     surf->layer_surface->margin_right = right;
     surf->layer_surface->margin_bottom = bottom;
     surf->layer_surface->margin_left = left;
+    trierarch_output_layout_recompute(
+        surf->srv);
 
     LOGI(
         "layer set_margin surf=%p "
