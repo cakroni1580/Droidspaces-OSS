@@ -268,6 +268,38 @@ static void surface_commit(struct wl_client *client, struct wl_resource *resourc
         if (pending) buffer_ref_release(pending);
     }
     pthread_mutex_unlock(&surf->srv->surfaces_mutex);
+    /*
+     * ================================================================
+     * LAYER-SHELL INITIAL CONFIGURE
+     * ================================================================
+     *
+     * CONTEXT:
+     *
+     * Initial layer-shell configure dipicu oleh initial
+     * wl_surface.commit(), bukan oleh get_layer_surface().
+     *
+     * Initial commit boleh TIDAK mempunyai buffer.
+     *
+     * Karena itu blok ini HARUS berada di luar:
+     *
+     *     if (surf->current_buffer)
+     *
+     * Jangan membuat configured/acked state machine baru.
+     *
+     * surf->mapped adalah lifecycle state compositor yang sudah
+     * ada dan digunakan untuk membedakan surface yang sudah aktif.
+     */
+    if (surf->layer_surface &&
+        surf->layer_surface_res &&
+        !surf->mapped) {
+
+        send_layer_surface_configure(surf);
+
+        LOGI(
+            "layer initial configure from commit "
+            "surf=%p",
+            (void *)surf);
+    }
 
     if (surf->current_buffer) {
         /*
@@ -288,50 +320,6 @@ static void surface_commit(struct wl_client *client, struct wl_resource *resourc
                     surf->srv,
                     surf);
         }
-
-        /*
-         * CONTEXT:
-         *
-         * Initial layer-shell configure tidak boleh dikirim dari
-         * get_layer_surface().
-         *
-         * Client baru mengirim:
-         *
-         *     set_size()
-         *     set_anchor()
-         *     set_margin()
-         *     set_exclusive_zone()
-         *     set_layer()
-         *
-         * sebelum initial commit.
-         *
-         * Karena itu configure pertama dipicu setelah commit.
-         *
-         * Trierarch tidak membutuhkan wlroots-style configured gate.
-         */
-        if (surf->layer_surface &&
-            surf->layer_surface_res) {
-
-           /*
-            * Initial layer-shell surface:
-            *
-            * Jika belum pernah menerima buffer, commit pertama menjadi
-            * titik konfigurasi geometry berdasarkan state client.
-            *
-            * Gunakan flag lifecycle yang SUDAH dimiliki compositor
-            * bila tersedia. Jangan membuat state machine wlroots baru.
-            */
-           if (!surf->mapped) {
-
-              send_layer_surface_configure(surf);
-
-              LOGI(
-                  "layer initial configure from commit "
-                  "surf=%p",
-                  (void *)surf);
-            }
-        }
-
 
         int32_t bw = buffer_ref_width(surf->current_buffer);
         int32_t bh = buffer_ref_height(surf->current_buffer);
