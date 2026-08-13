@@ -146,7 +146,111 @@ static void layer_surface_set_size(
         height);
 }
 
-/* AFTER */
+/*
+ * CONTEXT:
+ *
+ * Geometry authority:
+ *
+ *     srv->output_width/height
+ *             +
+ *     layer_surface state
+ *             |
+ *             v
+ *     surf->wm_x / surf->wm_y
+ *
+ * Helper ini hanya menghitung posisi layer.
+ * Tidak menghitung work-area.
+ * Tidak menyentuh exclusive reservation.
+ */
+static void layer_surface_calculate_position(
+        struct compositor_surface *surf,
+        uint32_t width,
+        uint32_t height)
+{
+    if (!surf ||
+        !surf->srv ||
+        !surf->layer_surface)
+        return;
+
+    const struct layer_surface_state *ls =
+            surf->layer_surface;
+
+    const int32_t ow =
+            surf->srv->output_width > 0 ?
+            surf->srv->output_width : 1;
+
+    const int32_t oh =
+            surf->srv->output_height > 0 ?
+            surf->srv->output_height : 1;
+
+    const bool left =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) != 0;
+
+    const bool right =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) != 0;
+
+    const bool top =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) != 0;
+
+    const bool bottom =
+            (ls->anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
+
+    /*
+     * Horizontal placement.
+     *
+     * left + right:
+     *     stretched surface, origin follows left margin.
+     *
+     * left only:
+     *     left aligned.
+     *
+     * right only:
+     *     right aligned.
+     *
+     * neither:
+     *     centered.
+     */
+    if (left) {
+
+        surf->wm_x = ls->margin_left;
+
+    } else if (right) {
+
+        surf->wm_x =
+                ow -
+                (int32_t)width -
+                ls->margin_right;
+
+    } else {
+
+        surf->wm_x =
+                (ow - (int32_t)width) / 2;
+    }
+
+    /*
+     * Vertical placement.
+     */
+    if (top) {
+
+        surf->wm_y = ls->margin_top;
+
+    } else if (bottom) {
+
+        surf->wm_y =
+                oh -
+                (int32_t)height -
+                ls->margin_bottom;
+
+    } else {
+
+        surf->wm_y =
+                (oh - (int32_t)height) / 2;
+    }
+}
 
 static void layer_surface_set_anchor(
         struct wl_client *client,
@@ -678,33 +782,54 @@ static void layer_shell_get_layer_surface(
     }
     
     /*
-     * PHOC/Trierarch contract:
+     * ================================================================
+     * ROLE OWNERSHIP
+     * ================================================================
      *
-     * Layer surface langsung menjadi role aktif setelah
-     * zwlr_layer_surface_v1 berhasil dibuat.
+     * Layer role sudah aktif pada compositor_surface.
      *
-     * Tidak ada pending/configure gate internal.
+     * Namun geometry JANGAN dihitung di sini.
+     *
+     * Client masih akan mengirim:
+     *
+     *     set_size()
+     *     set_anchor()
+     *     set_exclusive_zone()
+     *     set_margin()
+     *     set_keyboard_interactivity()
+     *     set_layer()
+     *
+     * sebelum initial commit.
+     *
+     * Configure pertama dilakukan dari surface commit path setelah
+     * pending layer state sudah lengkap.
      */
     surf->layer_surface = state;
     surf->layer_surface_res = layer_res;
 
     /*
-     * Trierarch render-list contract:
+     * ================================================================
+     * RENDER ORDER
+     * ================================================================
      *
-     * Jangan membuat list layer sendiri.
-     * compositor_foreach_surface() di server.c
-     * mengambil surface dari srv->surfaces lalu
-     * mengurutkannya berdasarkan surf->z_order.
+     * Trierarch tidak mempunyai layer render-list terpisah.
+     *
+     * Semua surface tetap berada di:
+     *
+     *     srv->surfaces
+     *
+     * compositor_foreach_surface() kemudian melakukan ordering
+     * berdasarkan z_order.
      */
     switch (layer) {
 
     case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
         surf->z_order = TRIERARCH_LAYER_Z_BACKGROUND;
         break;
-
+ 
     case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
-        surf->z_order = TRIERARCH_LAYER_Z_BOTTOM;
-        break;
+       surf->z_order = TRIERARCH_LAYER_Z_BOTTOM;
+       break;
 
     case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
         surf->z_order = TRIERARCH_LAYER_Z_TOP;
@@ -717,90 +842,19 @@ static void layer_shell_get_layer_surface(
     }
 
     /*
- * CONTEXT:
- *
- * WM_MODE_DIRECT source of truth:
- *
- * Layer-shell tetap menggunakan wm_x/wm_y yang sama
- * dengan XDG toplevel.
- *
- * Initial placement ditentukan dari geometry layer state,
- * tetapi hasil akhirnya disimpan ke wm_x/wm_y.
- *
- * Setelah ini tidak ada consumer yang menghitung ulang
- * posisi layer surface dari anchor.
- */
-    uint32_t width = 1;
-    uint32_t height = 1;
-
-    layer_surface_calculate_size(
-            surf,
-            &width,
-            &height);
-
-    if (layer == ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND ||
-        layer == ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM ||
-        layer == ZWLR_LAYER_SHELL_V1_LAYER_TOP ||
-        layer == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
-
-    /*
-     * Initial DIRECT placement.
+     * ================================================================
+     * INITIAL GEOMETRY
+     * ================================================================
      *
-     * Full-width/full-height layer yang di-anchor
-     * menggunakan output origin. Surface yang tidak
-     * stretch tetap ditempatkan berdasarkan anchor/margin.
+     * Jangan menghitung geometry di get_layer_surface().
+     *
+     * Pada titik ini client belum mengirim konfigurasi layer-shell.
+     *
+     * wm_x/wm_y akan dihitung ketika configure dibuat dari state
+     * layer yang sudah diterima.
      */
-        const struct layer_surface_state *ls =
-                surf->layer_surface;
-
-        const int32_t ow =
-                surf->srv->output_width > 0 ?
-                surf->srv->output_width : 1;
-
-        const int32_t oh =
-                surf->srv->output_height > 0 ?
-                surf->srv->output_height : 1;
-
-        const bool left =
-                (ls->anchor &
-                 ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) != 0;
-
-        const bool right =
-                (ls->anchor &
-                 ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) != 0;
-
-        const bool top =
-                (ls->anchor &
-                 ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) != 0;
-
-        const bool bottom =
-                (ls->anchor &
-                 ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
-
-        if (left) {
-            surf->wm_x = ls->margin_left;
-        } else if (right) {
-            surf->wm_x =
-                    ow -
-                    (int32_t)width -
-                    ls->margin_right;
-        } else {
-            surf->wm_x =
-                    (ow - (int32_t)width) / 2;
-        }
-
-        if (top) {
-            surf->wm_y = ls->margin_top;
-        } else if (bottom) {
-            surf->wm_y =
-                    oh -
-                    (int32_t)height -
-                    ls->margin_bottom;
-        } else {
-            surf->wm_y =
-                    (oh - (int32_t)height) / 2;
-        }
-    }
+    surf->wm_x = 0;
+    surf->wm_y = 0;
 
     wl_resource_set_implementation(
             layer_res,
@@ -808,13 +862,22 @@ static void layer_shell_get_layer_surface(
             surf,
             layer_surface_resource_destroy);
 
-    send_layer_surface_configure(surf);
-
+    /*
+     * CONTEXT:
+     *
+     * Tidak mengirim configure di sini.
+     *
+     * Initial configure dilakukan setelah client melakukan initial
+     * surface commit sehingga set_size/set_anchor/set_margin sudah
+     * tersedia.
+     */
     LOGI(
-        "new layer_surface surf=%p layer=%u ns=%s",
+        "new layer_surface pending initial state "
+        "surf=%p layer=%u ns=%s",
         (void *)surf,
         layer,
         namespace ? namespace : "");
+     
 }
 /*
  * CONTEXT:
@@ -1328,62 +1391,64 @@ void send_layer_surface_configure(struct compositor_surface *surf)
 
     struct wayland_server *srv = surf->srv;
 
-    /*
-     * ============================================================
-     * DISPLAY AUTHORITY
-     * ============================================================
-     *
-     * Jangan mengambil ukuran dari:
-     *
-     *   - GTK
-     *   - XDG
-     *   - work-area
-     *   - exclusive zone
-     *   - window geometry
-     *
-     * Android sudah memberikan physical display geometry
-     * melalui srv->output_width / srv->output_height.
-     */
     uint32_t width = 1;
     uint32_t height = 1;
 
-/*
- * CONTEXT:
- *
- * Configure harus mem-publish geometry yang sama
- * dengan geometry compositor DIRECT.
- *
- * X/Y tidak dikirim oleh layer-shell configure,
- * tetapi width/height harus konsisten dengan geometry
- * yang digunakan compositor.
- */
-    if (!layer_surface_get_geometry(
+    /*
+     * ================================================================
+     * GEOMETRY
+     * ================================================================
+     *    
+     * Size berasal dari layer-shell state + physical output.
+     *
+     * Position kemudian dihitung sekali dan disimpan ke wm_x/wm_y.
+     *
+     * Setelah helper selesai:
+     *
+     *     wm_x/wm_y = compositor geometry authority
+     */
+    layer_surface_calculate_size(
             surf,
             &width,
-            &height,
-            &surf->wm_x,
-            &surf->wm_y)) {
-        return;
-    }
+            &height);
 
+    layer_surface_calculate_position(
+            surf,
+            width,
+            height);
+
+    /*
+     * layer_surface_get_geometry() sekarang hanya menjadi consumer
+     * geometry. Jangan menggunakan pointer wm_x/wm_y sebagai output
+     * parameter di sini karena posisi sudah dihitung di atas.
+     */
     uint32_t serial =
-        wl_display_next_serial(srv->display);
+            wl_display_next_serial(srv->display);
 
     zwlr_layer_surface_v1_send_configure(
-        surf->layer_surface_res,
-        serial,
-        width,
-        height);
+            surf->layer_surface_res,
+            serial,
+            width,
+            height);
 
     LOGI(
         "layer DIRECT configure "
-        "surf=%p serial=%u geometry=%ux%u@%d,%d",
+        "surf=%p serial=%u geometry=%ux%u@%d,%d "
+        "anchor=0x%x margin=%d,%d,%d,%d "
+        "exclusive=%d layer=%u",
         (void *)surf,
         serial,
         width,
         height,
         surf->wm_x,
-        surf->wm_y);
+        surf->wm_y,
+        surf->layer_surface->anchor,
+        surf->layer_surface->margin_top,
+        surf->layer_surface->margin_right,
+        surf->layer_surface->margin_bottom,
+        surf->layer_surface->margin_left,
+        surf->layer_surface->exclusive_zone,
+        surf->layer_surface->layer);
 }
 
 void layer_surface_notify_output_change(
