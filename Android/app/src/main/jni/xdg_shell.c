@@ -634,10 +634,6 @@ static void xdg_wm_base_get_xdg_surface(struct wl_client *client, struct wl_reso
         struct wl_resource *surface_res) {
     struct wayland_server *srv = wl_resource_get_user_data(wm_res);
     struct compositor_surface *surf = wl_resource_get_user_data(surface_res);
-    if (!surf || surf->srv != srv) {
-        wl_resource_post_error(wm_res, XDG_WM_BASE_ERROR_INVALID_SURFACE_STATE, "invalid surface");
-        return;
-    }
     /*
      * CONTEXT:
      *
@@ -657,6 +653,11 @@ static void xdg_wm_base_get_xdg_surface(struct wl_client *client, struct wl_reso
 
         return;
     }
+    if (!surf || surf->srv != srv) {
+        wl_resource_post_error(wm_res, XDG_WM_BASE_ERROR_INVALID_SURFACE_STATE, "invalid surface");
+        return;
+    }
+    
     if (surf->xdg_surface_res) {
         wl_resource_post_error(wm_res, XDG_WM_BASE_ERROR_ROLE, "surface already has xdg_surface");
         return;
