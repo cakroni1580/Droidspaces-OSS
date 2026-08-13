@@ -268,30 +268,9 @@ static void surface_commit(struct wl_client *client, struct wl_resource *resourc
         if (pending) buffer_ref_release(pending);
     }
     pthread_mutex_unlock(&surf->srv->surfaces_mutex);
-    /*
-     * ================================================================
-     * LAYER-SHELL INITIAL CONFIGURE
-     * ================================================================
-     *
-     * CONTEXT:
-     *
-     * Initial layer-shell configure dipicu oleh initial
-     * wl_surface.commit(), bukan oleh get_layer_surface().
-     *
-     * Initial commit boleh TIDAK mempunyai buffer.
-     *
-     * Karena itu blok ini HARUS berada di luar:
-     *
-     *     if (surf->current_buffer)
-     *
-     * Jangan membuat configured/acked state machine baru.
-     *
-     * surf->mapped adalah lifecycle state compositor yang sudah
-     * ada dan digunakan untuk membedakan surface yang sudah aktif.
-     */
+    
     if (surf->layer_surface &&
-        surf->layer_surface_res &&
-        !surf->mapped) {
+        surf->layer_surface_res) {
 
         send_layer_surface_configure(surf);
 
