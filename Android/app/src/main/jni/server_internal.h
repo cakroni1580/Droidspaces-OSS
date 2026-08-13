@@ -387,6 +387,22 @@ void compositor_raise_surface(struct wayland_server *srv, struct compositor_surf
 
 /* surface.c */
 void surface_compositor_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
+/*
+ * CONTEXT:
+ *
+ * Central wl_surface role ownership.
+ * Dipakai oleh xdg_shell.c, layer_shell.c dan
+ * subcompositor.c sebelum membuat role object.
+ */
+bool compositor_surface_set_role(
+        struct compositor_surface *surf,
+        enum compositor_surface_role role);
+
+void compositor_surface_clear_role(
+        struct compositor_surface *surf,
+        enum compositor_surface_role role);
+
+/* pointer_input.c: track resources and deliver pointer events */
 
 /* pointer_input.c: track resources and deliver pointer events */
 void track_input_resource(struct wl_list *list, struct wl_resource *res);
