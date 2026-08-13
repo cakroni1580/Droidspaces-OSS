@@ -111,7 +111,7 @@ static void subcompositor_get_subsurface(struct wl_client *client,
     * mengambil role SUBSURFACE.
     */
    if (!compositor_surface_set_role(
-           surf,
+           child,
            COMPOSITOR_SURFACE_ROLE_SUBSURFACE)) {
 
        wl_resource_post_error(
