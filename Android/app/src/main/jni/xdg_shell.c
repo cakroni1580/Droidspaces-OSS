@@ -634,25 +634,6 @@ static void xdg_wm_base_get_xdg_surface(struct wl_client *client, struct wl_reso
         struct wl_resource *surface_res) {
     struct wayland_server *srv = wl_resource_get_user_data(wm_res);
     struct compositor_surface *surf = wl_resource_get_user_data(surface_res);
-    /*
-     * CONTEXT:
-     *
-     * xdg_surface mengambil exclusive XDG role.
-     *
-     * Jika wl_surface sudah menjadi layer-shell atau
-     * subsurface, XDG surface tidak boleh dibuat.
-     */
-    if (!compositor_surface_set_role(
-            surf,
-            COMPOSITOR_SURFACE_ROLE_XDG)) {
-
-        wl_resource_post_error(
-            wm_base_resource,
-            XDG_WM_BASE_ERROR_INVALID_SURFACE_STATE,
-            "wl_surface already has another role");
-
-        return;
-    }
     if (!surf || surf->srv != srv) {
         wl_resource_post_error(wm_res, XDG_WM_BASE_ERROR_INVALID_SURFACE_STATE, "invalid surface");
         return;
@@ -662,6 +643,23 @@ static void xdg_wm_base_get_xdg_surface(struct wl_client *client, struct wl_reso
         wl_resource_post_error(wm_res, XDG_WM_BASE_ERROR_ROLE, "surface already has xdg_surface");
         return;
     }
+    /*
+     * CONTEXT:
+     *
+     * Setelah existing XDG surface dipastikan tidak ada,
+     * klaim exclusive XDG role untuk wl_surface.
+     */
+    if (!compositor_surface_set_role(
+            surf,
+            COMPOSITOR_SURFACE_ROLE_XDG)) {
+
+        wl_resource_post_error(
+            wm_res,
+            XDG_WM_BASE_ERROR_INVALID_SURFACE_STATE,
+            "wl_surface already has another role");
+        return;
+    }
+    
     struct wl_resource *xdg_surf = wl_resource_create(client, &xdg_surface_interface,
             wl_resource_get_version(wm_res), id);
     if (!xdg_surf) {
