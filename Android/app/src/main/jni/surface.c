@@ -86,6 +86,53 @@ static void surface_resource_destroy(struct wl_resource *resource) {
     free(surf);
 }
 
+/*
+ * CONTEXT:
+ *
+ * Central role arbiter untuk wl_surface.
+ *
+ * Semua protocol yang memberikan exclusive role kepada
+ * wl_surface wajib melewati fungsi ini.
+ *
+ * Return:
+ *   true  -> role berhasil dimiliki
+ *   false -> surface sudah memiliki role lain
+ *
+ * Role yang sama dikembalikan true agar pemanggilan berulang
+ * dari protocol yang sama tidak dianggap konflik.
+ */
+bool compositor_surface_set_role(
+        struct compositor_surface *surf,
+        enum compositor_surface_role role)
+{
+    if (!surf || role == COMPOSITOR_SURFACE_ROLE_NONE)
+        return false;
+
+    if (surf->role == COMPOSITOR_SURFACE_ROLE_NONE) {
+        surf->role = role;
+        return true;
+    }
+
+    return surf->role == role;
+}
+
+/*
+ * CONTEXT:
+ *
+ * Role hanya boleh dilepas oleh protocol yang sebelumnya
+ * mengambil role tersebut.
+ */
+void compositor_surface_clear_role(
+        struct compositor_surface *surf,
+        enum compositor_surface_role role)
+{
+    if (!surf)
+        return;
+
+    if (surf->role == role)
+        surf->role = COMPOSITOR_SURFACE_ROLE_NONE;
+}
+
 static void surface_destroy(struct wl_client *client, struct wl_resource *resource) {
     (void)client;
     wl_resource_destroy(resource);
@@ -421,6 +468,19 @@ static void compositor_create_surface(struct wl_client *client,
         }
     }
     surf->srv = srv;
+    /*
+     * CONTEXT:
+     *
+     * wl_surface baru belum memiliki role.
+     *
+     * Role akan diambil oleh salah satu:
+     *   - xdg-shell
+     *   - layer-shell
+     *   - subcompositor
+     *
+     * Hanya satu exclusive role yang boleh aktif.
+     */
+    surf->role = COMPOSITOR_SURFACE_ROLE_NONE;
     surf->current_buffer = NULL;
     surf->pending_buffer = NULL;
     surf->xdg_surface_res = NULL;
