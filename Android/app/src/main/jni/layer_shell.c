@@ -367,20 +367,130 @@ static void layer_surface_set_exclusive_zone(
 
         return;
     }
+    /*
+ * ================================================================
+ * CONTEXT NOTE — STAGE 1: EXCLUSIVE ZONE STATE
+ * ================================================================
+ *
+ * Tahap 1 hanya memastikan request exclusive_zone dari client
+ * masuk ke LayerShell state dengan benar.
+ *
+ * Belum melakukan:
+ *
+ *   - XDG re-layout
+ *   - maximize
+ *   - multi-window placement
+ *   - focus policy
+ *
+ * Work-area tetap dihitung oleh layer_shell_get_work_area().
+ */
+
     surf->layer_surface->exclusive_zone = zone;
 
+    const uint32_t anchor =
+            surf->layer_surface->anchor;
+
+    const bool anchor_top =
+            (anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) != 0;
+
+    const bool anchor_bottom =
+            (anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
+
+    const bool anchor_left =
+            (anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) != 0;
+
+    const bool anchor_right =
+            (anchor &
+             ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) != 0;
+
+/*
+ * Valid exclusive edge mengikuti kontrak work-area:
+ *
+ * TOP:
+ *     TOP + (LEFT == RIGHT)
+ *
+ * BOTTOM:
+ *     BOTTOM + (LEFT == RIGHT)
+ *
+ * LEFT:
+ *     LEFT + (TOP == BOTTOM)
+ *
+ * RIGHT:
+ *     RIGHT + (TOP == BOTTOM)
+ */
+    const bool valid_top =
+            anchor_top &&
+            !anchor_bottom &&
+            (anchor_left == anchor_right);
+
+    const bool valid_bottom =
+            anchor_bottom &&
+            !anchor_top &&
+            (anchor_left == anchor_right);
+
+    const bool valid_left =
+            anchor_left &&
+            !anchor_right &&
+            (anchor_top == anchor_bottom);
+
+    const bool valid_right =
+            anchor_right &&
+            !anchor_left &&
+            (anchor_top == anchor_bottom);
+
+    const char *edge = "NONE";
+
+    if (valid_top)
+        edge = "TOP";
+    else if (valid_bottom)
+        edge = "BOTTOM";
+    else if (valid_left)
+        edge = "LEFT";
+    else if (valid_right)
+        edge = "RIGHT";
+
+/*
+ * ================================================================
+ * RESERVATION STATE LOG
+ * ================================================================
+ *
+ * Ini sengaja verbose.
+ *
+ * Kita perlu membuktikan bahwa:
+ *
+ *   Waybar -> set_exclusive_zone()
+ *              |
+ *              +-> zone
+ *              +-> anchor
+ *              +-> edge
+ *              +-> margin
+ *
+ * sudah sampai di compositor.
+ */
     LOGI(
-       "layer exclusive reservation changed "
-        "surf=%p zone=%d "
-        "geometry remains independent "
-        "anchor=0x%x margin=%d,%d,%d,%d",
+        "layer exclusive state "
+        "surf=%p zone=%d anchor=0x%x edge=%s "
+        "margin=%d,%d,%d,%d "
+        "valid=%s",
         (void *)surf,
         zone,
-        surf->layer_surface->anchor,
+        anchor,
+        edge,
         surf->layer_surface->margin_top,
         surf->layer_surface->margin_right,
         surf->layer_surface->margin_bottom,
-        surf->layer_surface->margin_left);
+        surf->layer_surface->margin_left,
+        (zone > 0 && edge[0] != 'N') ? "YES" : "NO");
+
+/*
+ * exclusive_zone == 0 / -1 bukan reservation.
+ *
+ * Tetapi state tetap disimpan karena client dapat mengubahnya
+ * lagi pada configure/commit berikutnya.
+ */
 }
 
 static void layer_surface_set_margin(
