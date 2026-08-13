@@ -69,6 +69,8 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 /* --- xdg_positioner state ------------------------------------------------- */
+#define XDG_WORKAREA_MARGIN_X 24
+#define XDG_WORKAREA_MARGIN_Y 24
 
 struct positioner_state {
     int32_t size_w, size_h;        /* requested popup size */
@@ -190,6 +192,71 @@ static bool xdg_get_work_area(
     return true;
 }
 
+/*
+ * CONTEXT:
+ *
+ * Menghasilkan geometry yang aman untuk XDG maximized window.
+ *
+ * area.x / area.y tetap dipertahankan sebagai origin work-area.
+ * Margin hanya mengurangi available width/height.
+ *
+ * Tidak mengubah output_width/output_height.
+ * Tidak mengubah buffer scale.
+ */
+static bool xdg_get_window_area(
+        struct compositor_surface *surf,
+        int32_t *x,
+        int32_t *y,
+        int32_t *width,
+        int32_t *height)
+{
+    struct trierarch_work_area area;
+
+    if (!xdg_get_work_area(surf, &area))
+        return false;
+
+    int32_t mx = XDG_WORKAREA_MARGIN_X;
+    int32_t my = XDG_WORKAREA_MARGIN_Y;
+
+    int32_t w = (int32_t)area.width  - (mx * 2);
+    int32_t h = (int32_t)area.height - (my * 2);
+
+    /*
+     * Jangan sampai margin membuat geometry invalid pada
+     * display kecil.
+     */
+    if (w < 1)
+        w = (int32_t)area.width;
+
+    if (h < 1)
+        h = (int32_t)area.height;
+
+    *x = area.x + mx;
+    *y = area.y + my;
+    *width = w;
+    *height = h;
+
+    LOGI(
+        "xdg window-area "
+        "surface=%p "
+        "geometry=%dx%d+%d+%d "
+        "work-area=%ux%u+%d+%d "
+        "margin=%dx%d",
+        (void *)surf,
+        w,
+        h,
+        *x,
+        *y,
+        area.width,
+        area.height,
+        area.x,
+        area.y,
+        mx,
+        my);
+
+    return true;
+}
+
 static void wm_base_resource_destroy(struct wl_listener *listener, void *data) {
     (void)data;
     struct wm_base_resource_node *node = wl_container_of(listener, node, destroy_listener);
@@ -263,19 +330,40 @@ static void xdg_toplevel_set_min_size(struct wl_client *c, struct wl_resource *r
 }
 static void xdg_toplevel_set_maximized(struct wl_client *c, struct wl_resource *r) {
     (void)c;
+
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf) return;
-    if (surf->srv->wm_mode == WM_MODE_DIRECT) return;
-    int32_t sw = 0, sh = 0;
+    if (!surf || !surf->srv)
+        return;
+
+    int32_t sw = 0;
+    int32_t sh = 0;
+
     compositor_surface_get_logical_size(surf, &sw, &sh);
+
     surf->wm_saved_x = surf->wm_x;
     surf->wm_saved_y = surf->wm_y;
     surf->wm_saved_w = sw;
     surf->wm_saved_h = sh;
-    surf->wm_x = 0;
-    surf->wm_y = 0;
+
+    if (surf->srv->wm_mode == WM_MODE_DIRECT) {
+        int32_t x = 0;
+        int32_t y = 0;
+        int32_t w = 0;
+        int32_t h = 0;
+
+        if (xdg_get_window_area(surf, &x, &y, &w, &h)) {
+            surf->wm_x = x;
+            surf->wm_y = y;
+            surf->wm_req_w = w;
+            surf->wm_req_h = h;
+        }
+    } else {
+        surf->wm_x = 0;
+        surf->wm_y = 0;
+    }
+
     surf->wm_maximized = true;
-    
+
     send_toplevel_configure(surf);
 }
 static void xdg_toplevel_unset_maximized(struct wl_client *c, struct wl_resource *r) {
@@ -362,26 +450,32 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
         if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
     } else {
-        /*
-         * WM_MODE_DIRECT:
-         *
-         * DIRECT tidak menggunakan MAXIMIZED/FULLSCREEN
-         * sebagai window policy.
-         *
-         * Window tetap windowed dan mempertahankan geometry
-         * masing-masing. Work-area hanya menjadi coordinate
-         * boundary/placement authority, bukan ukuran universal.
-         *
-         * w=0/h=0 berarti compositor tidak memaksakan ukuran
-         * kepada client; client menggunakan negotiated/natural
-         * geometry-nya sendiri.
-         */
+        
         if (surf->wm_resizing) {
             uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
-            if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
+            if (s_rz)
+                *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
         }
-        if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
-            /* Compositor-driven resize: send requested size (best-effort). */
+
+        if (surf->wm_maximized) {
+            
+            int32_t x = 0;
+            int32_t y = 0;
+            int32_t mw = 0;
+            int32_t mh = 0;
+
+            if (xdg_get_window_area(surf, &x, &y, &mw, &mh)) {
+                surf->wm_x = x;
+                surf->wm_y = y;
+
+                w = mw;
+                h = mh;
+            }
+
+            uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
+            if (s_max)
+                *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+        } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
             w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
             h = surf->wm_req_h > 0 ? surf->wm_req_h : 0;
         }
@@ -419,23 +513,20 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
     /* Assign a cascaded initial position and a unique stacking z_order. */
     if (surf->srv) {
         struct trierarch_work_area area;
-
-        /*
-         * CONTEXT:
-         *
-         * Output tetap coordinate space utama XDG.
-         * Namun initial placement harus dimulai dari work-area,
-         * bukan dari 0,0 output.
-         */
         if (xdg_get_work_area(surf, &area)) {
             surf->wm_x = area.x + surf->srv->cascade_x;
             surf->wm_y = area.y + surf->srv->cascade_y;
 
-            /*
-             * Cascade hanya boleh bergerak di dalam work-area.
-             */
-            int32_t max_x = (int32_t)area.width / 4;
-            int32_t max_y = (int32_t)area.height / 4;
+            int32_t usable_w =
+                 (int32_t)area.width -
+                 (XDG_WORKAREA_MARGIN_X * 2);
+
+            int32_t usable_h =
+                 (int32_t)area.height -
+                 (XDG_WORKAREA_MARGIN_Y * 2);
+
+            int32_t max_x = usable_w / 4;
+            int32_t max_y = usable_h / 4;
 
             if (max_x < 40)
                 max_x = 40;
