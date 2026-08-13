@@ -216,7 +216,7 @@ enum compositor_surface_role {
     COMPOSITOR_SURFACE_ROLE_XDG,
     COMPOSITOR_SURFACE_ROLE_LAYER_SHELL,
     COMPOSITOR_SURFACE_ROLE_SUBSURFACE,
-
+};
 
 struct compositor_surface {
     struct wl_list link;
