@@ -267,14 +267,14 @@ static void xdg_toplevel_set_maximized(struct wl_client *c, struct wl_resource *
     if (!surf) return;
     if (surf->srv->wm_mode == WM_MODE_DIRECT) return;
     int32_t sw = 0, sh = 0;
-        compositor_surface_get_logical_size(surf, &sw, &sh);
-        surf->wm_saved_x = surf->wm_x;
-        surf->wm_saved_y = surf->wm_y;
-        surf->wm_saved_w = sw;
-        surf->wm_saved_h = sh;
-        surf->wm_x = 0;
-        surf->wm_y = 0;
-        surf->wm_maximized = true;
+    compositor_surface_get_logical_size(surf, &sw, &sh);
+    surf->wm_saved_x = surf->wm_x;
+    surf->wm_saved_y = surf->wm_y;
+    surf->wm_saved_w = sw;
+    surf->wm_saved_h = sh;
+    surf->wm_x = 0;
+    surf->wm_y = 0;
+    surf->wm_maximized = true;
     
     send_toplevel_configure(surf);
 }
@@ -306,7 +306,7 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
         surf->wm_x = 0;
         surf->wm_y = 0;
         surf->wm_maximized = true;
-    
+    }
     send_toplevel_configure(surf);
 }
 static void xdg_toplevel_unset_fullscreen(struct wl_client *c, struct wl_resource *r) {
