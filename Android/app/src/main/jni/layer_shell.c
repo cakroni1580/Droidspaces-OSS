@@ -1319,28 +1319,16 @@ bool layer_surface_get_geometry(
     /*
      * CONTEXT:
      *
-     * WM_MODE_DIRECT geometry authority.
+     * Geometry sudah dipilih oleh compositor pada saat configure.
      *
-     * Layer-shell tidak lagi menghitung posisi sendiri.
-     * Posisi final compositor selalu berasal dari:
-     *
-     *     surf->wm_x
-     *     surf->wm_y
-     *
-     * Sama seperti XDG toplevel.
-     *
-     * layer_surface_calculate_size() tetap dipakai hanya
-     * untuk menentukan ukuran protocol surface.
+     * layer_surface_get_geometry() hanya membaca geometry tersebut.
+     * Ia TIDAK boleh menghitung ulang anchor/margin.
      */
     layer_surface_calculate_size(
             surf,
             width,
             height);
 
-    /*
-     * X/Y adalah geometry compositor yang sudah dipilih
-     * oleh WM DIRECT.
-     */
     *x = surf->wm_x;
     *y = surf->wm_y;
 
