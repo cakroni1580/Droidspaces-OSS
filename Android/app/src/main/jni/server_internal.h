@@ -200,6 +200,23 @@ enum compositor_resize_edges {
     COMPOSITOR_RESIZE_LEFT   = 1 << 3,
 };
 
+/*
+ * CONTEXT:
+ *
+ * wl_surface hanya boleh memiliki satu exclusive role.
+ *
+ * XDG dan layer-shell tidak boleh menggunakan wl_surface
+ * yang sama sebagai role utama.
+ *
+ * xdg_surface + xdg_toplevel tetap dianggap satu role XDG.
+ * GTK shell bukan exclusive role.
+ */
+enum compositor_surface_role {
+    COMPOSITOR_SURFACE_ROLE_NONE = 0,
+    COMPOSITOR_SURFACE_ROLE_XDG,
+    COMPOSITOR_SURFACE_ROLE_LAYER_SHELL,
+    COMPOSITOR_SURFACE_ROLE_SUBSURFACE,
+
 
 struct compositor_surface {
     struct wl_list link;
@@ -207,6 +224,14 @@ struct compositor_surface {
     struct wayland_server *srv;
     struct compositor_buffer_ref *current_buffer;
     struct compositor_buffer_ref *pending_buffer;
+    /*
+     * CONTEXT:
+     *
+     * Single source of truth untuk exclusive wl_surface role.
+     * Protocol-specific *_res bukan sumber role.
+     */
+    enum compositor_surface_role role;
+
     struct wl_resource *xdg_surface_res;
     struct wl_resource *xdg_toplevel_res;
 
