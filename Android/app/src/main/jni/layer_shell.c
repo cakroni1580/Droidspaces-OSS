@@ -693,29 +693,6 @@ static void layer_shell_get_layer_surface(
     struct compositor_surface *surf =
             wl_resource_get_user_data(surface_res);
 
-    /*
-     * CONTEXT:
-     *
-     * Layer-shell mengambil exclusive wl_surface role.
-     *
-     * Ini mencegah:
-     *
-     *     xdg_surface + layer_surface
-     *
-     * pada wl_surface yang sama.
-     */
-    if (!compositor_surface_set_role(
-            surf,
-            COMPOSITOR_SURFACE_ROLE_LAYER_SHELL)) {
-
-        wl_resource_post_error(
-            layer_shell_resource,
-            ZWLR_LAYER_SHELL_V1_ERROR_ROLE,
-            "wl_surface already has another role");
-
-        return;
-    }
-
     if (!srv || !surf || surf->srv != srv) {
         wl_resource_post_error(
                 resource,
@@ -758,6 +735,28 @@ static void layer_shell_get_layer_surface(
             (void *)surf,
             (void *)surf->layer_surface,
             (void *)surf->layer_surface_res);
+
+        return;
+    }
+    /*
+     * CONTEXT:
+     *
+     * Layer-shell mengambil exclusive wl_surface role.
+     *
+     * Ini mencegah:
+     *
+     *     xdg_surface + layer_surface
+     *
+     * pada wl_surface yang sama.
+     */
+    if (!compositor_surface_set_role(
+            surf,
+            COMPOSITOR_SURFACE_ROLE_LAYER_SHELL)) {
+
+        wl_resource_post_error(
+            layer_shell_resource,
+            ZWLR_LAYER_SHELL_V1_ERROR_ROLE,
+            "wl_surface already has another role");
 
         return;
     }
