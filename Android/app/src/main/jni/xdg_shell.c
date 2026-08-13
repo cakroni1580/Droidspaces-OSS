@@ -400,6 +400,13 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
         wl_resource_post_error(xdg_surface_res, XDG_WM_BASE_ERROR_ROLE, "surface already has role");
         return;
     }
+    if (surf->role != COMPOSITOR_SURFACE_ROLE_XDG) {
+        wl_resource_post_error(
+            xdg_surface_res,
+            XDG_WM_BASE_ERROR_ROLE,
+            "surface does not have XDG role");
+        return;
+    }
     struct wl_resource *toplevel = wl_resource_create(client, &xdg_toplevel_interface,
             wl_resource_get_version(xdg_surface_res), id);
     if (!toplevel) {
@@ -456,6 +463,19 @@ static void xdg_surface_get_toplevel(struct wl_client *client, struct wl_resourc
         }
 
         surf->z_order = surf->srv->next_z_order++;
+        if (surf->srv->wm_mode == WM_MODE_DIRECT)
+            compositor_raise_surface(surf->srv, surf);
+
+        LOGI(
+            "XDG toplevel created "
+            "surf=%p app_id=%s title=%s "
+            "geometry=%d,%d z=%d",
+            (void *)surf,
+            surf->app_id,
+            surf->title,
+            surf->wm_x,
+            surf->wm_y,
+            surf->z_order);
     }
 
     send_toplevel_configure(surf);
