@@ -74,7 +74,10 @@ static struct compositor_surface *find_pointer_target(struct wayland_server *srv
         int32_t hit_z = -1;
         wl_list_for_each(surf, &srv->surfaces, link) {
             if (surf->parent || surf->is_cursor) continue;
-            if (!surf->xdg_toplevel_res || !surf->layer_surface_res || !surf->current_buffer) continue;
+            if ((!surf->xdg_toplevel_res &&
+                 !surf->layer_surface_res) ||
+                 !surf->current_buffer)
+                 continue;
             int32_t sw = 0, sh = 0;
             compositor_surface_get_logical_size(surf, &sw, &sh);
             if (sw <= 0 || sh <= 0) continue;
@@ -93,7 +96,12 @@ static struct compositor_surface *find_pointer_target(struct wayland_server *srv
         struct compositor_surface *top = NULL;
         int32_t top_z = -1;
         wl_list_for_each(surf, &srv->surfaces, link) {
-            if (surf->parent || surf->is_cursor || !surf->xdg_toplevel_res|| !surf->layer_surface_res) continue;
+            if (surf->parent || surf->is_cursor)
+                continue;
+
+            if (!surf->xdg_toplevel_res &&
+                !surf->layer_surface_res)
+                continue;
             if (surf->z_order > top_z) { top_z = surf->z_order; top = surf; }
         }
         return top;
@@ -110,9 +118,14 @@ static struct compositor_surface *find_pointer_target(struct wayland_server *srv
             int32_t h = buffer_ref_height(surf->current_buffer);
             score = (int64_t)w * h;
         }
-        if (surf->xdg_toplevel_res) score += 100000000LL;
-        if (score < 128 * 128 && wl_list_empty(&surf->children) && !surf->xdg_toplevel_res)
-            continue;
+        if (surf->xdg_toplevel_res)
+            score += 100000000LL;
+
+       if (score < 128 * 128 &&
+           wl_list_empty(&surf->children) &&
+           !surf->xdg_toplevel_res &&
+           !surf->layer_surface_res)
+           continue;
         if (score > best_score) {
             best_score = score;
             best = surf;
@@ -139,7 +152,11 @@ static void pointer_send_enter(struct wayland_server *srv,
 static inline void surface_local_coords(struct wayland_server *srv, struct compositor_surface *surf,
         wl_fixed_t in_x, wl_fixed_t in_y, wl_fixed_t *out_x, wl_fixed_t *out_y) {
     if (!out_x || !out_y) return;
-    if (srv && srv->wm_mode == WM_MODE_DIRECT && surf && surf->xdg_toplevel_res) {
+    if (srv &&
+        srv->wm_mode == WM_MODE_DIRECT &&
+        surf &&
+        (surf->xdg_toplevel_res ||
+         surf->layer_surface_res)) {
         /* wl_pointer coordinates are surface-local; translate from output coords. */
         double dx = wl_fixed_to_double(in_x) - (double)surf->wm_x;
         double dy = wl_fixed_to_double(in_y) - (double)surf->wm_y;
