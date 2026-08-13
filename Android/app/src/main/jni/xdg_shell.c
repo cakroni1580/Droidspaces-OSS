@@ -362,38 +362,25 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
         if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
     } else {
-        /* Direct mode: let the client choose its own size (w=0, h=0 per xdg-shell spec).
-         * If explicitly maximized, fill the output and advertise MAXIMIZED. */
+        /*
+         * WM_MODE_DIRECT:
+         *
+         * DIRECT tidak menggunakan MAXIMIZED/FULLSCREEN
+         * sebagai window policy.
+         *
+         * Window tetap windowed dan mempertahankan geometry
+         * masing-masing. Work-area hanya menjadi coordinate
+         * boundary/placement authority, bukan ukuran universal.
+         *
+         * w=0/h=0 berarti compositor tidak memaksakan ukuran
+         * kepada client; client menggunakan negotiated/natural
+         * geometry-nya sendiri.
+         */
         if (surf->wm_resizing) {
             uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
             if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
         }
-        struct trierarch_work_area area;
-
-        if (xdg_get_work_area(surf, &area)) {
-            /*
-             * Posisi surface harus mengikuti origin work-area.
-             *
-             * Jangan menggunakan 0,0 karena exclusive zone
-             * dapat membuat work-area dimulai pada offset tertentu.
-             */
-            surf->wm_x = area.x;
-            surf->wm_y = area.y;
-
-            w = (int32_t)area.width;
-            h = (int32_t)area.height;
-
-            LOGI(
-                "xdg maximize "
-                "surface=%p "
-                "work-area=%ux%u+%d+%d",
-                (void *)surf,
-                area.width,
-                area.height,
-                area.x,
-                area.y);
-
-        } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
+        if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
             /* Compositor-driven resize: send requested size (best-effort). */
             w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
             h = surf->wm_req_h > 0 ? surf->wm_req_h : 0;
