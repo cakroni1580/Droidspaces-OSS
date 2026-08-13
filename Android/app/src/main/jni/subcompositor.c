@@ -115,7 +115,7 @@ static void subcompositor_get_subsurface(struct wl_client *client,
            COMPOSITOR_SURFACE_ROLE_SUBSURFACE)) {
 
        wl_resource_post_error(
-           subcompositor_resource,
+           subcomp_res,
            WL_SUBCOMPOSITOR_ERROR_BAD_SURFACE,
            "wl_surface already has another role");
 
