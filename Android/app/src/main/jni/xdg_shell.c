@@ -265,6 +265,10 @@ static void xdg_toplevel_set_maximized(struct wl_client *c, struct wl_resource *
     (void)c;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
     if (!surf) return;
+    if (surf->srv->wm_mode == WM_MODE_DIRECT) {
+        send_toplevel_configure(surf);
+        return;
+    }
     int32_t sw = 0, sh = 0;
         compositor_surface_get_logical_size(surf, &sw, &sh);
         surf->wm_saved_x = surf->wm_x;
@@ -280,7 +284,12 @@ static void xdg_toplevel_set_maximized(struct wl_client *c, struct wl_resource *
 static void xdg_toplevel_unset_maximized(struct wl_client *c, struct wl_resource *r) {
     (void)c;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf) return;
+    if (!surf || !surf->srv)
+        return;
+    if (surf->srv->wm_mode == WM_MODE_DIRECT) {
+        send_toplevel_configure(surf);
+        return;
+    }
     if (surf->wm_maximized) {
         surf->wm_x = surf->wm_saved_x;
         surf->wm_y = surf->wm_saved_y;
@@ -292,6 +301,10 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
     (void)c;(void)o;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
     if (!surf) return;
+    if (surf->srv->wm_mode == WM_MODE_DIRECT) {
+        send_toplevel_configure(surf);
+        return;
+    }
     if (!surf->wm_maximized) {
         int32_t sw = 0, sh = 0;
         compositor_surface_get_logical_size(surf, &sw, &sh);
@@ -308,7 +321,12 @@ static void xdg_toplevel_set_fullscreen(struct wl_client *c, struct wl_resource 
 static void xdg_toplevel_unset_fullscreen(struct wl_client *c, struct wl_resource *r) {
     (void)c;
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf) return;
+    if (!surf || !surf->srv)
+        return;
+    if (surf->srv->wm_mode == WM_MODE_DIRECT) {
+        send_toplevel_configure(surf);
+        return;
+    }
     if (surf->wm_maximized) {
         surf->wm_x = surf->wm_saved_x;
         surf->wm_y = surf->wm_saved_y;
@@ -362,23 +380,7 @@ void send_toplevel_configure(struct compositor_surface *surf) {
             uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
             if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
         }
-        /*
-         * CONTEXT:
-         *
-         * wm_maximized bukan berarti fullscreen output.
-         *
-         * XDG maximize harus mengisi WORK AREA:
-         *
-         *     output geometry
-         *          ↓
-         *     layer-shell exclusive zone
-         *          ↓
-         *     work-area
-         *
-         * Output tetap menjadi display coordinate space.
-         */
-        if (surf->wm_maximized) {
-            struct trierarch_work_area area;
+        struct trierarch_work_area area;
 
            if (xdg_get_work_area(surf, &area)) {
                /*
