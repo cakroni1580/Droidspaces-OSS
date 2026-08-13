@@ -4,6 +4,59 @@
  * WM_MODE_NESTED : toplevels are configured fullscreen; popup positions not tracked.
  * WM_MODE_DIRECT : toplevels get windowed configure; popup positions are computed from
  *                  the positioner and placed in absolute output coords.
+ *
+ * ================================================================
+ * TRIERARCH WM CONTRACT — WM_MODE_DIRECT
+ * ================================================================
+ *
+ * Target desktop:
+ *
+ *   Waybar
+ *   ┌──────────────────────────────┐
+ *   │                              │
+ *   │        work-area             │
+ *   │                              │
+ *   │ ┌────────────┐ ┌───────────┐ │
+ *   │ │  Firefox   │ │ Calculator│ │
+ *   │ │            │ │           │ │
+ *   │ └────────────┘ └───────────┘ │
+ *   │                              │
+ *   └──────────────────────────────┘
+ *
+ * CONTRACT:
+ *   1. LayerShell top/bottom exclusive_zone MUST reserve work-area.
+ *   2. XDG maximized windows MUST use the resulting work-area,
+ *      not the full physical output.
+ *   3. WM_MODE_DIRECT MUST support multiple mapped XDG windows
+ *      simultaneously.
+ *   4. Each XDG window MUST retain independent geometry/state/focus.
+ *   5. A new XDG window MUST NOT replace or overwrite another
+ *      mapped XDG window.
+ *   6. Normal windows, maximized windows, and fullscreen windows
+ *      MUST remain distinct states.
+ *   7. LayerShell background/overlay surfaces MUST NOT accidentally
+ *      modify the XDG work-area unless they request a valid
+ *      exclusive reservation.
+ *
+ * CURRENT BASELINE:
+ *   - xdg_wm_base: working
+ *   - xdg_surface/configure/ack: working
+ *   - gtk_shell1: working
+ *   - zwlr_layer_shell_v1: working
+ *   - LayerShell work-area calculation: present
+ *   - Exclusive reservation propagation: NOT COMPLETE
+ *   - Multi-window WM_MODE_DIRECT: NOT COMPLETE
+ *
+ * DO NOT:
+ *   - force every XDG surface to fullscreen
+ *   - use physical output size as universal window geometry
+ *   - treat one XDG surface as the only desktop window
+ *
+ * The WM layer is responsible for window policy.
+ * XDG/LayerShell protocol handlers are responsible only for
+ * maintaining the protocol state required by the WM.
+ *
+ * ================================================================
  */
 #include "server_internal.h"
 #include "xdg-shell-server-protocol.h"
