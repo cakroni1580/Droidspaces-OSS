@@ -102,6 +102,8 @@ static void layer_surface_calculate_size(
         struct compositor_surface *surf,
         uint32_t *width,
         uint32_t *height);
+void layer_surface_notify_output_change(
+        struct wayland_server *srv);
 
 
 static void layer_surface_resource_destroy(
@@ -386,6 +388,8 @@ static void layer_surface_set_exclusive_zone(
  */
 
     surf->layer_surface->exclusive_zone = zone;
+    if (surf->srv)
+        layer_surface_notify_output_change(surf->srv);
 
     const uint32_t anchor =
             surf->layer_surface->anchor;
@@ -522,6 +526,8 @@ static void layer_surface_set_margin(
     surf->layer_surface->margin_right = right;
     surf->layer_surface->margin_bottom = bottom;
     surf->layer_surface->margin_left = left;
+    if (surf->srv)
+        layer_surface_notify_output_change(surf->srv);
 
     LOGI(
         "layer set_margin surf=%p "
