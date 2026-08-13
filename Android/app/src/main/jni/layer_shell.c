@@ -754,7 +754,7 @@ static void layer_shell_get_layer_surface(
             COMPOSITOR_SURFACE_ROLE_LAYER_SHELL)) {
 
         wl_resource_post_error(
-            layer_shell_resource,
+            resource,
             ZWLR_LAYER_SHELL_V1_ERROR_ROLE,
             "wl_surface already has another role");
 
