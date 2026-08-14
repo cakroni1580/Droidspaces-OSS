@@ -835,19 +835,28 @@ static void xdg_surface_set_window_geometry(struct wl_client *c,
     if (!xdg_get_work_area(surf, &area))
         return;
 
-    int32_t max_w =
+    int32_t usable_w =
         (int32_t)area.width -
         (XDG_WORKAREA_MARGIN_X * 2);
 
-    int32_t max_h =
+    int32_t usable_h =
         (int32_t)area.height -
         (XDG_WORKAREA_MARGIN_Y * 2);
 
-    if (max_w < 1)
-        max_w = (int32_t)area.width;
+    if (usable_w < 1 || usable_h < 1) {
+        LOGE(
+            "XDG DIRECT invalid work-area "
+            "surf=%p area=%ux%u+%d+%d margin=%dx%d",
+            (void *)surf,
+            area.width,
+            area.height,
+            area.x,
+            area.y,
+            XDG_WORKAREA_MARGIN_X,
+            XDG_WORKAREA_MARGIN_Y);
 
-    if (max_h < 1)
-        max_h = (int32_t)area.height;
+        return false;
+    }
 
     if (w > max_w)
         w = max_w;
