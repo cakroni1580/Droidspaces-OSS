@@ -243,6 +243,8 @@ static void layer_surface_set_anchor(
     if (!surf || !surf->layer_surface)
         return;
     surf->layer_surface->anchor = anchor;
+    if (surf->srv)
+       layer_surface_notify_output_change(surf->srv);
     LOGI(
         "layer set_anchor surf=%p anchor=0x%x",
         (void *)surf,
