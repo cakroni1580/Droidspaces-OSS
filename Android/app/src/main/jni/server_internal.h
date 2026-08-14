@@ -22,6 +22,45 @@
 #include <stdint.h>
 
 #include "compositor.h"
+/*
+ * Shared by:
+ *   - pointer.c
+ *   - xdg_shell.c
+ *
+ * WM geometry is expressed in compositor logical/output coordinates.
+ */
+
+#ifndef WM_TITLEBAR_HOT_Y
+#define WM_TITLEBAR_HOT_Y 36
+#endif
+
+#ifndef WM_RESIZE_HOT_PX
+#define WM_RESIZE_HOT_PX 24
+#endif
+
+#ifndef WM_MIN_W
+#define WM_MIN_W 96
+#endif
+
+#ifndef WM_MIN_H
+#define WM_MIN_H 64
+#endif
+
+#ifndef WM_EDGE_LEFT
+#define WM_EDGE_LEFT   1u
+#endif
+
+#ifndef WM_EDGE_RIGHT
+#define WM_EDGE_RIGHT  2u
+#endif
+
+#ifndef WM_EDGE_TOP
+#define WM_EDGE_TOP    4u
+#endif
+
+#ifndef WM_EDGE_BOTTOM
+#define WM_EDGE_BOTTOM 8u
+#endif
 
 /* wm_mode_t is defined in compositor.h (included above). */
 
