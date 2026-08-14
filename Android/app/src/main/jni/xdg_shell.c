@@ -63,15 +63,11 @@
 #include <android/log.h>
 #include <stdlib.h>
 #include <string.h>
-
 #define LOG_TAG "TrierarchXdgShell"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-
-/* --- xdg_positioner state ------------------------------------------------- */
 #define XDG_WORKAREA_MARGIN_X 24
 #define XDG_WORKAREA_MARGIN_Y 24
-
 struct positioner_state {
     int32_t size_w, size_h;        /* requested popup size */
     int32_t anchor_x, anchor_y;    /* anchor rect origin relative to parent surface */
