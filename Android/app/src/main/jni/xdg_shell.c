@@ -318,48 +318,22 @@ static void xdg_toplevel_move(struct wl_client *c, struct wl_resource *r,
     srv->wm_drag_surf_start_x = surf->wm_x;
     srv->wm_drag_surf_start_y = surf->wm_y;
 }
-static void xdg_resize_apply(struct compositor_surface *surf) {
-    if (!surf || !surf->srv || !surf->wm_resizing ||
-        surf->srv->wm_mode != WM_MODE_DIRECT) return;
-
-    float px = (float)wl_fixed_to_double(surf->srv->pointer_x);
-    float py = (float)wl_fixed_to_double(surf->srv->pointer_y);
-    float dx = px - surf->wm_resize_ptr_x;
-    float dy = py - surf->wm_resize_ptr_y;
-    int32_t x = surf->wm_saved_x, y = surf->wm_saved_y;
-    int32_t w = surf->wm_saved_w, h = surf->wm_saved_h;
-
-    switch (surf->wm_resize_edge) {
-    case XDG_TOPLEVEL_RESIZE_EDGE_TOP:
-        y += (int32_t)dy; h -= (int32_t)dy; break;
-    case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM:
-        h += (int32_t)dy; break;
-    case XDG_TOPLEVEL_RESIZE_EDGE_LEFT:
-        x += (int32_t)dx; w -= (int32_t)dx; break;
-    case XDG_TOPLEVEL_RESIZE_EDGE_RIGHT:
-        w += (int32_t)dx; break;
-    case XDG_TOPLEVEL_RESIZE_EDGE_TOP_LEFT:
-        x += (int32_t)dx; y += (int32_t)dy;
-        w -= (int32_t)dx; h -= (int32_t)dy; break;
-    case XDG_TOPLEVEL_RESIZE_EDGE_TOP_RIGHT:
-        y += (int32_t)dy; w += (int32_t)dx; h -= (int32_t)dy; break;
-    case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_LEFT:
-        x += (int32_t)dx; w -= (int32_t)dx; h += (int32_t)dy; break;
-    case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_RIGHT:
-        w += (int32_t)dx; h += (int32_t)dy; break;
-    default:
-        return;
-    }
-
-    if (w < 64) w = 64;
-    if (h < 64) h = 64;
-
-    surf->wm_x = x;
-    surf->wm_y = y;
-    surf->wm_req_w = w;
-    surf->wm_req_h = h;
-    send_toplevel_configure(surf);
-}
+/*
+ * CONTEXT:
+ *
+ * WM_MODE_DIRECT interactive resize is executed centrally by
+ * pointer.c through:
+ *
+ *   srv->wm_resize_surf
+ *   srv->wm_resize_edges
+ *   srv->wm_resize_ptr_start_x/y
+ *   srv->wm_resize_start_x/y
+ *   srv->wm_resize_start_w/h
+ *
+ * Do not keep a second per-surface resize state machine here.
+ * xdg_toplevel.resize() only needs to initiate the compositor
+ * resize operation; pointer MOVE performs the geometry update.
+ */
 static void xdg_toplevel_resize(struct wl_client *c, struct wl_resource *r,
         struct wl_resource *s, uint32_t edge, uint32_t serial) {
     (void)c; (void)s; (void)serial;
