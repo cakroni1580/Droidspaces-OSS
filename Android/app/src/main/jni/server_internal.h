@@ -272,13 +272,12 @@ struct compositor_surface {
     int32_t sub_x, sub_y;
     bool is_cursor;  /* true = cursor surface from wl_pointer.set_cursor, drawn at pointer position */
     /* Window manager state (windowed/direct mode). */
-    int32_t wm_x, wm_y;         /* window top-left in logical output coords */
     int32_t z_order;             /* stacking order: higher = drawn on top / gets input first */
-    bool wm_maximized;           /* currently maximized */
-    int32_t wm_saved_x, wm_saved_y; /* pre-maximize position for restore */
-    int32_t wm_saved_w, wm_saved_h; /* pre-maximize size for restore (best-effort) */
-    int32_t wm_req_w, wm_req_h;     /* requested toplevel size (DIRECT); 0 = let client decide */
-    bool wm_resizing;              /* true while compositor-driven resize drag is active */
+    bool wm_resizing, wm_maximized, wm_minimized;
+    uint32_t wm_resize_edge;
+    int32_t wm_x, wm_y, wm_req_w, wm_req_h;
+    int32_t wm_saved_x, wm_saved_y, wm_saved_w, wm_saved_h;
+    float wm_resize_ptr_x, wm_resize_ptr_y;
     char title[256];             /* from xdg_toplevel.set_title */
     char app_id[256];            /* from xdg_toplevel.set_app_id */
 };
