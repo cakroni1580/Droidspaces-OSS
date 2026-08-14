@@ -602,75 +602,76 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
     } else {
         
-        if (surf->wm_resizing) {
-            uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
-            if (s_rz)
-                *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
-        }
+           if (surf->wm_resizing) {
+                uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
+                if (s_rz)
+                    *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
+            }
 
-        if (surf->wm_maximized) {
+            if (surf->wm_maximized) {
             
-            int32_t x = 0;
-            int32_t y = 0;
-            int32_t mw = 0;
-            int32_t mh = 0;
+                int32_t x = 0;
+                int32_t y = 0;
+                int32_t mw = 0;
+                int32_t mh = 0;
 
-            if (xdg_get_window_area(surf, &x, &y, &mw, &mh)) {
-                surf->wm_x = x;
-                surf->wm_y = y;
+                if (xdg_get_window_area(surf, &x, &y, &mw, &mh)) {
+                    surf->wm_x = x;
+                    surf->wm_y = y;
 
-                w = mw;
-                h = mh;
-            }
+                    w = mw;
+                    h = mh;
+                }
 
-            uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
-            if (s_max)
-                *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
-        } else {
-        /*
-         * CONTEXT:
-         *
-         * WM_MODE_DIRECT normal window:
-         *
-         * wm_req_w/h berasal dari set_window_geometry().
-         *
-         * Jangan mengganti requested geometry dengan
-         * output_width/output_height di sini.
-         */
-        w = surf->wm_req_w;
-        h = surf->wm_req_h;
-
-        /*
-         * Jika client belum memberikan geometry valid,
-         * gunakan work-area sebagai fallback policy.
-         *
-         * output logical size hanya dipakai oleh
-         * xdg_get_work_area() ketika work-area tidak tersedia.
-         */
-        if (w <= 0 || h <= 0) {
-            int32_t x = 0;
-            int32_t y = 0;
-            int32_t wa_w = 0;
-            int32_t wa_h = 0;
-
-            if (xdg_get_window_area(
-                    surf,
-                    &x,
-                    &y,
-                    &wa_w,
-                    &wa_h)) {
-
-                w = wa_w;
-                h = wa_h;
+                uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
+                if (s_max)
+                    *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
             } else {
-                /*
-                 * Ultimate fallback: logical output.
-                 */
-                w = surf->srv->output_width;
-                h = surf->srv->output_height;
+            /*
+             * CONTEXT:
+             *
+             * WM_MODE_DIRECT normal window:
+             *
+             * wm_req_w/h berasal dari set_window_geometry().
+             *
+             * Jangan mengganti requested geometry dengan
+             * output_width/output_height di sini.
+             */
+            w = surf->wm_req_w;
+            h = surf->wm_req_h;
+
+            /*
+             * Jika client belum memberikan geometry valid,
+             * gunakan work-area sebagai fallback policy.
+             *
+             * output logical size hanya dipakai oleh
+             * xdg_get_work_area() ketika work-area tidak tersedia.
+             */
+            if (w <= 0 || h <= 0) {
+                int32_t x = 0;
+                int32_t y = 0;
+                int32_t wa_w = 0;
+               int32_t wa_h = 0;
+
+                if (xdg_get_window_area(
+                        surf,
+                        &x,
+                        &y,
+                        &wa_w,
+                        &wa_h)) {
+
+                    w = wa_w;
+                    h = wa_h;
+                } else {
+                    /*
+                     * Ultimate fallback: logical output.
+                     */
+                    w = surf->srv->output_width;
+                    h = surf->srv->output_height;
+                }
             }
         }
-    }
+    }    
     xdg_toplevel_send_configure(surf->xdg_toplevel_res, w, h, &states);
     wl_array_release(&states);
     uint32_t serial = wl_display_next_serial(surf->srv->display);
