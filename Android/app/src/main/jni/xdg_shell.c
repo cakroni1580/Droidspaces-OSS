@@ -321,41 +321,145 @@ static void xdg_toplevel_move(struct wl_client *c, struct wl_resource *r,
 /*
  * CONTEXT:
  *
- * WM_MODE_DIRECT interactive resize is executed centrally by
- * pointer.c through:
+ * WM_MODE_DIRECT resize state is owned by the server-level
+ * pointer interaction state machine in pointer.c.
  *
- *   srv->wm_resize_surf
- *   srv->wm_resize_edges
- *   srv->wm_resize_ptr_start_x/y
- *   srv->wm_resize_start_x/y
- *   srv->wm_resize_start_w/h
+ * xdg_toplevel.resize() is only the protocol entry point.
+ * It must initialize the same state consumed by:
  *
- * Do not keep a second per-surface resize state machine here.
- * xdg_toplevel.resize() only needs to initiate the compositor
- * resize operation; pointer MOVE performs the geometry update.
+ *     POINTER_ACTION_MOVE
+ *         -> wm_apply_resize_clamped()
+ *         -> send_toplevel_configure()
+ *
+ * Do not maintain a second per-surface resize state machine here.
  */
 static void xdg_toplevel_resize(struct wl_client *c, struct wl_resource *r,
         struct wl_resource *s, uint32_t edge, uint32_t serial) {
-    (void)c; (void)s; (void)serial;
+    (void)c;
+    (void)s;
+    (void)serial;
+
     struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (!surf || !surf->srv || surf->srv->wm_mode != WM_MODE_DIRECT) return;
+    if (!surf || !surf->srv)
+        return;
 
     struct wayland_server *srv = surf->srv;
-    int32_t w = 0, h = 0;
+
+    if (srv->wm_mode != WM_MODE_DIRECT)
+        return;
+
+    /*
+     * CONTEXT:
+     *
+     * Another compositor-driven resize must not overwrite an
+     * already active resize operation.
+     */
+    if (srv->wm_resize_surf && srv->wm_resize_surf != surf)
+        return;
+
+    int32_t w = 0;
+    int32_t h = 0;
+
     compositor_surface_get_logical_size(surf, &w, &h);
 
+    if (w < WM_MIN_W)
+        w = WM_MIN_W;
+
+    if (h < WM_MIN_H)
+        h = WM_MIN_H;
+
+    /*
+     * XDG resize edges use the same directional semantics as
+     * the compositor pointer resize state.
+     *
+     * Convert the protocol edge directly to WM_EDGE_*.
+     */
+    uint32_t wm_edges = 0;
+
+    switch (edge) {
+    case XDG_TOPLEVEL_RESIZE_EDGE_TOP:
+        wm_edges = WM_EDGE_TOP;
+        break;
+
+    case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM:
+        wm_edges = WM_EDGE_BOTTOM;
+        break;
+
+    case XDG_TOPLEVEL_RESIZE_EDGE_LEFT:
+        wm_edges = WM_EDGE_LEFT;
+        break;
+
+    case XDG_TOPLEVEL_RESIZE_EDGE_RIGHT:
+        wm_edges = WM_EDGE_RIGHT;
+        break;
+
+    case XDG_TOPLEVEL_RESIZE_EDGE_TOP_LEFT:
+        wm_edges = WM_EDGE_TOP | WM_EDGE_LEFT;
+        break;
+
+    case XDG_TOPLEVEL_RESIZE_EDGE_TOP_RIGHT:
+        wm_edges = WM_EDGE_TOP | WM_EDGE_RIGHT;
+        break;
+
+    case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_LEFT:
+        wm_edges = WM_EDGE_BOTTOM | WM_EDGE_LEFT;
+        break;
+
+    case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_RIGHT:
+        wm_edges = WM_EDGE_BOTTOM | WM_EDGE_RIGHT;
+        break;
+
+    default:
+        LOGI(
+            "XDG resize ignored: invalid edge "
+            "surf=%p edge=%u",
+            (void *)surf,
+            edge);
+        return;
+    }
+
+    /*
+     * CONTEXT:
+     *
+     * Save the exact pointer position and geometry at the moment
+     * the XDG resize request arrives.
+     *
+     * pointer.c will calculate all subsequent dx/dy from this
+     * snapshot.
+     */
+    srv->wm_resize_surf = surf;
+
+    srv->wm_resize_ptr_start_x =
+        (float)wl_fixed_to_double(srv->pointer_x);
+
+    srv->wm_resize_ptr_start_y =
+        (float)wl_fixed_to_double(srv->pointer_y);
+
+    srv->wm_resize_start_x = surf->wm_x;
+    srv->wm_resize_start_y = surf->wm_y;
+    srv->wm_resize_start_w = w;
+    srv->wm_resize_start_h = h;
+    srv->wm_resize_edges = wm_edges;
+
     surf->wm_resizing = true;
-    surf->wm_resize_edge = edge;
-    surf->wm_resize_ptr_x = (float)wl_fixed_to_double(srv->pointer_x);
-    surf->wm_resize_ptr_y = (float)wl_fixed_to_double(srv->pointer_y);
-    surf->wm_saved_x = surf->wm_x;
-    surf->wm_saved_y = surf->wm_y;
-    surf->wm_saved_w = w;
-    surf->wm_saved_h = h;
     surf->wm_minimized = false;
 
-    LOGI("XDG resize start surf=%p edge=%u geom=%dx%d+%d+%d",
-         (void *)surf, edge, w, h, surf->wm_x, surf->wm_y);
+    LOGI(
+        "XDG resize start "
+        "surf=%p "
+        "edge=%u "
+        "wm_edges=%u "
+        "geom=%dx%d+%d+%d "
+        "pointer=%.1f,%.1f",
+        (void *)surf,
+        edge,
+        wm_edges,
+        w,
+        h,
+        surf->wm_x,
+        surf->wm_y,
+        srv->wm_resize_ptr_start_x,
+        srv->wm_resize_ptr_start_y);
 }
 static void xdg_toplevel_set_max_size(struct wl_client *c, struct wl_resource *r, int32_t w, int32_t h) {
     (void)c;(void)r;(void)w;(void)h;
