@@ -6,52 +6,104 @@
  * TRIERARCH WM CONTRACT — WM_MODE_DIRECT
  * ================================================================
  *
- * Target desktop:
+ * Target desktop harus universal:
  *
- *   Waybar
+ *   waybar,phosh,plasma-mobile labwc or etc.
  *   ┌──────────────────────────────┐
- *   │                              │
- *   │        work-area             │
- *   │                              │
+      esclusive zones
+ *   │___________________________________│
+ *   │        work-area                  │
+ *   │                                   │
  *   │ ┌────────────┐ ┌───────────┐ │
- *   │ │  Firefox   │ │ Calculator│ │
- *   │ │            │ │           │ │
+ *   │ │  Firefox     │ | Calculator  │  |
+ *   │ │              │ |             │  |
  *   │ └────────────┘ └───────────┘ │
- *   │                              │
+ *   │___________________________________│
+     |  back   | home   | window          |
  *   └──────────────────────────────┘
  *
- * CONTRACT:
- *   1. LayerShell top/bottom exclusive_zone MUST reserve work-area.
- *   2. XDG maximized windows MUST use the resulting work-area,
- *      not the full physical output.
- *   3. WM_MODE_DIRECT MUST support multiple mapped XDG windows
- *      simultaneously.
- *   4. Each XDG window MUST retain independent geometry/state/focus.
- *   5. A new XDG window MUST NOT replace or overwrite another
- *      mapped XDG window.
- *   6. Normal windows, maximized windows, and fullscreen windows
- *      MUST remain distinct states.
- *   7. LayerShell background/overlay surfaces MUST NOT accidentally
- *      modify the XDG work-area unless they request a valid
- *      exclusive reservation.
+ * NOTE CONTRACT:
+ *   layershell.c berjalan di Trierarch compositor JNI sebagai
+ *   compositor display host. Implementasi mengikuti policy Phoc,
+ *   bukan asumsi generic wlroots.
  *
- * CURRENT BASELINE:
- *   - xdg_wm_base: working
- *   - xdg_surface/configure/ack: working
- *   - gtk_shell1: working
- *   - zwlr_layer_shell_v1: working
- *   - LayerShell work-area calculation: present
- *   - Exclusive reservation propagation: NOT COMPLETE
- *   - Multi-window WM_MODE_DIRECT: NOT COMPLETE
+ * 1. WORK-AREA adalah milik dan geometry authority Trierarch WM.
+ *    Work-area HARUS sudah aktif sejak compositor mulai, walaupun
+ *    belum ada Waybar atau layer-shell surface.
  *
- * DO NOT:
- *   - force every XDG surface to fullscreen
- *   - use physical output size as universal window geometry
- *   - treat one XDG surface as the only desktop window
+ * 2. Default work-area selalu sama dengan physical output:
  *
- * The WM layer is responsible for window policy.
- * XDG/LayerShell protocol handlers are responsible only for
- * maintaining the protocol state required by the WM.
+ *       x=0, y=0, width=output_width, height=output_height
+ *
+ *    Waybar bukan pembuat work-area.
+ *
+ * 3. EXCLUSIVE ZONE adalah reservation terhadap work-area yang
+ *    diproses oleh WM. Layer-shell hanya mengirim state:
+ *
+ *       anchor / margin / exclusive_zone
+ *
+ *    Layer-shell tidak memiliki work-area dan tidak menentukan
+ *    geometry XDG.
+ *
+ * 4. exclusive_zone:
+ *
+ *       > 0  -> WM mengurangi work-area
+ *        0   -> tidak reserve
+ *       -1   -> tidak reserve
+ *
+ *    Hanya reservation dengan edge anchor yang valid yang boleh
+ *    mempengaruhi work-area.
+ *
+ * 5. Jika tidak ada exclusive layer, work-area tetap ada dan
+ *    mencakup seluruh physical output.
+ *
+ * 6. Jika Waybar muncul, reservation Waybar hanya mengurangi
+ *    work-area yang sudah ada. Jika Waybar hilang, reservation
+ *    dilepas dan work-area kembali ke output yang tersedia.
+ *
+ * 7. XDG-SHELL TIDAK mengetahui konsep exclusive zone.
+ *    XDG hanya KONSUMER hasil final work-area dari WM.
+ *
+ *       output
+ *          |
+ *          v
+ *       WM base work-area
+ *          |
+ *          +-- layer exclusive reservations
+ *          |
+ *          v
+ *       final work-area
+ *          |
+ *          +-- XDG normal/maximize geometry
+ *
+ * 8. XDG maximized window WAJIB menggunakan final work-area,
+ *    bukan physical output.
+ *
+ * 9. WM_MODE_DIRECT WAJIB mendukung banyak XDG window secara
+ *    bersamaan. Setiap window mempertahankan geometry, state,
+ *    focus, dan lifecycle secara independen.
+ *
+ * 10. Normal, maximized, dan fullscreen adalah state yang berbeda.
+ *
+ * 11. Layer background/overlay tanpa valid exclusive reservation
+ *     TIDAK boleh mengubah work-area.
+ *
+ * 12. Perubahan output Android langsung menjadi geometry authority
+ *     baru. Work-area dihitung dari output terbaru + reservation
+ *     layer-shell aktif. Tidak boleh ada pending work-area state
+ *     kedua atau menunggu XDG/Waybar untuk membentuk desktop.
+ *
+ * 13. DO NOT:
+ *       - membuat work-area bergantung pada Waybar
+ *       - membuat XDG memanggil/menghitung exclusive zone
+ *       - memakai physical output sebagai geometry maximized XDG
+ *       - memaksa semua XDG menjadi fullscreen
+ *       - mengganti/menghapus XDG window lain saat window baru map
+ *       - memperlakukan satu XDG surface sebagai seluruh desktop
+ *
+ * WM bertanggung jawab atas window policy dan work-area.
+ * XDG/LayerShell hanya mempertahankan protocol state yang diperlukan
+ * WM; keputusan geometry tetap berada pada Trierarch WM.
  *
  * ================================================================
  */
