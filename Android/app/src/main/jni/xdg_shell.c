@@ -773,17 +773,165 @@ static void xdg_surface_get_popup(struct wl_client *client, struct wl_resource *
     xdg_surface_send_configure(xdg_surface_res, serial);
 }
 
-static void xdg_surface_set_window_geometry(struct wl_client *c, struct wl_resource *r,
-        int32_t x, int32_t y, int32_t w, int32_t h) {
+/*
+ * CONTEXT:
+ *
+ * xdg_surface.set_window_geometry()
+ *
+ * WM_MODE_NESTED:
+ *     Protocol state is observed only.
+ *     Existing fullscreen/output policy remains unchanged.
+ *
+ * WM_MODE_DIRECT:
+ *     Apply the client-reported geometry as the requested window size,
+ *     but constrain it against the existing XDG work-area.
+ *
+ * IMPORTANT:
+ *     x/y from set_window_geometry() are surface-local geometry
+ *     coordinates. They are NOT an absolute compositor window position.
+ *
+ *     Therefore:
+ *         - x/y are recorded/logged as protocol geometry only.
+ *         - wm_x/wm_y remain owned by the WM placement logic.
+ *         - wm_req_w/wm_req_h become the requested window dimensions.
+ *
+ * The work-area remains the geometry authority for the usable desktop.
+ */
+static void xdg_surface_set_window_geometry(struct wl_client *c,
+        struct wl_resource *r,
+        int32_t x,
+        int32_t y,
+        int32_t w,
+        int32_t h)
+{
     (void)c;
+
     static unsigned geom_logged;
-    struct compositor_surface *surf = wl_resource_get_user_data(r);
-    if (geom_logged < 64) {
-        LOGI("xdg_surface.set_window_geometry surf=%p app_id=%s title=%s geom=%d,%d %dx%d",
+
+    struct compositor_surface *surf =
+        wl_resource_get_user_data(r);
+
+    if (!surf || !surf->srv)
+        return;
+
+    /*
+     * WM_MODE_NESTED:
+     *
+     * Do not change the existing nested policy.
+     * Nested windows are configured fullscreen by send_toplevel_configure().
+     */
+    if (surf->srv->wm_mode != WM_MODE_DIRECT) {
+        if (geom_logged < 64) {
+            LOGI(
+                "xdg_surface.set_window_geometry "
+                "nested: surf=%p app_id=%s title=%s "
+                "geom=%d,%d %dx%d",
                 (void *)surf,
-                surf ? surf->app_id : "?",
-                surf ? surf->title : "?",
-                (int)x, (int)y, (int)w, (int)h);
+                surf->app_id,
+                surf->title,
+                (int)x,
+                (int)y,
+                (int)w,
+                (int)h);
+
+            geom_logged++;
+        }
+
+        return;
+    }
+
+    /*
+     * CONTEXT:
+     *
+     * WM_MODE_DIRECT menggunakan work-area sebagai source/boundary.
+     *
+     * Jangan menggunakan output_width/output_height langsung di sini.
+     */
+    struct trierarch_work_area area;
+
+    if (!xdg_get_work_area(surf, &area))
+        return;
+
+    /*
+     * Invalid client geometry tidak boleh masuk ke WM state.
+     */
+    if (w <= 0 || h <= 0)
+        return;
+
+    /*
+     * Requested window size.
+     *
+     * Work-area tetap menjadi batas maksimum.
+     *
+     * Margin mengikuti policy yang sama dengan
+     * xdg_get_window_area().
+     */
+    int32_t max_w =
+        (int32_t)area.width -
+        (XDG_WORKAREA_MARGIN_X * 2);
+
+    int32_t max_h =
+        (int32_t)area.height -
+        (XDG_WORKAREA_MARGIN_Y * 2);
+
+    /*
+     * Display kecil: jangan menghasilkan ukuran <= 0.
+     */
+    if (max_w < 1)
+        max_w = (int32_t)area.width;
+
+    if (max_h < 1)
+        max_h = (int32_t)area.height;
+
+    if (w > max_w)
+        w = max_w;
+
+    if (h > max_h)
+        h = max_h;
+
+    /*
+     * Requested geometry untuk normal XDG window.
+     *
+     * wm_x / wm_y TIDAK disentuh di sini.
+     *
+     * Posisi window tetap merupakan tanggung jawab WM:
+     *     - initial cascade
+     *     - move
+     *     - resize
+     *     - maximize
+     */
+    surf->wm_req_w = w;
+    surf->wm_req_h = h;
+
+    /*
+     * set_window_geometry() adalah geometry dari surface content,
+     * bukan absolute WM position.
+     *
+     * Karena itu x/y tidak dimasukkan ke wm_x/wm_y.
+     */
+
+    if (geom_logged < 64) {
+        LOGI(
+            "xdg_surface.set_window_geometry "
+            "DIRECT applied: "
+            "surf=%p app_id=%s title=%s "
+            "client_geom=%d,%d %dx%d "
+            "requested=%dx%d "
+            "work-area=%ux%u+%d+%d",
+            (void *)surf,
+            surf->app_id,
+            surf->title,
+            (int)x,
+            (int)y,
+            (int)w,
+            (int)h,
+            (int)surf->wm_req_w,
+            (int)surf->wm_req_h,
+            area.width,
+            area.height,
+            area.x,
+            area.y);
+
         geom_logged++;
     }
 }
