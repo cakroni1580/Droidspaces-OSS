@@ -55,46 +55,108 @@ static struct compositor_surface *find_pointer_target(struct wayland_server *srv
         wl_fixed_t fx, wl_fixed_t fy) {
     struct compositor_surface *surf;
 
+    /* AFTER */
     if (srv->wm_mode == WM_MODE_DIRECT) {
         float px = (float)wl_fixed_to_double(fx);
         float py = (float)wl_fixed_to_double(fy);
 
-        /* Pass 1: hit-test toplevels, pick the one with the highest z_order under the cursor. */
+    /*
+     * DIRECT pointer contract:
+     *
+     *   fx/fy = compositor output coordinates
+     *   wm_x/wm_y = compositor placement
+     *   pointer result = actual surface under cursor
+     *
+     * Do NOT fall back to the topmost window when the pointer is in
+     * an empty area. Multi-app DIRECT requires real hit-testing.
+     */
+
         struct compositor_surface *hit = NULL;
         int32_t hit_z = -1;
+
+    /*
+     * First pass: normal XDG/layer surfaces.
+     *
+     * Popup surfaces are handled separately below because their
+     * parent-relative geometry must already have been converted into
+     * absolute wm_x/wm_y by the XDG popup implementation.
+     */
         wl_list_for_each(surf, &srv->surfaces, link) {
-            if (surf->parent || surf->is_cursor) continue;
-            if ((!surf->xdg_toplevel_res &&
-                 !surf->layer_surface_res) ||
-                 !surf->current_buffer)
-                 continue;
+            if (surf->is_cursor)
+                continue;
+
+            if (!surf->current_buffer)
+                continue;
+
+            if (surf->parent)
+                continue;
+
+            if (!surf->xdg_toplevel_res &&
+                !surf->layer_surface_res)
+                continue;
+
             int32_t sw = 0, sh = 0;
             compositor_surface_get_logical_size(surf, &sw, &sh);
-            if (sw <= 0 || sh <= 0) continue;
+
+            if (sw <= 0 || sh <= 0)
+                continue;
+
             float x0 = (float)surf->wm_x;
             float y0 = (float)surf->wm_y;
-            if (px >= x0 && px < x0 + (float)sw && py >= y0 && py < y0 + (float)sh) {
+
+            if (px >= x0 && px < x0 + (float)sw &&
+                py >= y0 && py < y0 + (float)sh) {
+
                 if (surf->z_order > hit_z) {
                     hit_z = surf->z_order;
                     hit = surf;
                 }
             }
         }
-        if (hit) return hit;
 
-        /* Pass 2: pointer is in a gap — return the topmost toplevel regardless of position. */
-        struct compositor_surface *top = NULL;
-        int32_t top_z = -1;
+    /*
+     * Second pass: child surfaces / XDG popups.
+     *
+     * Popup wm_x/wm_y are absolute compositor coordinates.
+     * Therefore pointer hit-testing does not need to reconstruct
+     * the parent-relative popup position here.
+     */
         wl_list_for_each(surf, &srv->surfaces, link) {
-            if (surf->parent || surf->is_cursor)
+            if (!surf->parent || surf->is_cursor)
                 continue;
 
-            if (!surf->xdg_toplevel_res &&
-                !surf->layer_surface_res)
+            if (!surf->current_buffer)
                 continue;
-            if (surf->z_order > top_z) { top_z = surf->z_order; top = surf; }
+
+            int32_t sw = 0, sh = 0;
+            compositor_surface_get_logical_size(surf, &sw, &sh);
+
+            if (sw <= 0 || sh <= 0)
+                continue;
+
+            float x0 = (float)surf->wm_x;
+            float y0 = (float)surf->wm_y;
+
+            if (px >= x0 && px < x0 + (float)sw &&
+                py >= y0 && py < y0 + (float)sh) {
+
+            /*
+             * Child popup must win over its parent and other surfaces
+             * occupying the same output coordinates.
+             */
+                if (!hit || surf->z_order > hit_z) {
+                    hit_z = surf->z_order;
+                    hit = surf;
+                }
+            }
         }
-        return top;
+
+    /*
+     * No surface under pointer.
+     *
+     * This is a real "no focus" state in multi-app DIRECT.
+     */
+        return hit;
     }
 
     /* NESTED mode: largest area + xdg_toplevel bonus (original behaviour). */
@@ -338,16 +400,43 @@ void compositor_pointer_right_click(wayland_server_t *srv_opaque, uint32_t time_
     /* do not overwrite cursor_phys: app already set it via nativeSetCursorPhysical for drawing */
     struct compositor_surface *surf = find_pointer_target(srv, fx, fy);
     if (surf && surf != srv->pointer_focus) {
-        if (srv->pointer_focus) pointer_send_leave(srv, srv->pointer_focus);
+        if (srv->pointer_focus)
+            pointer_send_leave(srv, srv->pointer_focus);
+
         srv->pointer_focus = surf;
-        pointer_send_enter(srv, surf, fx, fy);
+
+        /*
+         * wl_pointer coordinates are surface-local.
+         * fx/fy are compositor/output coordinates.
+         */
+        wl_fixed_t lx = fx;
+        wl_fixed_t ly = fy;
+        surface_local_coords(srv, surf, fx, fy, &lx, &ly);
+
+        pointer_send_enter(srv, surf, lx, ly);
         keyboard_focus_update(srv, surf);
         compositor_raise_surface(srv, surf);
     }
+
     if (surf && surf->resource) {
-        pointer_send_motion(srv, surf, time_ms, fx, fy);
-        pointer_send_button(srv, surf, time_ms, BTN_RIGHT, WL_POINTER_BUTTON_STATE_PRESSED);
-        pointer_send_button(srv, surf, time_ms, BTN_RIGHT, WL_POINTER_BUTTON_STATE_RELEASED);
+        wl_fixed_t lx = fx;
+        wl_fixed_t ly = fy;
+
+        /*
+         * Right-click follows exactly the same coordinate contract
+         * as normal POINTER_ACTION_DOWN.
+         */
+        surface_local_coords(srv, surf, fx, fy, &lx, &ly);
+
+        pointer_send_motion(srv, surf, time_ms, lx, ly);
+
+        pointer_send_button(srv, surf, time_ms,
+                            BTN_RIGHT,
+                            WL_POINTER_BUTTON_STATE_PRESSED);
+
+        pointer_send_button(srv, surf, time_ms,
+                            BTN_RIGHT,
+                            WL_POINTER_BUTTON_STATE_RELEASED);
     }
     pthread_mutex_unlock(&srv->surfaces_mutex);
 }
