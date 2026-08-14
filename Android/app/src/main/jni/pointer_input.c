@@ -20,16 +20,6 @@
 #define WL_POINTER_BUTTON_STATE_PRESSED  1
 #define WL_POINTER_BUTTON_STATE_RELEASED 0
 
-#define WM_TITLEBAR_HOT_Y 36
-#define WM_RESIZE_HOT_PX  24
-#define WM_MIN_W          96
-#define WM_MIN_H          64
-
-#define WM_EDGE_LEFT   1u
-#define WM_EDGE_RIGHT  2u
-#define WM_EDGE_TOP    4u
-#define WM_EDGE_BOTTOM 8u
-
 /*
  * Input model contract:
  * - This compositor uses a "best fullscreen surface" heuristic for pointer focus because we target
