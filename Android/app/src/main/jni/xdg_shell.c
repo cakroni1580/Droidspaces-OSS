@@ -817,62 +817,40 @@ static void xdg_surface_set_window_geometry(struct wl_client *c,
     if (!surf || !surf->srv)
         return;
 
-    if (surf->srv->wm_mode != WM_MODE_DIRECT)
-        return;
-
-    if (w <= 0 || h <= 0)
-        return;
-
-    struct trierarch_work_area area;
-
     /*
      * CONTEXT:
      *
-     * No fallback.
+     * wm_req_w / wm_req_h adalah requested client geometry.
+     * Geometry ini tidak boleh dipaksa mengikuti work-area.
      *
-     * Jika work-area belum valid, geometry tidak diterapkan.
+     * Work-area digunakan oleh:
+     *
+     *     xdg_toplevel.set_maximized()
+     *     send_toplevel_configure()
+     *     WM resize policy
      */
-    if (!xdg_get_work_area(surf, &area))
+    if (w <= 0 || h <= 0)
         return;
-
-    int32_t usable_w =
-        (int32_t)area.width -
-        (XDG_WORKAREA_MARGIN_X * 2);
-
-    int32_t usable_h =
-        (int32_t)area.height -
-        (XDG_WORKAREA_MARGIN_Y * 2);
-
-    if (usable_w < 1 || usable_h < 1) {
-        LOGE(
-            "XDG DIRECT invalid work-area "
-            "surf=%p area=%ux%u+%d+%d margin=%dx%d",
-            (void *)surf,
-            area.width,
-            area.height,
-            area.x,
-            area.y,
-            XDG_WORKAREA_MARGIN_X,
-            XDG_WORKAREA_MARGIN_Y);
-
-        return false;
-    }
-
-    if (w > max_w)
-        w = max_w;
-
-    if (h > max_h)
-        h = max_h;
 
     surf->wm_req_w = w;
     surf->wm_req_h = h;
 
+    /*
+     * x/y adalah window geometry relatif terhadap surface
+     * menurut xdg-shell, bukan posisi compositor window.
+     *
+     * Posisi WM tetap berada di:
+     *
+     *     surf->wm_x
+     *     surf->wm_y
+     */
     LOGI(
-        "XDG set_window_geometry DIRECT "
+        "XDG set_window_geometry "
         "surf=%p "
         "client=%d,%d %dx%d "
         "wm_req=%dx%d "
-        "work-area=%ux%u+%d+%d",
+        "wm_pos=%d,%d "
+        "mode=%s",
         (void *)surf,
         x,
         y,
@@ -880,10 +858,11 @@ static void xdg_surface_set_window_geometry(struct wl_client *c,
         h,
         surf->wm_req_w,
         surf->wm_req_h,
-        area.width,
-        area.height,
-        area.x,
-        area.y);
+        surf->wm_x,
+        surf->wm_y,
+        surf->srv->wm_mode == WM_MODE_DIRECT
+            ? "DIRECT"
+            : "NESTED");
 }
 
 
