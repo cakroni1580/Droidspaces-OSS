@@ -318,9 +318,70 @@ static void xdg_toplevel_move(struct wl_client *c, struct wl_resource *r,
     srv->wm_drag_surf_start_x = surf->wm_x;
     srv->wm_drag_surf_start_y = surf->wm_y;
 }
+static void xdg_resize_apply(struct compositor_surface *surf) {
+    if (!surf || !surf->srv || !surf->wm_resizing ||
+        surf->srv->wm_mode != WM_MODE_DIRECT) return;
+
+    float px = (float)wl_fixed_to_double(surf->srv->pointer_x);
+    float py = (float)wl_fixed_to_double(surf->srv->pointer_y);
+    float dx = px - surf->wm_resize_ptr_x;
+    float dy = py - surf->wm_resize_ptr_y;
+    int32_t x = surf->wm_saved_x, y = surf->wm_saved_y;
+    int32_t w = surf->wm_saved_w, h = surf->wm_saved_h;
+
+    switch (surf->wm_resize_edge) {
+    case XDG_TOPLEVEL_RESIZE_EDGE_TOP:
+        y += (int32_t)dy; h -= (int32_t)dy; break;
+    case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM:
+        h += (int32_t)dy; break;
+    case XDG_TOPLEVEL_RESIZE_EDGE_LEFT:
+        x += (int32_t)dx; w -= (int32_t)dx; break;
+    case XDG_TOPLEVEL_RESIZE_EDGE_RIGHT:
+        w += (int32_t)dx; break;
+    case XDG_TOPLEVEL_RESIZE_EDGE_TOP_LEFT:
+        x += (int32_t)dx; y += (int32_t)dy;
+        w -= (int32_t)dx; h -= (int32_t)dy; break;
+    case XDG_TOPLEVEL_RESIZE_EDGE_TOP_RIGHT:
+        y += (int32_t)dy; w += (int32_t)dx; h -= (int32_t)dy; break;
+    case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_LEFT:
+        x += (int32_t)dx; w -= (int32_t)dx; h += (int32_t)dy; break;
+    case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_RIGHT:
+        w += (int32_t)dx; h += (int32_t)dy; break;
+    default:
+        return;
+    }
+
+    if (w < 64) w = 64;
+    if (h < 64) h = 64;
+
+    surf->wm_x = x;
+    surf->wm_y = y;
+    surf->wm_req_w = w;
+    surf->wm_req_h = h;
+    send_toplevel_configure(surf);
+}
 static void xdg_toplevel_resize(struct wl_client *c, struct wl_resource *r,
         struct wl_resource *s, uint32_t edge, uint32_t serial) {
-    (void)c;(void)r;(void)s;(void)edge;(void)serial;
+    (void)c; (void)s; (void)serial;
+    struct compositor_surface *surf = wl_resource_get_user_data(r);
+    if (!surf || !surf->srv || surf->srv->wm_mode != WM_MODE_DIRECT) return;
+
+    struct wayland_server *srv = surf->srv;
+    int32_t w = 0, h = 0;
+    compositor_surface_get_logical_size(surf, &w, &h);
+
+    surf->wm_resizing = true;
+    surf->wm_resize_edge = edge;
+    surf->wm_resize_ptr_x = (float)wl_fixed_to_double(srv->pointer_x);
+    surf->wm_resize_ptr_y = (float)wl_fixed_to_double(srv->pointer_y);
+    surf->wm_saved_x = surf->wm_x;
+    surf->wm_saved_y = surf->wm_y;
+    surf->wm_saved_w = w;
+    surf->wm_saved_h = h;
+    surf->wm_minimized = false;
+
+    LOGI("XDG resize start surf=%p edge=%u geom=%dx%d+%d+%d",
+         (void *)surf, edge, w, h, surf->wm_x, surf->wm_y);
 }
 static void xdg_toplevel_set_max_size(struct wl_client *c, struct wl_resource *r, int32_t w, int32_t h) {
     (void)c;(void)r;(void)w;(void)h;
@@ -371,10 +432,13 @@ static void xdg_toplevel_unset_maximized(struct wl_client *c, struct wl_resource
     struct compositor_surface *surf = wl_resource_get_user_data(r);
     if (!surf || !surf->srv)
         return;
-    if (surf->srv->wm_mode == WM_MODE_DIRECT) return;
+    if (surf->srv->wm_mode == WM_MODE_DIRECT && !surf->wm_maximized)
+    return;
     if (surf->wm_maximized) {
         surf->wm_x = surf->wm_saved_x;
         surf->wm_y = surf->wm_saved_y;
+        surf->wm_req_w = surf->wm_saved_w;
+        surf->wm_req_h = surf->wm_saved_h;
         surf->wm_maximized = false;
     }
     send_toplevel_configure(surf);
@@ -411,7 +475,20 @@ static void xdg_toplevel_unset_fullscreen(struct wl_client *c, struct wl_resourc
     send_toplevel_configure(surf);
 }
 static void xdg_toplevel_set_minimized(struct wl_client *c, struct wl_resource *r) {
-    (void)c;(void)r;
+    (void)c;
+    struct compositor_surface *surf = wl_resource_get_user_data(r);
+    if (!surf || !surf->srv || surf->srv->wm_mode != WM_MODE_DIRECT) return;
+
+    surf->wm_minimized = true;
+    surf->wm_resizing = false;
+
+    if (surf->srv->wm_drag_surf == surf)
+        surf->srv->wm_drag_surf = NULL;
+    if (surf->srv->wm_resize_surf == surf)
+        surf->srv->wm_resize_surf = NULL;
+
+    LOGI("XDG minimized surf=%p app_id=%s title=%s",
+         (void *)surf, surf->app_id, surf->title);
 }
 
 static const struct xdg_toplevel_interface xdg_toplevel_impl = {
