@@ -13,114 +13,27 @@
 #define COMPOSITOR_RESIZE_RIGHT  (1u << 1)
 #define COMPOSITOR_RESIZE_BOTTOM (1u << 2)
 #define COMPOSITOR_RESIZE_LEFT   (1u << 3)
-/*
- * ================================================================
- * GTK SHELL ARCHITECTURE
- * ================================================================
- *
- * gtk-shell.c TIDAK memiliki authority terhadap:
- *
- *   - surface geometry
- *   - wm_x / wm_y
- *   - output size
- *   - maximize/fullscreen
- *   - configure serial
- *   - xdg_toplevel.configure
- *   - gtk_surface1.configure
- *
- * Semua geometry/state diproses oleh compositor/output.c.
- *
- * gtk-shell.c hanya menjadi protocol bridge antara GTK client
- * dengan compositor_surface.
- *
- * Flow:
- *
- *   GTK client
- *       |
- *       +--> gtk_shell1
- *       |
- *       +--> gtk_surface1
- *               |
- *               v
- *        compositor_surface
- *               |
- *               v
- *            output.c
- *               |
- *        +------+------+
- *        |             |
- *      xdg-shell    gtk-shell
- *
- * ================================================================
- */
- /*
- * ================================================================
- * CONTEXT: GTK DEFAULT SURFACE AUTHORITY
- * ================================================================
- *
- * GTK shell boleh attached ke wl_surface yang juga merupakan
- * layer-shell surface, tetapi GTK window-management policy hanya
- * berlaku pada XDG toplevel.
- *
- * Default desktop application:
- *
- *     wl_surface
- *          |
- *          +--> xdg_surface
- *                  |
- *                  +--> xdg_toplevel   <-- GTK geometry authority
- *
- * Layer-shell tetap valid:
- *
- *     wl_surface
- *          |
- *          +--> zwlr_layer_surface_v1
- *
- * tetapi GTK TIDAK mengambil alih geometry layer-shell.
- *
- * ================================================================
- */
+
 static bool gtk_surface_is_xdg_toplevel(
         struct compositor_surface *surf)
 {
     if (!surf)
         return false;
-
-    /*
-     * xdg_toplevel_res adalah indicator bahwa wl_surface ini
-     * sudah memperoleh role xdg_toplevel.
-     *
-     * GTK tiling/maximize hanya boleh diterapkan pada surface ini.
-     */
     return surf->xdg_surface_res != NULL &&
            surf->xdg_toplevel_res != NULL;
 }
 
 static uint32_t gtk_surface_get_tiling_state(
         struct compositor_surface *surf);
-
 bool gtk_shell_get_work_area(
         struct compositor_surface *surf,
         struct trierarch_work_area *area);
-/*
- * Keyboard focus bridge.
- *
- * GTK shell tidak memiliki authority terhadap focus.
- * Request focus diteruskan ke compositor.
- */
 extern void keyboard_focus_update(
         struct wayland_server *srv,
         struct compositor_surface *surface);
 
 /*
  * Layer-shell adalah authority untuk usable output area.
- *
- * GTK shell TIDAK membaca:
- *
- *     layer_surface->exclusive_zone
- *
- * secara langsung.
- *
  * Hasil dari layer_shell_get_work_area() adalah final work-area
  * setelah seluruh layer-shell exclusive zone diterapkan.
  */
@@ -128,105 +41,47 @@ extern void layer_shell_get_work_area(
         struct wayland_server *srv,
         struct compositor_surface *exclude,
         struct trierarch_work_area *area);
-
-
-/* --------------------------------------------------------------- */
-/* gtk_surface1 state                                              */
-/* --------------------------------------------------------------- */
-
 struct gtk_surface_state {
     struct wl_resource *resource;
     struct wl_resource *wl_surface;
-
-    /*
-     * Direct reference ke compositor surface.
-     *
-     * Tidak memakai DBus karena Trierarch embedded di Android JNI.
-     */
     struct compositor_surface *surface;
-
-    /*
-     * Lifecycle listener untuk wl_surface.
-     */
     struct wl_listener surface_destroy_listener;
 };
-
-
-/* Forward declarations. */
-
 static const struct gtk_surface1_interface gtk_surface_impl;
 static const struct gtk_shell1_interface gtk_shell_impl;
-
-
 static void gtk_surface_wl_surface_destroy(
         struct wl_listener *listener,
         void *data)
 {
     (void)data;
-
     struct gtk_surface_state *state =
         wl_container_of(listener, state,
                         surface_destroy_listener);
-
-    /*
-     * wl_surface sudah mati.
-     *
-     * Putuskan seluruh reference agar request GTK berikutnya
-     * tidak pernah mengakses compositor_surface yang sudah tidak
-     * valid.
-     */
     state->wl_surface = NULL;
     state->surface = NULL;
-
     LOGI("gtk_surface wl_surface destroyed");
 }
-
-
-/* --------------------------------------------------------------- */
-/* gtk_surface resource lifecycle                                   */
-/* --------------------------------------------------------------- */
-
 static void gtk_surface_resource_destroy(
         struct wl_resource *resource)
 {
     struct gtk_surface_state *state =
         wl_resource_get_user_data(resource);
-
     if (!state)
         return;
-
-    /*
-     * Putuskan hubungan:
-     *
-     * compositor_surface -> gtk_surface_state
-     */
     if (state->surface &&
         state->surface->gtk_surface == state) {
-
         state->surface->gtk_surface = NULL;
     }
 
-    /*
-     * Remove wl_surface destroy listener.
-     */
     if (state->surface_destroy_listener.link.prev &&
         state->surface_destroy_listener.link.next) {
-
         wl_list_remove(
             &state->surface_destroy_listener.link);
-
         wl_list_init(
             &state->surface_destroy_listener.link);
     }
-
     free(state);
 }
-
-
-/* --------------------------------------------------------------- */
-/* GTK metadata                                                     */
-/* --------------------------------------------------------------- */
-
 static void gtk_surface_set_dbus_properties(
         struct wl_client *client,
         struct wl_resource *resource,
@@ -239,13 +94,6 @@ static void gtk_surface_set_dbus_properties(
 {
     (void)client;
     (void)resource;
-
-    /*
-     * Trierarch embedded Android tidak menggunakan metadata
-     * DBus milik GTK.
-     *
-     * Request tetap diterima agar client GTK kompatibel.
-     */
     LOGI(
         "gtk_surface.set_dbus_properties "
         "app_id='%s' "
@@ -261,24 +109,12 @@ static void gtk_surface_set_dbus_properties(
         application_object_path ? application_object_path : "(null)",
         unique_bus_name ? unique_bus_name : "(null)");
 }
-
-
-/* --------------------------------------------------------------- */
-/* GTK modal                                                         */
-/* --------------------------------------------------------------- */
-
 static void gtk_surface_set_modal(
         struct wl_client *client,
         struct wl_resource *resource)
 {
     (void)client;
     (void)resource;
-
-    /*
-     * Modal state belum menjadi authority GTK.
-     *
-     * Jangan mengubah geometry atau focus di sini.
-     */
 }
 
 static void gtk_surface_unset_modal(
@@ -287,30 +123,17 @@ static void gtk_surface_unset_modal(
 {
     (void)client;
     (void)resource;
-
-    /*
-     * Modal state belum dikelola oleh gtk-shell.
-     */
 }
-
-
-/* --------------------------------------------------------------- */
-/* GTK present                                                       */
-/* --------------------------------------------------------------- */
-
 static void gtk_surface_present(
         struct wl_client *client,
         struct wl_resource *resource,
         uint32_t timestamp)
 {
     (void)client;
-
     struct gtk_surface_state *state =
         wl_resource_get_user_data(resource);
-
     if (!state || !state->surface)
         return;
-
     LOGI(
         "gtk_surface.present "
         "timestamp=%u "
@@ -326,12 +149,6 @@ static void gtk_surface_present(
         state->surface->xdg_surface_res,
         state->surface->xdg_toplevel_res);
 }
-
-
-/* --------------------------------------------------------------- */
-/* GTK focus request                                                 */
-/* --------------------------------------------------------------- */
-
 static void gtk_surface_request_focus(
         struct wl_client *client,
         struct wl_resource *resource,
@@ -339,57 +156,31 @@ static void gtk_surface_request_focus(
 {
     (void)client;
     (void)startup_id;
-
     struct gtk_surface_state *state =
         wl_resource_get_user_data(resource);
-
     if (!state || !state->surface)
         return;
-
     struct compositor_surface *surf =
         state->surface;
-
     if (!surf->srv)
         return;
-
-    /*
-     * GTK meminta surface menjadi keyboard focus.
-     *
-     * Focus authority tetap berada di compositor.
-     */
     LOGI(
         "gtk_surface.request_focus "
         "surface=%p app_id=%s title=%s",
         (void *)surf,
         surf->app_id,
         surf->title);
-
      if (!gtk_surface_is_xdg_toplevel(surf)) {
-
          LOGI(
              "gtk focus skipped "
              "surface=%p reason=not-xdg-toplevel",
              (void *)surf);
-
          return;
      }
      keyboard_focus_update(
         surf->srv,
         surf);
-
-    /*
-     * Jangan mengirim configure di sini.
-     *
-     * Setelah focus berubah, output/compositor state akan menjadi
-     * sumber configure.
-     */
 }
-
-
-/* --------------------------------------------------------------- */
-/* gtk_shell.get_gtk_surface                                        */
-/* --------------------------------------------------------------- */
-
 static void gtk_shell_get_gtk_surface(
         struct wl_client *client,
         struct wl_resource *resource,
@@ -398,99 +189,53 @@ static void gtk_shell_get_gtk_surface(
 {
     struct wayland_server *srv =
         wl_resource_get_user_data(resource);
-
     struct compositor_surface *surf =
         surface ? wl_resource_get_user_data(surface) : NULL;
-
-    /*
-     * ------------------------------------------------------------
-     * Validate wl_surface.
-     *
-     * gtk-shell protocol ini tidak mendefinisikan
-     * GTK_SHELL1_ERROR_INVALID_SURFACE.
-     *
-     * Karena itu invalid surface cukup ditolak oleh compositor.
-     * ------------------------------------------------------------
-     */
     if (!surf || !srv || surf->srv != srv) {
-
         LOGE(
             "gtk_shell.get_gtk_surface: invalid wl_surface "
             "surface=%p compositor_surface=%p srv=%p",
             (void *)surface,
             (void *)surf,
             (void *)srv);
-
         return;
     }
-
-    /*
-     * ------------------------------------------------------------
-     * Satu wl_surface hanya boleh memiliki satu gtk_surface1.
-     * ------------------------------------------------------------
-     */
     if (surf->gtk_surface) {
-
         LOGE(
             "gtk_shell.get_gtk_surface: "
             "surface already has gtk_surface "
             "surface=%p",
             (void *)surf);
-
         return;
     }
-
     struct wl_resource *gtk_surface =
         wl_resource_create(
             client,
             &gtk_surface1_interface,
             wl_resource_get_version(resource),
             id);
-
     if (!gtk_surface) {
         wl_client_post_no_memory(client);
         return;
     }
-
     struct gtk_surface_state *state =
         calloc(1, sizeof(*state));
-
     if (!state) {
         wl_resource_destroy(gtk_surface);
         wl_client_post_no_memory(client);
         return;
     }
-
     wl_list_init(
         &state->surface_destroy_listener.link);
-
-    /*
-     * Link:
-     *
-     * gtk_surface_state
-     *        |
-     *        +----> wl_surface
-     *        |
-     *        +----> compositor_surface
-     */
     state->resource = gtk_surface;
     state->wl_surface = surface;
     state->surface = surf;
-
     state->surface_destroy_listener.notify =
         gtk_surface_wl_surface_destroy;
-
     wl_resource_add_destroy_listener(
         surface,
         &state->surface_destroy_listener);
-
-    /*
-     * Reverse link:
-     *
-     * compositor_surface -> gtk_surface_state
-     */
     surf->gtk_surface = state;
-
     wl_resource_set_implementation(
         gtk_surface,
         &gtk_surface_impl,
@@ -538,106 +283,56 @@ static uint32_t gtk_surface_get_tiling_state(
 {
     if (!surf)
         return 0;
-
     switch (compositor_surface_get_tiling(surf)) {
-
     case COMPOSITOR_TILING_ALL:
         return GTK_SURFACE1_STATE_TILED;
-
     case COMPOSITOR_TILING_TOP:
         return GTK_SURFACE1_STATE_TILED_TOP;
-
     case COMPOSITOR_TILING_RIGHT:
         return GTK_SURFACE1_STATE_TILED_RIGHT;
-
     case COMPOSITOR_TILING_BOTTOM:
         return GTK_SURFACE1_STATE_TILED_BOTTOM;
-
     case COMPOSITOR_TILING_LEFT:
         return GTK_SURFACE1_STATE_TILED_LEFT;
-
     case COMPOSITOR_TILING_NONE:
     default:
         return 0;
     }
 }
-
-
-/*
- * ---------------------------------------------------------------
- * GTK edge constraints
- * ---------------------------------------------------------------
- *
- * GTK shell v2 menyediakan configure_edges().
- *
- * Ini BUKAN posisi window.
- *
- * Ini memberi tahu GTK edge mana yang masih boleh di-resize.
- *
- * Karena compositor Trierarch saat ini belum mempunyai
- * edge-specific resize policy, jangan mengarang constraint.
- *
- * Array kosong berarti tidak ada constraint khusus.
- */
 static void gtk_surface_build_edge_constraints(
         struct compositor_surface *surf,
         struct wl_array *edges)
 {
     wl_array_init(edges);
-
     if (!surf)
         return;
-
     uint32_t resize_edges =
         compositor_surface_get_resize_edges(surf);
-
-    /*
-     * GTK shell protocol menggunakan satu uint32_t
-     * untuk setiap edge.
-     */
-
     if (resize_edges & COMPOSITOR_RESIZE_TOP) {
-
         uint32_t *edge =
             wl_array_add(edges, sizeof(*edge));
-
         if (edge)
             *edge = GTK_SURFACE1_EDGE_CONSTRAINT_RESIZABLE_TOP;
     }
-
     if (resize_edges & COMPOSITOR_RESIZE_RIGHT) {
-
         uint32_t *edge =
             wl_array_add(edges, sizeof(*edge));
-
         if (edge)
             *edge = GTK_SURFACE1_EDGE_CONSTRAINT_RESIZABLE_RIGHT;
     }
-
     if (resize_edges & COMPOSITOR_RESIZE_BOTTOM) {
-
         uint32_t *edge =
             wl_array_add(edges, sizeof(*edge));
-
         if (edge)
             *edge = GTK_SURFACE1_EDGE_CONSTRAINT_RESIZABLE_BOTTOM;
     }
-
     if (resize_edges & COMPOSITOR_RESIZE_LEFT) {
-
         uint32_t *edge =
             wl_array_add(edges, sizeof(*edge));
-
         if (edge)
             *edge = GTK_SURFACE1_EDGE_CONSTRAINT_RESIZABLE_LEFT;
     }
 }
-
-
-/* --------------------------------------------------------------- */
-/* GTK startup notification                                          */
-/* --------------------------------------------------------------- */
-
 static void gtk_shell_set_startup_id(
         struct wl_client *client,
         struct wl_resource *resource,
@@ -646,18 +341,7 @@ static void gtk_shell_set_startup_id(
     (void)client;
     (void)resource;
     (void)startup_id;
-
-    /*
-     * Trierarch embedded tidak menggunakan GTK startup
-     * notification sebagai window-management authority.
-     */
 }
-
-
-/* --------------------------------------------------------------- */
-/* GTK system bell                                                   */
-/* --------------------------------------------------------------- */
-
 static void gtk_shell_system_bell(
         struct wl_client *client,
         struct wl_resource *resource,
@@ -666,15 +350,8 @@ static void gtk_shell_system_bell(
     (void)client;
     (void)resource;
     (void)surface;
-
     LOGI("gtk_shell.system_bell");
 }
-
-
-/* --------------------------------------------------------------- */
-/* GTK launch notification                                           */
-/* --------------------------------------------------------------- */
-
 static void gtk_shell_notify_launch(
         struct wl_client *client,
         struct wl_resource *resource,
@@ -683,15 +360,8 @@ static void gtk_shell_notify_launch(
     (void)client;
     (void)resource;
     (void)startup_id;
-
     LOGI("gtk_shell.notify_launch");
 }
-
-
-/* --------------------------------------------------------------- */
-/* Protocol implementations                                          */
-/* --------------------------------------------------------------- */
-
 static const struct gtk_surface1_interface gtk_surface_impl = {
     .set_dbus_properties = gtk_surface_set_dbus_properties,
     .set_modal           = gtk_surface_set_modal,
@@ -810,16 +480,13 @@ void compositor_surface_set_tiling(
 {
     if (!surf)
         return;
-
     surf->tiling_state = state;
-
     LOGI(
         "set tiling "
         "surface=%p "
         "state=%d",
         (void *)surf,
         state);
-
 }
 
 enum compositor_tiling_state
@@ -828,18 +495,14 @@ compositor_surface_get_tiling(
 {
     if (!surf)
         return COMPOSITOR_TILING_NONE;
-
     return surf->tiling_state;
 }
-
-
 void compositor_surface_set_resize_edges(
         struct compositor_surface *surf,
         uint32_t edges)
 {
     if (!surf)
         return;
-
     surf->resize_edges = edges;
 }
 
@@ -848,7 +511,6 @@ uint32_t compositor_surface_get_resize_edges(
 {
     if (!surf)
         return COMPOSITOR_RESIZE_NONE;
-
     return surf->resize_edges;
 }
 
@@ -946,43 +608,6 @@ bool gtk_shell_get_work_area(
 }
 
 
-/*
- * ================================================================
- * GTK MAXIMIZED GEOMETRY
- * ================================================================
- *
- * CONTEXT:
- *
- * WM_MODE_DIRECT maximize harus memakai geometry yang sama
- * dengan GTK tiling.
- *
- * Flow:
- *
- *     layer-shell exclusive zone
- *              ↓
- *          work-area
- *              ↓
- *       GTK geometry policy
- *              ↓
- *        XDG maximize
- *
- * GTK-shell protocol tidak perlu dibind oleh client.
- *
- * Jika tidak ada layer-shell reservation:
- *
- *     work-area == output
- *
- * sehingga maximize tetap normal.
- * ================================================================
- */
-/*
- * CONTEXT NOTE:
- *
- * Maximized geometry sudah diputuskan oleh XDG/output.c
- * dalam WM_MODE_DIRECT.
- *
- * GTK shell hanya membaca hasil akhirnya.
- */
 bool gtk_shell_get_maximized_geometry(
         struct compositor_surface *surf,
         int32_t *x,
@@ -998,79 +623,87 @@ bool gtk_shell_get_maximized_geometry(
         return false;
 
     /*
-     * GTK window-management policy hanya berlaku
-     * untuk XDG toplevel.
+     * ============================================================
+     * CONTEXT:
      *
-     * Layer-shell tidak boleh masuk jalur ini.
+     * GTK maximized geometry mengikuti WM_MODE_DIRECT.
+     *
+     * Geometry authority:
+     *
+     *     layer-shell
+     *          ↓
+     *     exclusive zones
+     *          ↓
+     *       work-area
+     *          ↓
+     *     XDG maximized
+     *
+     * Jangan mengambil logical size dari compositor_surface di
+     * sini. Work-area sudah menjadi geometry authority dan sudah
+     * memakai logical-size pada jalur pembentukannya.
+     *
+     * gtk-shell hanya membaca hasil work-area.
+     * ============================================================
      */
     if (!gtk_surface_is_xdg_toplevel(surf))
         return false;
 
-    /*
-     * ============================================================
-     * POSITION
-     * ============================================================
-     *
-     * Position tetap membaca geometry authority compositor.
-     */
-    *x = surf->wm_x;
-    *y = surf->wm_y;
+    struct trierarch_work_area area;
 
     /*
      * ============================================================
-     * SIZE
+     * WORK-AREA
      * ============================================================
      *
-     * compositor_surface tidak mempunyai:
+     * XDG toplevel tidak di-exclude dari reservation layer-shell.
      *
-     *     surf->width
-     *     surf->height
+     * Karena surf adalah XDG:
      *
-     * Gunakan API logical-size.
+     *     exclude = NULL
      *
-     * API ini:
-     *
-     *     void compositor_surface_get_logical_size(
-     *         surf,
-     *         int32_t *w,
-     *         int32_t *h);
-     *
-     * Jadi jangan menggunakan return value sebagai boolean.
+     * sehingga seluruh exclusive layer-shell reservation
+     * diperhitungkan.
      */
-    int32_t logical_width = 0;
-    int32_t logical_height = 0;
-
-    compositor_surface_get_logical_size(
-        surf,
-        &logical_width,
-        &logical_height);
-
-    /*
-     * Validasi masih dalam signed domain sebelum cast
-     * ke uint32_t.
-     */
-    if (logical_width <= 0 ||
-        logical_height <= 0) {
+    if (!gtk_shell_get_work_area(
+            surf,
+            &area)) {
 
         LOGI(
             "gtk maximized geometry unavailable "
-            "surface=%p logical=%dx%d",
-            (void *)surf,
-            logical_width,
-            logical_height);
+            "surface=%p reason=invalid-work-area",
+            (void *)surf);
 
         return false;
     }
 
     /*
-     * Sekarang aman dikonversi karena sudah dipastikan
-     * nilainya > 0.
+     * ============================================================
+     * MAXIMIZED GEOMETRY
+     * ============================================================
+     *
+     * Jangan membaca:
+     *
+     *     surf->wm_x
+     *     surf->wm_y
+     *     compositor_surface_get_logical_size()
+     *
+     * untuk menentukan maximize.
+     *
+     * Work-area adalah hasil final:
+     *
+     *     x      = usable work-area X
+     *     y      = usable work-area Y
+     *     width  = usable work-area width
+     *     height = usable work-area height
+     * ============================================================
      */
-    *width = (uint32_t)logical_width;
-    *height = (uint32_t)logical_height;
+    *x = area.x;
+    *y = area.y;
+    *width = area.width;
+    *height = area.height;
 
     LOGI(
-        "gtk maximized follows XDG "
+        "gtk maximized follows work-area "
         "surface=%p geometry=%ux%u+%d+%d",
         (void *)surf,
         *width,
@@ -1088,31 +721,23 @@ void gtk_shell_bind(
         uint32_t id)
 {
     struct wayland_server *srv = data;
-
-    /*
-     * gtk-shell protocol saat ini dibatasi sampai version 3.
-     */
     if (version > 3)
         version = 3;
-
     struct wl_resource *resource =
         wl_resource_create(
             client,
             &gtk_shell1_interface,
             version,
             id);
-
     if (!resource) {
         wl_client_post_no_memory(client);
         return;
     }
-
     wl_resource_set_implementation(
         resource,
         &gtk_shell_impl,
         srv,
         NULL);
-
     LOGI(
         "bind gtk_shell1 "
         "version=%u",
