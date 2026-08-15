@@ -36,6 +36,10 @@ esac
 # stays compatible. A tarball wrapped in a single top-level dir (e.g.
 # rootfs/bin/...) is intentionally rejected - it would extract to the wrong
 # layout anyway.
+#
+# Exception: NixOS ships none of that layout - /bin, /sbin and /usr are created
+# by the activation script on first boot, so a top-level nix/ store is accepted
+# on its own (same marker post_extract_fixes.sh uses to detect NixOS).
 RESULT=$($DECOMP "$TARBALL" 2>/dev/null | $BB tar -tf - 2>/dev/null | $BB awk '
     {
         name = $0
@@ -43,14 +47,15 @@ RESULT=$($DECOMP "$TARBALL" 2>/dev/null | $BB tar -tf - 2>/dev/null | $BB awk '
         sub(/^\//, "", name)
         split(name, parts, "/")
         top = parts[1]
+        if (top == "nix")  ok = 1
         if (top == "bin")  b = 1
         if (top == "sbin") s = 1
         if (top == "etc")  e = 1
         if (top == "usr")  u = 1
-        if (b && s && e && u) { print "OK"; exit }
+        if (ok || (b && s && e && u)) { ok = 1; print "OK"; exit }
     }
     END {
-        if (!(b && s && e && u)) {
+        if (!ok) {
             miss = ""
             if (!b) miss = miss " bin"
             if (!s) miss = miss " sbin"

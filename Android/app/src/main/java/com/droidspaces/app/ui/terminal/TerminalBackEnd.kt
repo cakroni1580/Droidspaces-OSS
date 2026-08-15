@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.res.Configuration
-import android.content.res.Resources
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -83,8 +82,18 @@ class TerminalBackEnd(
     }
 
     override fun onSingleTapUp(e: MotionEvent) {
-        val hasHardwareKeyboard = Resources.getSystem().configuration.keyboard != Configuration.KEYBOARD_NOKEYS
-        if (!hasHardwareKeyboard) showSoftInput()
+        val keyboard = terminal.resources.configuration.keyboard
+        if (keyboard == Configuration.KEYBOARD_NOKEYS ||
+            keyboard == Configuration.KEYBOARD_12KEY) {
+            showSoftInput()
+        }
+    }
+
+    fun activate12KeyInputMethodIfNeeded() {
+        // A 12-key hardware keypad still depends on the IME for text composition.
+        if (terminal.resources.configuration.keyboard == Configuration.KEYBOARD_12KEY) {
+            showSoftInput()
+        }
     }
 
     override fun shouldBackButtonBeMappedToEscape(): Boolean = false

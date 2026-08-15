@@ -330,7 +330,11 @@ private fun TerminalTabView(
     // 258 = cursor. Dark mode uses the classic termux white-on-black scheme:
     // pure white foreground on pure black background.
     val terminalForeground = if (terminalDarkTheme) Color.White.toArgb() else MaterialTheme.colorScheme.onSurface.toArgb()
-    val terminalBackground = if (terminalDarkTheme) Color.Black.toArgb() else MaterialTheme.colorScheme.surface.toArgb()
+    // Only dark mode explicitly overrides the full-screen background (View paint)
+    // and the default background color (index 257). In light mode we keep the
+    // pre-PR behavior: the Activity background shows through and the Termux
+    // default background color is left untouched.
+    val terminalBackground = if (terminalDarkTheme) Color.Black.toArgb() else 0
     val virtualKeysBackground = if (terminalDarkTheme) Color(0xFF1A1A1E) else MaterialTheme.colorScheme.surfaceContainerHighest
 
     AnimatedVisibility(
@@ -351,7 +355,9 @@ private fun TerminalTabView(
                         isFocusableInTouchMode = true
                         // The renderer only paints cell backgrounds; the full-screen
                         // default background comes from the View itself.
-                        setBackgroundColor(terminalBackground)
+                        if (terminalDarkTheme) {
+                            setBackgroundColor(terminalBackground)
+                        }
 
                         if (activity != null) {
                             val client = TerminalBackEnd(
@@ -379,10 +385,13 @@ private fun TerminalTabView(
 
                         post {
                             requestFocus()
+                            (mClient as? TerminalBackEnd)?.activate12KeyInputMethodIfNeeded()
                             mEmulator?.mColors?.mCurrentColors?.apply {
                                 set(256, terminalForeground)
-                                set(257, terminalBackground)
                                 set(258, terminalForeground)
+                                if (terminalDarkTheme) {
+                                    set(257, terminalBackground)
+                                }
                             }
                         }
                     }

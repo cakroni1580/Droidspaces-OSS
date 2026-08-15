@@ -102,6 +102,7 @@ fun FullScreenLoading(
         contentAlignment = Alignment.Center
     ) {
         Column(
+            modifier = Modifier.padding(horizontal = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -109,9 +110,13 @@ fun FullScreenLoading(
             message?.let {
                 Text(
                     text = it,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    // Fills the column so the text's centre line is the spinner's
+                    // centre line; without it the column shrinks to the text and a
+                    // wrapped message drifts out of line with the spinner above it.
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
