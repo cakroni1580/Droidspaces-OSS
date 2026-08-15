@@ -349,34 +349,24 @@ class WaylandDisplayLayout(
                     if (w <= 0 || h <= 0)
                         return
 
-                    pendingWidth = w
-                    pendingHeight = h
+                   /*
+                    * Direct resize:
+                    * Android SurfaceView -> Wayland compositor
+                    *
+                    * Tidak menunggu IME animation selesai dan tidak menggunakan
+                    * postDelayed().
+                    */
+                   WaylandSurface.nativeOutputSizeChanged(
+                        w,
+                        h,
+                        resolutionPercent,
+                        scalePercent
+                  )
 
-                    if (!imeAnimating) {
-
-                        removeCallbacks(resizeCommit)
-
-                        WaylandSurface.nativeOutputSizeChanged(
-                            w,
-                            h,
-                            resolutionPercent,
-                            scalePercent
-                        )
-
-                    } else {
-
-                        removeCallbacks(resizeCommit)
-
-                           postDelayed(
-                           resizeCommit,
-                           16L
-                        )
-                    }
-                    /* PATCH:
-                     * Sinkronkan ukuran Surface dengan mapper Trierarch.
-                     */
-                    
-                    coordMapper.setSurfaceSize(w, h)
+                 /*
+                  * Sinkronkan ukuran Surface dengan mapper Trierarch.
+                  */
+                  coordMapper.setSurfaceSize(w, h)
                 }
                 override fun surfaceDestroyed(h: SurfaceHolder) {
                     WaylandSurface.nativeSurfaceDestroyed()
