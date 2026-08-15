@@ -411,6 +411,7 @@
     <string name="init_system_not_available">Systemd/OpenWrt/OpenRC Not Available</string>
     <string name="init_system_not_available_desc">This container does not have systemd, OpenWrt/procd, or OpenRC installed</string>
     <string name="fetching_services">Fetching services...</string>
+    <string name="fetching_distros">Fetching distros from the rootfs repo...</string>
 
     <string name="search_services">Search services...</string>
     <string name="enabled_legend">Enabled</string>
@@ -518,6 +519,7 @@
     <string name="maximum_size_512gb">Maximum size is 512 GB</string>
     <string name="size_gb">Size (GB)</string>
     <string name="enter_size_between_4_512_gb">Enter size between 4 and 512 GB</string>
+    <string name="resize_same_as_current">Already %1$d GB. Enter a different size to resize.</string>
 
     <!-- Container Log Viewer -->
     <string name="logs_title">Logs: %1$s</string>

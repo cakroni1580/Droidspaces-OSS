@@ -27,6 +27,7 @@ import com.droidspaces.app.util.IconUtils
  * Container card for Panel tab — shows container name, OS info, resource usage, and quick actions.
  * Receives fully-populated OSInfo from SystemStatsViewModel (single polling source).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RunningContainerCard(
     container: ContainerInfo,
@@ -140,10 +141,14 @@ fun RunningContainerCard(
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
                 ) {
-                    Row(
+                    // FlowRow, not Row: on a narrow display (watch, small phone, or a
+                    // locale with longer labels) CPU and RAM do not fit side by side.
+                    // A Row would hand RAM whatever sliver is left and shred its text;
+                    // this drops it onto a second line instead.
+                    FlowRow(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (cpuPercent >= 0.0) {
                             Row(
