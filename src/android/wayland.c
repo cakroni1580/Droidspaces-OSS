@@ -35,13 +35,29 @@ int ds_setup_wayland_socket(struct ds_config *cfg) {
   if (ds_bind_mount_socket(DS_WL_HOST_SOCKET_OLDROOT, DS_WL_CONTAINER_SOCKET,
                            0, "Wayland") < 0)
     return -1;
+  ds_log("[Wayland] socket staged: %s -> %s",
+         DS_WL_HOST_SOCKET_OLDROOT,
+         DS_WL_CONTAINER_SOCKET);
 
-  ds_log("[Wayland] socket staged: %s -> %s", DS_WL_HOST_SOCKET_OLDROOT,
+  /*
+   * Publish the staged compositor socket into the root user's
+   * standard XDG runtime directory.
+   *
+   * /run/droidspaces/wayland-1
+   *          ↓ bind mount
+   * /run/user/0/wayland-1
+   */
+  if (ds_bind_mount_socket(DS_WL_CONTAINER_SOCKET,
+                           "/run/user/0/wayland-1",
+                           0, "Wayland root runtime") < 0)
+    return -1;
+
+  ds_log("[Wayland] socket published: %s -> /run/user/0/wayland-1",
          DS_WL_CONTAINER_SOCKET);
 
   setenv("QT_QPA_PLATFORM", "wayland", 1);
   setenv("XDG_SESSION_TYPE", "wayland", 1);
-  setenv("XDG_RUNTIME_DIR", "/run/droidspaces", 1);
+  setenv("XDG_RUNTIME_DIR", "/run/user/0", 1);
   setenv("WAYLAND_DISPLAY", "wayland-1", 1);
   setenv("KWIN_COMPOSE", "Q", 1);
   setenv("KWIN_OPENGL_INTERFACE", "egl", 1);
@@ -49,7 +65,7 @@ int ds_setup_wayland_socket(struct ds_config *cfg) {
   setenv("WLR_BACKENDS", "wayland", 1);
   setenv("WLR_RENDERER", "pixman", 1);
 
-  ds_log("[Wayland]   XDG_RUNTIME_DIR=/run/droidspaces");
+  ds_log("[Wayland]   XDG_RUNTIME_DIR=/run/user/0");
   ds_log("[Wayland]   WAYLAND_DISPLAY=wayland-1");
 
   return 0;
