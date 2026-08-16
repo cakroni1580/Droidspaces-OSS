@@ -25,9 +25,6 @@ static bool gtk_surface_is_xdg_toplevel(
 
 static uint32_t gtk_surface_get_tiling_state(
         struct compositor_surface *surf);
-bool gtk_shell_get_work_area(
-        struct compositor_surface *surf,
-        struct trierarch_work_area *area);
 extern void keyboard_focus_update(
         struct wayland_server *srv,
         struct compositor_surface *surface);
