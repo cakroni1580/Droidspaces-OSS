@@ -32,15 +32,6 @@ extern void keyboard_focus_update(
         struct wayland_server *srv,
         struct compositor_surface *surface);
 
-/*
- * Layer-shell adalah authority untuk usable output area.
- * Hasil dari layer_shell_get_work_area() adalah final work-area
- * setelah seluruh layer-shell exclusive zone diterapkan.
- */
-extern void layer_shell_get_work_area(
-        struct wayland_server *srv,
-        struct compositor_surface *exclude,
-        struct trierarch_work_area *area);
 struct gtk_surface_state {
     struct wl_resource *resource;
     struct wl_resource *wl_surface;
@@ -378,38 +369,6 @@ static const struct gtk_shell1_interface gtk_shell_impl = {
     .notify_launch   = gtk_shell_notify_launch,
 };
 
-/*
- * CONTEXT NOTE:
- *
- * WM_MODE_DIRECT geometry authority:
- *
- *     layer-shell
- *          ↓
- *     exclusive zones
- *          ↓
- *     work-area
- *          ↓
- *     XDG shell / output.c
- *          ↓
- *     compositor_surface geometry
- *
- * gtk-shell.c BUKAN geometry authority.
- *
- * GTK shell hanya boleh:
- *
- *     - expose GTK state
- *     - expose resize constraints
- *     - consume XDG state
- *
- * GTK tidak boleh menghitung atau menulis:
- *
- *     surf->wm_x
- *     surf->wm_y
- *     width
- *     height
- *
- * Geometry final harus sudah ditentukan oleh XDG/output.c.
- */
 bool gtk_shell_apply_tiling_geometry(
         struct compositor_surface *surf,
         uint32_t *width,
@@ -419,56 +378,54 @@ bool gtk_shell_apply_tiling_geometry(
         return false;
 
     /*
-     * GTK shell hanya berlaku untuk XDG toplevel.
+     * CONTEXT NOTE:
      *
-     * Layer-shell tetap sepenuhnya berada di bawah
-     * layer_surface_get_geometry().
+     * GTK shell hanya berlaku sebagai companion protocol
+     * untuk XDG toplevel.
+     *
+     * Geometry authority tetap WM/XDG.
      */
     if (!gtk_surface_is_xdg_toplevel(surf)) {
-
         LOGI(
             "gtk geometry skipped "
             "surface=%p reason=not-xdg-toplevel",
             (void *)surf);
-
         return false;
     }
 
-    /*
-     * ============================================================
-     * SOURCE OF TRUTH
-     * ============================================================
-     *
-     * WM_MODE_DIRECT sudah mempunyai geometry final pada
-     * compositor_surface.
-     *
-     * GTK tidak menghitung ulang geometry tersebut.
-     *
-     * Karena itu helper ini hanya mengekspos geometry yang
-     * sudah diputuskan oleh XDG/output.c.
-     */
     if (*width == 0 || *height == 0) {
-
         LOGI(
             "gtk geometry unavailable "
             "surface=%p geometry=%ux%u",
             (void *)surf,
             *width,
             *height);
-
         return false;
     }
 
+    /*
+     * CONTEXT NOTE:
+     *
+     * Tidak ada work-area di GTK shell.
+     *
+     * Posisi dan ukuran yang sudah diberikan oleh XDG/WM
+     * digunakan langsung.
+     *
+     * surf->z_order juga merupakan z-order authority yang sama
+     * dengan XDG shell.
+     */
     LOGI(
-        "gtk geometry follows XDG "
+        "gtk geometry follows XDG/output "
         "surface=%p "
         "geometry=%ux%u+%d+%d "
+        "z_order=%d "
         "tiling=%d",
         (void *)surf,
         *width,
         *height,
         surf->wm_x,
         surf->wm_y,
+        surf->z_order,
         compositor_surface_get_tiling(surf));
 
     return true;
@@ -514,100 +471,6 @@ uint32_t compositor_surface_get_resize_edges(
     return surf->resize_edges;
 }
 
-/*
- * ================================================================
- * GTK SHELL <-> LAYER-SHELL WORK-AREA
- * ================================================================
- *
- * CONTEXT:
- *
- * Work-area adalah geometry dasar untuk window-management
- * WM_MODE_DIRECT.
- *
- * Source of truth:
- *
- *     layer-shell
- *          ↓
- *     exclusive zones
- *          ↓
- *     usable work-area
- *
- * GTK shell dan XDG shell menggunakan work-area yang sama.
- *
- * Penting:
- *
- *     gtk-shell protocol TIDAK harus pernah dipanggil client.
- *
- * Helper ini adalah compositor-side geometry API.
- *
- * Jika:
- *
- *     - tidak ada GTK client
- *     - tidak ada layer-shell surface
- *
- * maka layer_shell_get_work_area() tetap mengembalikan
- * output area normal.
- * ================================================================
- */
-bool gtk_shell_get_work_area(
-        struct compositor_surface *surf,
-        struct trierarch_work_area *area)
-{
-    if (!surf ||
-        !surf->srv ||
-        !area)
-        return false;
-
-    /*
-     * ============================================================
-     * CONTEXT:
-     *
-     * layer-shell tetap menjadi authority exclusive-zone.
-     *
-     * Namun surface XDG bukan layer surface, sehingga tidak boleh
-     * diperlakukan sebagai layer-shell object yang perlu di-exclude.
-     *
-     * Untuk XDG:
-     *
-     *     exclude = NULL
-     *
-     * Untuk layer-shell:
-     *
-     *     exclude = surf
-     *
-     * Dengan demikian GTK/XDG membaca work-area yang sama tanpa
-     * mengambil alih geometry layer-shell.
-     * ============================================================
-     */
-    struct compositor_surface *exclude = NULL;
-
-    if (!gtk_surface_is_xdg_toplevel(surf))
-        exclude = surf;
-
-    layer_shell_get_work_area(
-        surf->srv,
-        exclude,
-        area);
-
-    if (area->width == 0 ||
-        area->height == 0) {
-
-        LOGE(
-            "gtk invalid layer-shell work-area "
-            "surface=%p area=%ux%u+%d+%d",
-            (void *)surf,
-            area->width,
-            area->height,
-            area->x,
-            area->y);
-
-        return false;
-    }
-
-    return true;
-}
-
-
 bool gtk_shell_get_maximized_geometry(
         struct compositor_surface *surf,
         int32_t *x,
@@ -616,6 +479,7 @@ bool gtk_shell_get_maximized_geometry(
         uint32_t *height)
 {
     if (!surf ||
+        !surf->srv ||
         !x ||
         !y ||
         !width ||
@@ -623,93 +487,74 @@ bool gtk_shell_get_maximized_geometry(
         return false;
 
     /*
-     * ============================================================
-     * CONTEXT:
+     * CONTEXT NOTE:
      *
-     * GTK maximized geometry mengikuti WM_MODE_DIRECT.
+     * GTK shell hanya companion protocol untuk XDG toplevel.
+     * Geometry maximized menggunakan output langsung.
      *
-     * Geometry authority:
+     * Tidak ada:
      *
-     *     layer-shell
-     *          ↓
-     *     exclusive zones
-     *          ↓
-     *       work-area
-     *          ↓
-     *     XDG maximized
-     *
-     * Jangan mengambil logical size dari compositor_surface di
-     * sini. Work-area sudah menjadi geometry authority dan sudah
-     * memakai logical-size pada jalur pembentukannya.
-     *
-     * gtk-shell hanya membaca hasil work-area.
-     * ============================================================
+     *     layer_shell_get_work_area()
+     *     trierarch_work_area
+     *     exclusive-zone adjustment
      */
     if (!gtk_surface_is_xdg_toplevel(surf))
         return false;
 
-    struct trierarch_work_area area;
+    struct wayland_server *srv = surf->srv;
 
     /*
      * ============================================================
-     * WORK-AREA
+     * OUTPUT GEOMETRY
      * ============================================================
      *
-     * XDG toplevel tidak di-exclude dari reservation layer-shell.
+     * Maximized GTK/XDG menggunakan seluruh output.
      *
-     * Karena surf adalah XDG:
+     *     x = 0
+     *     y = 0
+     *     width  = output_width
+     *     height = output_height
      *
-     *     exclude = NULL
-     *
-     * sehingga seluruh exclusive layer-shell reservation
-     * diperhitungkan.
+     * Sama dengan geometry authority yang digunakan XDG shell.
      */
-    if (!gtk_shell_get_work_area(
-            surf,
-            &area)) {
+    *x = 0;
+    *y = 0;
+    *width = srv->output_width > 0
+            ? (uint32_t)srv->output_width
+            : 0;
+    *height = srv->output_height > 0
+            ? (uint32_t)srv->output_height
+            : 0;
 
-        LOGI(
+    if (*width == 0 || *height == 0) {
+        LOGE(
             "gtk maximized geometry unavailable "
-            "surface=%p reason=invalid-work-area",
-            (void *)surf);
-
+            "surface=%p output=%ux%u",
+            (void *)surf,
+            *width,
+            *height);
         return false;
     }
 
     /*
-     * ============================================================
-     * MAXIMIZED GEOMETRY
-     * ============================================================
+     * CONTEXT NOTE:
      *
-     * Jangan membaca:
+     * z_order TIDAK dibuat ulang di GTK shell.
      *
-     *     surf->wm_x
-     *     surf->wm_y
-     *     compositor_surface_get_logical_size()
-     *
-     * untuk menentukan maximize.
-     *
-     * Work-area adalah hasil final:
-     *
-     *     x      = usable work-area X
-     *     y      = usable work-area Y
-     *     width  = usable work-area width
-     *     height = usable work-area height
-     * ============================================================
+     * surf->z_order adalah state compositor_surface yang sama
+     * dengan XDG shell.
      */
-    *x = area.x;
-    *y = area.y;
-    *width = area.width;
-    *height = area.height;
-
     LOGI(
-        "gtk maximized follows work-area "
-        "surface=%p geometry=%ux%u+%d+%d",
+        "gtk maximized follows output "
+        "surface=%p "
+        "geometry=%ux%u+%d+%d "
+        "z_order=%d",
         (void *)surf,
         *width,
         *height,
         *x,
-        *y);
+        *y,
+        surf->z_order);
 
     return true;
 }
