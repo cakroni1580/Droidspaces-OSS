@@ -244,22 +244,181 @@ void send_toplevel_configure(struct compositor_surface *surf) {
         uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
         if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
     } else {
-        /* Direct mode: let the client choose its own size (w=0, h=0 per xdg-shell spec).
-         * If explicitly maximized, fill the output and advertise MAXIMIZED. */
+        /*
+         * ============================================================
+         * WM_MODE_DIRECT
+         * ============================================================
+         *
+         * XDG shell tidak membuat keputusan tiling sendiri.
+         *
+         * Source of truth:
+         *
+         *     compositor_surface.tiling_state
+         *
+         * State tersebut juga dipakai oleh gtk-shell.
+         *
+         * Dengan demikian:
+         *
+         *     GTK shell
+         *         ↓
+         *     compositor_surface_get_tiling()
+         *         ↓
+         *     XDG shell
+         *
+         * menghasilkan state WM yang konsisten.
+         */
+
         if (surf->wm_resizing) {
-            uint32_t *s_rz = wl_array_add(&states, sizeof(uint32_t));
-            if (s_rz) *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
+            uint32_t *s_rz =
+                wl_array_add(&states, sizeof(uint32_t));
+
+            if (s_rz)
+                *s_rz = XDG_TOPLEVEL_STATE_RESIZING;
         }
+
+        /*
+         * ============================================================
+         * TILING STATE
+         * ============================================================
+         *
+         * Jangan derive tiled state dari:
+         *
+         *     wm_x
+         *     wm_y
+         *     width
+         *     height
+         *
+         * Gunakan compositor_surface state secara langsung.
+         *
+         * COMPOSITOR_TILING_ALL:
+         *     top + right + bottom + left
+         *
+         * Directional tiling:
+         *     hanya edge yang sesuai yang dikirim.
+         */
+        switch (compositor_surface_get_tiling(surf)) {
+
+        case COMPOSITOR_TILING_ALL: {
+            uint32_t *s_top =
+                wl_array_add(&states, sizeof(uint32_t));
+            uint32_t *s_right =
+                wl_array_add(&states, sizeof(uint32_t));
+            uint32_t *s_bottom =
+                wl_array_add(&states, sizeof(uint32_t));
+            uint32_t *s_left =
+                wl_array_add(&states, sizeof(uint32_t));
+
+            if (s_top)
+                *s_top = XDG_TOPLEVEL_STATE_TILED_TOP;
+
+            if (s_right)
+                *s_right = XDG_TOPLEVEL_STATE_TILED_RIGHT;
+
+            if (s_bottom)
+                *s_bottom = XDG_TOPLEVEL_STATE_TILED_BOTTOM;
+
+            if (s_left)
+                *s_left = XDG_TOPLEVEL_STATE_TILED_LEFT;
+
+            break;
+        }
+
+        case COMPOSITOR_TILING_TOP: {
+            uint32_t *s =
+                wl_array_add(&states, sizeof(uint32_t));
+
+            if (s)
+                *s = XDG_TOPLEVEL_STATE_TILED_TOP;
+
+            break;
+        }
+
+        case COMPOSITOR_TILING_RIGHT: {
+            uint32_t *s =
+                wl_array_add(&states, sizeof(uint32_t));
+
+            if (s)
+                *s = XDG_TOPLEVEL_STATE_TILED_RIGHT;
+
+            break;
+        }
+
+        case COMPOSITOR_TILING_BOTTOM: {
+            uint32_t *s =
+                wl_array_add(&states, sizeof(uint32_t));
+
+            if (s)
+                *s = XDG_TOPLEVEL_STATE_TILED_BOTTOM;
+
+            break;
+        }
+
+        case COMPOSITOR_TILING_LEFT: {
+            uint32_t *s =
+                wl_array_add(&states, sizeof(uint32_t));
+
+            if (s)
+                *s = XDG_TOPLEVEL_STATE_TILED_LEFT;
+
+            break;
+        }
+
+        case COMPOSITOR_TILING_NONE:
+        default:
+            break;
+        }
+
+        /*
+         * ============================================================
+         * MAXIMIZED
+         * ============================================================
+         *
+         * Maximized tetap state terpisah dari tiled.
+         *
+         * Tiling state tidak menggantikan wm_maximized.
+         */
         if (surf->wm_maximized) {
-            w = surf->srv->output_width  > 0 ? surf->srv->output_width  : 0;
-            h = surf->srv->output_height > 0 ? surf->srv->output_height : 0;
-            uint32_t *s_max = wl_array_add(&states, sizeof(uint32_t));
-            if (s_max) *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
-        } else if (surf->wm_req_w > 0 || surf->wm_req_h > 0) {
-            /* Compositor-driven resize: send requested size (best-effort). */
-            w = surf->wm_req_w > 0 ? surf->wm_req_w : 0;
-            h = surf->wm_req_h > 0 ? surf->wm_req_h : 0;
+            w = surf->srv->output_width  > 0
+                ? surf->srv->output_width
+                : 0;
+
+            h = surf->srv->output_height > 0
+                ? surf->srv->output_height
+                : 0;
+
+            uint32_t *s_max =
+                wl_array_add(&states, sizeof(uint32_t));
+
+            if (s_max)
+                *s_max = XDG_TOPLEVEL_STATE_MAXIMIZED;
+
+        } else if (surf->wm_req_w > 0 ||
+                   surf->wm_req_h > 0) {
+
+            /*
+             * Compositor-driven resize:
+             * kirim requested size tanpa mengubah tiling state.
+             */
+            w = surf->wm_req_w > 0
+                ? surf->wm_req_w
+                : 0;
+
+            h = surf->wm_req_h > 0
+                ? surf->wm_req_h
+                : 0;
         }
+
+        LOGI(
+            "xdg configure direct "
+            "surface=%p "
+            "tiling=%d "
+            "maximized=%d "
+            "geometry=%ux%u",
+            (void *)surf,
+            compositor_surface_get_tiling(surf),
+            surf->wm_maximized,
+            w,
+            h);
     }
 
     xdg_toplevel_send_configure(surf->xdg_toplevel_res, w, h, &states);
