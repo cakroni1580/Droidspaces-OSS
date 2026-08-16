@@ -47,13 +47,27 @@ int ds_setup_wayland_socket(struct ds_config *cfg) {
    *          ↓ bind mount
    * /run/user/0/wayland-1
    */
-  if (ds_bind_mount_socket(DS_WL_CONTAINER_SOCKET,
-                           "/run/user/0/wayland-1",
-                           0, "Wayland root runtime") < 0)
+  if (mkdir("/run/user", 0755) < 0 && errno != EEXIST) {
+    ds_warn("[Wayland] failed to create /run/user: %s", strerror(errno));
+    return -1;
+}
+
+if (mkdir("/run/user/0", 0700) < 0 && errno != EEXIST) {
+    ds_warn("[Wayland] failed to create /run/user/0: %s", strerror(errno));
+    return -1;
+}
+
+/*
+ * Publish staged compositor socket into the standard root
+ * XDG runtime directory.
+ */
+if (ds_bind_mount_socket(DS_WL_CONTAINER_SOCKET,
+                         "/run/user/0/wayland-1",
+                         0, "Wayland root runtime") < 0)
     return -1;
 
-  ds_log("[Wayland] socket published: %s -> /run/user/0/wayland-1",
-         DS_WL_CONTAINER_SOCKET);
+ds_log("[Wayland] socket published: %s -> /run/user/0/wayland-1",
+       DS_WL_CONTAINER_SOCKET);
 
   setenv("QT_QPA_PLATFORM", "wayland", 1);
   setenv("XDG_SESSION_TYPE", "wayland", 1);
