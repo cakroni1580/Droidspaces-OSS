@@ -38,17 +38,40 @@ static void layer_surface_resource_destroy(
         struct wl_resource *resource)
 {
     struct compositor_surface *surf =
-            wl_resource_get_user_data(resource);
+        wl_resource_get_user_data(resource);
+
     if (!surf)
         return;
+
     if (surf->srv &&
         surf->srv->keyboard_focus == surf) {
         keyboard_focus_update(
-                surf->srv,
-                NULL);
+            surf->srv,
+            NULL);
     }
+
+    /*
+     * CONTEXT:
+     *
+     * wl_resource destroy hanya berarti resource protocol
+     * layer-surface tersebut benar-benar dihancurkan.
+     *
+     * Android SurfaceDestroyed TIDAK boleh masuk ke sini.
+     *
+     * Native/Android surface lifecycle harus ditangani oleh
+     * compositor surface lifecycle, bukan dengan menghancurkan
+     * layer_surface_state.
+     */
+
     surf->layer_surface_res = NULL;
 
+    /*
+     * layer_surface_state hanya dihancurkan apabila role
+     * layer-shell memang selesai melalui wl_resource lifecycle.
+     *
+     * Jangan gunakan handler ini sebagai Android SurfaceDestroyed
+     * handler.
+     */
     if (surf->layer_surface) {
         surf->layer_surface->popup_res = NULL;
         free(surf->layer_surface);
@@ -685,20 +708,100 @@ void layer_surface_notify_output_change(
 {
     if (!srv)
         return;
-    pthread_mutex_lock(
-            &srv->surfaces_mutex);
+
+    pthread_mutex_lock(&srv->surfaces_mutex);
+
     struct compositor_surface *surf;
+
     wl_list_for_each(
-            surf,
-            &srv->surfaces,
-            link) {
+        surf,
+        &srv->surfaces,
+        link) {
+
         if (!surf->layer_surface)
             continue;
-        send_layer_surface_configure(surf);
+
+        /*
+         * CONTEXT:
+         *
+         * EMERGENCY / HEADLESS PATH
+         *
+         * Fungsi ini TIDAK menggantikan
+         * send_layer_surface_configure().
+         *
+         * Fungsi ini dipakai ketika Android/native surface sedang
+         * destroyed atau belum tersedia.
+         *
+         * layershell tidak mengetahui konsep Android SurfaceDestroyed.
+         * Karena itu compositor yang melakukan switch lifecycle.
+         *
+         * Jangan membuat cache geometry baru di sini.
+         * output.c tetap menjadi source of truth untuk logical output.
+         *
+         * Tujuan utama path ini:
+         *
+         *     Wayland layer surface tetap hidup
+         *     walaupun Android rendering surface sementara hilang.
+         *
+         * Ketika physical output kembali terdeteksi berubah,
+         * compositor kembali menggunakan:
+         *
+         *     send_layer_surface_configure(surf)
+         *
+         * sebagai jalur normal.
+         */
+
+        const uint32_t width =
+            srv->output_width > 0 ?
+            (uint32_t)srv->output_width : 1;
+
+        const uint32_t height =
+            srv->output_height > 0 ?
+            (uint32_t)srv->output_height : 1;
+
+        if (!surf->layer_surface_res) {
+            LOGI(
+                "layer emergency/headless "
+                "surf=%p logical=%ux%u "
+                "layer resource unavailable",
+                (void *)surf,
+                width,
+                height);
+
+            continue;
+        }
+
+        /*
+         * Headless configure:
+         *
+         * Jangan destroy role.
+         * Jangan free layer_surface_state.
+         * Jangan membuat geometry cache.
+         *
+         * Cukup menjaga protocol layer surface tetap menerima
+         * configure berdasarkan logical output dari output.c.
+         */
+        uint32_t serial =
+            wl_display_next_serial(srv->display);
+
+        zwlr_layer_surface_v1_send_configure(
+            surf->layer_surface_res,
+            serial,
+            width,
+            height);
+
+        LOGI(
+            "layer emergency/headless configure "
+            "surf=%p serial=%u logical=%ux%u",
+            (void *)surf,
+            serial,
+            width,
+            height);
     }
-    pthread_mutex_unlock(
-            &srv->surfaces_mutex);
+
+    pthread_mutex_unlock(&srv->surfaces_mutex);
 }
+
 void layer_shell_bind(
         struct wl_client *client,
         void *data,
