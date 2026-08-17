@@ -538,4 +538,8 @@
     <string name="override_placeholder">[Service]\nEnvironment=FOO=bar</string>
     <string name="saving_override">Ukládání přepisu konfigurace…</string>
     <string name="applying_override">Uplatňování přepisu konfigurace…</string>
+    <string name="terminal_dark_theme">Tmavý motiv terminálu</string>
+    <string name="terminal_dark_theme_description">Použije tmavé barvy pouze na stránce terminálu</string>
+    <string name="fetching_distros">Načítají se distribuce z repozitáře rootfs...</string>
+    <string name="resize_same_as_current">Velikost je již %1$d GB. Zadejte jinou velikost.</string>
 </resources>

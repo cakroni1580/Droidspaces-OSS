@@ -546,4 +546,6 @@
     <string name="override_placeholder">[Service]\nEnvironment=FOO=bar</string>
     <string name="saving_override">正在保存覆盖配置…</string>
     <string name="applying_override">正在应用覆盖配置…</string>
+    <string name="fetching_distros">正在从 rootfs 仓库中获取发行版……</string>
+    <string name="resize_same_as_current">当前已为 %1$d GB，请输入其他容量大小。</string>
 </resources>
