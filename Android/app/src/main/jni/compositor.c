@@ -166,7 +166,7 @@ static wayland_server_t *compositor_create_impl(const char *runtime_dir, const c
      *
      * Advertise zwlr_layer_shell_v1 to Wayland clients.
      * Layer surface creation is handled by layershell.c.
-     *
+     */
     wl_global_create(
             srv->display,
             &zwlr_layer_shell_v1_interface,
