@@ -235,37 +235,6 @@ static void gtk_shell_get_gtk_surface(
         "surface=%p",
         (void *)surf);
 }
-
-/* --------------------------------------------------------------- */
-/* GTK state translation                                             */
-/* --------------------------------------------------------------- */
-
-/*
- * GTK shell mempunyai state tiling sendiri.
- *
- * Source of truth tetap compositor_surface.
- *
- * GTK shell hanya menerjemahkan state compositor menjadi:
- *
- *   GTK_SURFACE1_STATE_TILED
- *   GTK_SURFACE1_STATE_TILED_TOP
- *   GTK_SURFACE1_STATE_TILED_RIGHT
- *   GTK_SURFACE1_STATE_TILED_BOTTOM
- *   GTK_SURFACE1_STATE_TILED_LEFT
- *
- * GTK shell TIDAK menentukan apakah surface harus tiled.
- */
-
-/*
- * Return non-zero apabila compositor menganggap surface
- * sedang tiled.
- *
- * API ini sengaja dipisahkan dari gtk-shell.c supaya
- * xdg-shell dan layer-shell dapat memakai state yang sama.
- *
- * Implementasinya harus membaca state authority milik
- * compositor_surface.
- */
 static uint32_t gtk_surface_get_tiling_state(
         struct compositor_surface *surf)
 {
@@ -399,18 +368,6 @@ bool gtk_shell_apply_tiling_geometry(
             *height);
         return false;
     }
-
-    /*
-     * CONTEXT NOTE:
-     *
-     * Tidak ada work-area di GTK shell.
-     *
-     * Posisi dan ukuran yang sudah diberikan oleh XDG/WM
-     * digunakan langsung.
-     *
-     * surf->z_order juga merupakan z-order authority yang sama
-     * dengan XDG shell.
-     */
     LOGI(
         "gtk geometry follows XDG/output "
         "surface=%p "
@@ -482,38 +439,10 @@ bool gtk_shell_get_maximized_geometry(
         !width ||
         !height)
         return false;
-
-    /*
-     * CONTEXT NOTE:
-     *
-     * GTK shell hanya companion protocol untuk XDG toplevel.
-     * Geometry maximized menggunakan output langsung.
-     *
-     * Tidak ada:
-     *
-     *     layer_shell_get_work_area()
-     *     trierarch_work_area
-     *     exclusive-zone adjustment
-     */
     if (!gtk_surface_is_xdg_toplevel(surf))
         return false;
 
     struct wayland_server *srv = surf->srv;
-
-    /*
-     * ============================================================
-     * OUTPUT GEOMETRY
-     * ============================================================
-     *
-     * Maximized GTK/XDG menggunakan seluruh output.
-     *
-     *     x = 0
-     *     y = 0
-     *     width  = output_width
-     *     height = output_height
-     *
-     * Sama dengan geometry authority yang digunakan XDG shell.
-     */
     *x = 0;
     *y = 0;
     *width = srv->output_width > 0
