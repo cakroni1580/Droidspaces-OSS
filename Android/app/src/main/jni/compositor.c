@@ -174,7 +174,7 @@ static wayland_server_t *compositor_create_impl(const char *runtime_dir, const c
             srv,
             layer_shell_bind);
 
-    LOGI("global advertised: zwlr_layer_shell_v1 v4");*/
+    LOGI("global advertised: zwlr_layer_shell_v1 v4");
 
     g_client_created_listener.notify = client_created_notify;
     wl_display_add_client_created_listener(srv->display, &g_client_created_listener);
