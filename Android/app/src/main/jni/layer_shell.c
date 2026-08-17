@@ -732,8 +732,8 @@ void layer_surface_notify_output_change(
          * Fungsi ini dipakai ketika Android/native surface sedang
          * destroyed atau belum tersedia.
          *
-         * layershell tidak mengetahui konsep Android SurfaceDestroyed.
-         * Karena itu compositor yang melakukan switch lifecycle.
+         * layershell tidak mengetahui konsep Android surfacedestroyed.
+         * layer_surface_notify_output_change memastikan ouput phisical size tetap valid ketika android surfacedestroyed.
          *
          * Jangan membuat cache geometry baru di sini.
          * output.c tetap menjadi source of truth untuk logical output.
