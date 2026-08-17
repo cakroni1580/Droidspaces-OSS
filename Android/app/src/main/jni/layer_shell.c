@@ -3,26 +3,8 @@
  * note contract:layershell.c berjalan di trierarch compositor jni sebagai compositor display host
  * note contract:buat agar agar mengikuti phoc alih alih wlroots.
  * ================================================================
- * TRIERARCH WM CONTRACT
+ * TRIERARCH CONTRACT
  * ================================================================
- *
- * Target desktop harus universal:
- *
- *   waybar,phosh,plasma-mobile labwc or etc.
- *   ┌──────────────────────────────┐
-      esclusive zones
- *   │___________________________________│
- *   │        work-area                  │
- *   │                                   │
- *   │ ┌────────────┐ ┌───────────┐ │
- *   │ │  Firefox     │ | Calculator  │  |
- *   │ │              │ |             │  |
- *   │ └────────────┘ └───────────┘ │
- *   │___________________________________│
-     |  back   | home   | window          |
- *   └──────────────────────────────┘
- *
- * NOTE CONTRACT:
  *   layershell.c berjalan di Trierarch compositor JNI sebagai
  *   compositor display host. Implementasi mengikuti policy Phoc,
  *   bukan asumsi generic wlroots.
@@ -164,8 +146,6 @@ static void layer_surface_set_anchor(
     if (!surf || !surf->layer_surface)
         return;
     surf->layer_surface->anchor = anchor;
-    if (surf->srv)
-       layer_surface_notify_output_change(surf->srv);
     LOGI(
         "layer set_anchor surf=%p anchor=0x%x",
         (void *)surf,
@@ -261,8 +241,6 @@ static void layer_surface_set_margin(
     surf->layer_surface->margin_right = right;
     surf->layer_surface->margin_bottom = bottom;
     surf->layer_surface->margin_left = left;
-    if (surf->srv)
-        layer_surface_notify_output_change(surf->srv);
     LOGI(
         "layer set_margin surf=%p "
         "top=%d right=%d bottom=%d left=%d",
@@ -679,12 +657,13 @@ void send_layer_surface_configure(struct compositor_surface *surf)
             width,
             height);
 
-    LOGI(
-        "layer DIRECT configure "
-        "surf=%p serial=%u geometry=%ux%u@%d,%d "
+     LOGI(
+        "layer configure "
+        "surf=%p mode=%s serial=%u geometry=%ux%u@%d,%d "
         "anchor=0x%x margin=%d,%d,%d,%d "
         "exclusive=%d layer=%u",
         (void *)surf,
+        srv->wm_mode == WM_MODE_DIRECT ? "DIRECT" : "NESTED",
         serial,
         width,
         height,
@@ -718,8 +697,6 @@ void layer_surface_notify_output_change(
     pthread_mutex_unlock(
             &srv->surfaces_mutex);
 }
-
-
 void layer_shell_bind(
         struct wl_client *client,
         void *data,
