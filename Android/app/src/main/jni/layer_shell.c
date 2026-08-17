@@ -462,6 +462,7 @@ static void layer_shell_get_layer_surface(
         return;
     }
     state->layer = layer;
+    state->exclusive_zone = 120;
     if (namespace) {
         strncpy(state->namespace_name,
                 namespace,
@@ -491,6 +492,7 @@ static void layer_shell_get_layer_surface(
             &layer_surface_impl,
             surf,
             layer_surface_resource_destroy);
+    send_layer_surface_configure(surf);
     LOGI(
         "new layer_surface pending initial state "
         "surf=%p layer=%u ns=%s",
