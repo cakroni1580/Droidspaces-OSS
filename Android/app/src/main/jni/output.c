@@ -121,7 +121,6 @@ void compositor_set_output_size(wayland_server_t *srv_opaque,
     xdg_output_notify_all(srv);
     surface_notify_preferred_buffer_scale_all(srv);
     fractional_scale_notify_all(srv);
-    layer_surface_notify_output_change(srv);
 }
 
 void compositor_set_output_override(wayland_server_t *srv_opaque, int32_t w, int32_t h) {
