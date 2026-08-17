@@ -3,7 +3,7 @@
  * note contract:layershell.c berjalan di trierarch compositor jni sebagai compositor display host
  * note contract:buat agar agar mengikuti phoc alih alih wlroots.
  * ================================================================
- * TRIERARCH WM CONTRACT — WM_MODE_DIRECT
+ * TRIERARCH WM CONTRACT
  * ================================================================
  *
  * Target desktop harus universal:
