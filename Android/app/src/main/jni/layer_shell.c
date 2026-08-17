@@ -698,6 +698,37 @@ void send_layer_surface_configure(struct compositor_surface *surf)
         surf->layer_surface->layer);
 }
 
+/*
+ * CONTEXT:
+ *
+ * output.c adalah source of truth untuk output geometry.
+ *
+ * Fungsi ini bukan geometry/configure implementation kedua.
+ *
+ * Tujuannya hanya menjaga layer-surface tetap valid ketika
+ * Android Surface lifecycle berubah, termasuk SurfaceDestroyed.
+ *
+ * Semua geometry tetap diputuskan oleh:
+ *
+ *     send_layer_surface_configure()
+ *
+ * Dengan demikian:
+ *
+ *     output.c
+ *       ↓
+ *     output_width/output_height
+ *       ↓
+ *     send_layer_surface_configure()
+ *       ↓
+ *     layer_surface_calculate_size()
+ *       ↓
+ *     layer_surface_calculate_position()
+ *       ↓
+ *     zwlr_layer_surface_v1.configure
+ *
+ * Tidak ada configure dengan ukuran output mentah di sini.
+ */
+
 void layer_surface_notify_output_change(
         struct wayland_server *srv)
 {
@@ -717,81 +748,43 @@ void layer_surface_notify_output_change(
             continue;
 
         /*
-         * CONTEXT:
+         * Android SurfaceDestroyed tidak menghancurkan
+         * wl_surface / layer-shell role.
          *
-         * EMERGENCY / HEADLESS PATH
-         *
-         * Fungsi ini TIDAK menggantikan
-         * send_layer_surface_configure().
-         *
-         * Fungsi ini dipakai ketika Android/native surface sedang
-         * destroyed atau belum tersedia.
-         *
-         * layershell tidak mengetahui konsep Android surfacedestroyed.
-         * layer_surface_notify_output_change memastikan ouput phisical size tetap valid ketika android surfacedestroyed.
-         *
-         * Jangan membuat cache geometry baru di sini.
-         * output.c tetap menjadi source of truth untuk logical output.
-         *
-         * Tujuan utama path ini:
-         *
-         *     Wayland layer surface tetap hidup
-         *     walaupun Android rendering surface sementara hilang.
-         *
-         * Ketika physical output kembali terdeteksi berubah,
-         * compositor kembali menggunakan:
-         *
-         *     send_layer_surface_configure(surf)
-         *
-         * sebagai jalur normal.
+         * Jika resource protocol masih hidup, gunakan jalur
+         * configure utama sehingga output.c tetap menjadi
+         * satu-satunya geometry authority.
          */
-
-        const uint32_t width =
-            srv->output_width > 0 ?
-            (uint32_t)srv->output_width : 1;
-
-        const uint32_t height =
-            srv->output_height > 0 ?
-            (uint32_t)srv->output_height : 1;
-
         if (!surf->layer_surface_res) {
             LOGI(
-                "layer emergency/headless "
-                "surf=%p logical=%ux%u "
+                "layer output change "
+                "surf=%p logical=%dx%d "
                 "layer resource unavailable",
                 (void *)surf,
-                width,
-                height);
+                srv->output_width,
+                srv->output_height);
 
             continue;
         }
 
         /*
-         * Headless configure:
+         * IMPORTANT:
          *
-         * Jangan destroy role.
-         * Jangan free layer_surface_state.
-         * Jangan membuat geometry cache.
+         * Jangan menghitung width/height sendiri di sini.
+         * Jangan langsung memanggil
+         * zwlr_layer_surface_v1_send_configure().
          *
-         * Cukup menjaga protocol layer surface tetap menerima
-         * configure berdasarkan logical output dari output.c.
+         * Semua perubahan output harus melewati jalur utama.
          */
-        uint32_t serial =
-            wl_display_next_serial(srv->display);
-
-        zwlr_layer_surface_v1_send_configure(
-            surf->layer_surface_res,
-            serial,
-            width,
-            height);
+        send_layer_surface_configure(surf);
 
         LOGI(
-            "layer emergency/headless configure "
-            "surf=%p serial=%u logical=%ux%u",
+            "layer output change routed through "
+            "send_layer_surface_configure "
+            "surf=%p logical=%dx%d",
             (void *)surf,
-            serial,
-            width,
-            height);
+            srv->output_width,
+            srv->output_height);
     }
 
     pthread_mutex_unlock(&srv->surfaces_mutex);
