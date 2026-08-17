@@ -53,31 +53,25 @@ static void layer_surface_resource_destroy(
     /*
      * CONTEXT:
      *
-     * wl_resource destroy hanya berarti resource protocol
-     * layer-surface tersebut benar-benar dihancurkan.
+     * Ini hanya destroy wl_resource layer-shell.
      *
-     * Android SurfaceDestroyed TIDAK boleh masuk ke sini.
+     * Android SurfaceDestroyed TIDAK masuk melalui callback ini.
      *
-     * Native/Android surface lifecycle harus ditangani oleh
-     * compositor surface lifecycle, bukan dengan menghancurkan
-     * layer_surface_state.
+     * layer_surface_state lifetime dikelola oleh compositor
+     * surface lifecycle di surface.c.
+     *
+     * Karena itu callback ini hanya memutus hubungan resource
+     * protocol dengan compositor_surface.
      */
-
     surf->layer_surface_res = NULL;
 
     /*
-     * layer_surface_state tidak pernah di free.
-     * destroy surface state dilakukan melalului mekanisme unbind layershell yang ditangani oleh surface.c
-     * layer-shell memang selesai melalui wl_resource lifecycle.
+     * JANGAN free surf->layer_surface di sini.
      *
-     * Jangan gunakan handler ini sebagai Android SurfaceDestroyed
-     * handler.
+     * layer_surface_state harus tetap berada di bawah lifetime
+     * compositor_surface sampai surface.c benar-benar melakukan
+     * teardown role/state.
      */
-    if (surf->layer_surface) {
-        surf->layer_surface->popup_res = NULL;
-        free(surf->layer_surface);
-        surf->layer_surface = NULL;
-    }
 }
 static void layer_surface_destroy(
         struct wl_client *client,
