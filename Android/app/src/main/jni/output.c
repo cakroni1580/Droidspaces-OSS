@@ -154,7 +154,7 @@ void compositor_set_output_user_scale(wayland_server_t *srv_opaque, int32_t scal
     wl_list_for_each(surf, &srv->surfaces, link) {
         if (surf->xdg_toplevel_res)
             send_toplevel_configure(surf);
-            /*layer_shell.c*/
+            /*layer_shell.*/
         if (surf->layer_surface_res)
             send_layer_surface_configure(surf);
 
@@ -168,13 +168,10 @@ void compositor_set_output_user_scale(wayland_server_t *srv_opaque, int32_t scal
     surface_notify_preferred_buffer_scale_all(srv);
     fractional_scale_notify_all(srv);
     /*
-     * Layer shell harus mengikuti
-     * geometry output baru.
+     * Notify already-bound wl_output resources so Resolution takes effect without reconnecting
+     * Layershell tidak mengerti konsep android surfacedestroyed 
+     * layer_surface_notify_output_change memastikan surface size tetap valid meskipun dalam mode android surfacedestroyed.
      *
-     * Contoh:
-     * - phosh panel
-     * - notification layer
-     * - fullscreen overlay
      */
     layer_surface_notify_output_change(srv);
 }
