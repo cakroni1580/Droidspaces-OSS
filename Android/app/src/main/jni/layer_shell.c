@@ -66,7 +66,8 @@ static void layer_surface_resource_destroy(
     surf->layer_surface_res = NULL;
 
     /*
-     * layer_surface_state hanya dihancurkan apabila role
+     * layer_surface_state tidak pernah di free.
+     * destroy surface state dilakukan melalului mekanisme unbind layershell yang ditangani oleh surface.c
      * layer-shell memang selesai melalui wl_resource lifecycle.
      *
      * Jangan gunakan handler ini sebagai Android SurfaceDestroyed
