@@ -191,8 +191,7 @@ static void layer_surface_set_exclusive_zone(
         return;
     }
     surf->layer_surface->exclusive_zone = zone;
-    if (surf->srv)
-        layer_surface_notify_output_change(surf->srv);
+    
     const uint32_t anchor =
             surf->layer_surface->anchor;
     const bool anchor_top =
@@ -233,19 +232,17 @@ static void layer_surface_set_exclusive_zone(
     else if (valid_right)
         edge = "RIGHT";
     LOGI(
-        "layer exclusive state "
-        "surf=%p zone=%d anchor=0x%x edge=%s "
-        "margin=%d,%d,%d,%d "
-        "valid=%s",
-        (void *)surf,
-        zone,
-        anchor,
-        edge,
-        surf->layer_surface->margin_top,
-        surf->layer_surface->margin_right,
-        surf->layer_surface->margin_bottom,
-        surf->layer_surface->margin_left,
-        (zone > 0 && edge[0] != 'N') ? "YES" : "NO");
+       "layer exclusive state "
+       "surf=%p zone=%d anchor=0x%x edge=%s "
+       "margin=%d,%d,%d,%d",
+       (void *)surf,
+       zone,
+       anchor,
+       edge,
+       surf->layer_surface->margin_top,
+       surf->layer_surface->margin_right,
+       surf->layer_surface->margin_bottom,
+       surf->layer_surface->margin_left);
 }
 static void layer_surface_set_margin(
         struct wl_client *client,
