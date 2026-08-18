@@ -562,7 +562,7 @@ compositor_surface_get_tiling(
         struct compositor_surface *surf);
 
 
-void send_layer_surface_configure(struct compositor_surface *surf);
+/*void send_layer_surface_configure(struct compositor_surface *surf);*/
 
 
 #endif
