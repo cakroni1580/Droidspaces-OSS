@@ -564,9 +564,9 @@ void send_layer_surface_configure(struct compositor_surface *surf)
  *       ↓
  *     layer_shell_get_layer_surface
  *       ↓
- *     void send_layer_surface_configure
-         ↓
  *     client menerima ukuran terbaru
+ *        ↓
+ *     void send_layer_surface_configure
  *
  * Tidak ada configure dengan ukuran output mentah di sini.
  */
