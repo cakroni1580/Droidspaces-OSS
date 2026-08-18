@@ -316,7 +316,7 @@ static void surface_commit(struct wl_client *client, struct wl_resource *resourc
     }
     pthread_mutex_unlock(&surf->srv->surfaces_mutex);
     
-    if (surf->layer_surface &&
+    /*if (surf->layer_surface &&
         surf->layer_surface_res) {
 
         send_layer_surface_configure(surf);
@@ -324,7 +324,7 @@ static void surface_commit(struct wl_client *client, struct wl_resource *resourc
         LOGI(
             "layer initial configure from commit "
             "surf=%p",
-            (void *)surf);
+            (void *)surf);*/
     }
 
     if (surf->current_buffer) {
