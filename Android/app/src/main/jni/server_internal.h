@@ -181,6 +181,15 @@ struct layer_surface_state {
     int32_t margin_left;
 
     char namespace_name[128];
+    uint32_t pending_configure_serial;
+    uint32_t pending_width;
+    uint32_t pending_height;
+
+    uint32_t configured_width;
+    uint32_t configured_height;
+
+    bool configure_pending;
+    bool configure_acked;
 };
 
 /*
