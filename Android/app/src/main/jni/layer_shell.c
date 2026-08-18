@@ -518,70 +518,7 @@ static void layer_shell_get_layer_surface(
         layer,
         namespace ? namespace : "");
 }
-static void layer_surface_calculate_size(
-        struct compositor_surface *surf,
-        uint32_t *width,
-        uint32_t *height)
-{
-    struct layer_surface_state *ls =
-        surf ? surf->layer_surface : NULL;
-    struct wayland_server *srv =
-        surf ? surf->srv : NULL;
-    if (!srv || !width || !height) {
-        if (width)
-            *width = 1;
-        if (height)
-            *height = 1;
-        return;
-    }
-    uint32_t ow =
-        srv->output_width > 0 ?
-        srv->output_width : 1;
-    uint32_t oh =
-        srv->output_height > 0 ?
-        srv->output_height : 1;
-    if (!ls) {
-        *width = ow;
-        *height = oh;
-        return;
-    }
-    const bool left =
-        (ls->anchor &
-         ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) != 0;
-    const bool right =
-        (ls->anchor &
-         ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) != 0;
-    const bool top =
-        (ls->anchor &
-         ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) != 0;
-    const bool bottom =
-        (ls->anchor &
-         ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) != 0;
-    if (left && right) {
-        int64_t w =
-            (int64_t)ow -
-            ls->margin_left -
-            ls->margin_right;
-        *width = w > 0 ? (uint32_t)w : 1;
-    } else if (ls->requested_width > 0) {
-        *width = ls->requested_width;
-    } else {
-        *width = 1;
-    }
-    if (top && bottom) {
-        int64_t h =
-            (int64_t)oh -
-            ls->margin_top -
-            ls->margin_bottom;
-        *height = h > 0 ? (uint32_t)h : 1;
-    } else if (ls->requested_height > 0) {
-        *height = ls->requested_height;
-    } else {
-        *height = 1;
-    }
-}
-
-/* layer_shell interface                                                     */
+                                                     */
 /* ------------------------------------------------------------------------- */
 
 static const struct zwlr_layer_shell_v1_interface
@@ -593,60 +530,11 @@ layer_shell_impl = {
         layer_shell_get_layer_surface,
 };
 
-/*perubahan ukuran surface itu harus selalu di refresh oleh geometry tanpa harus melakukan recommit dan cached,
- *karna send_layer_surface_configure itu ukuran size benar benar realtime*/
-bool layer_surface_get_geometry(
-        struct compositor_surface *surf,
-        uint32_t *width,
-        uint32_t *height,
-        int32_t *x,
-        int32_t *y)
-{
-    if (!surf ||
-        !surf->layer_surface ||
-        !width ||
-        !height ||
-        !x ||
-        !y)
-        return false;
+/*perubahan ukuran surface itu harus selalu di refresh oleh layershell secara langsung tanpa harus melakukan recommit ulang dan cached,
+ *karna send_layer_surface_configure itu ukuran size benar benar realtime
+ * tidsk boleh ada cslculate geometry dll di layershell.
+ */
 
-    /*
-     * CONTEXT:
-     *
-     * Geometry harus selalu mengikuti physical output terbaru.
-     *
-     * Jangan menggunakan geometry hasil configure sebelumnya
-     * sebagai source of truth.
-     *
-     * Tidak ada wl_surface commit yang diperlukan di sini.
-     */
-    layer_surface_calculate_size(
-            surf,
-            width,
-            height);
-
-    /*
-     * Position juga dihitung ulang dari geometry TERBARU.
-     *
-     * Ini penting untuk:
-     *
-     *   - CENTER anchor
-     *   - RIGHT anchor
-     *   - BOTTOM anchor
-     *   - kombinasi anchor + margin
-     *
-     * setelah physical output berubah.
-     */
-    layer_surface_calculate_position(
-            surf,
-            *width,
-            *height);
-
-    *x = surf->wm_x;
-    *y = surf->wm_y;
-
-    return true;
-}
 void send_layer_surface_configure(struct compositor_surface *surf)
 {
     if (!surf ||
@@ -665,29 +553,10 @@ void send_layer_surface_configure(struct compositor_surface *surf)
      * GEOMETRY
      * ================================================================
      *    
-     * Size berasal dari layer-shell state + physical output.
-     *
-     * Position kemudian dihitung sekali dan disimpan ke wm_x/wm_y.
-     *
-     * Setelah helper selesai:
-     *
-     *     wm_x/wm_y = compositor geometry authority
+     * Size berasal dari layer-shell di refres dsri  physical output secara langsung.
      */
-    layer_surface_calculate_size(
-            surf,
-            &width,
-            &height);
 
-    layer_surface_calculate_position(
-            surf,
-            width,
-            height);
-
-    /*
-     * layer_surface_get_geometry() sekarang hanya menjadi consumer
-     * geometry. Jangan menggunakan pointer wm_x/wm_y sebagai output
-     * parameter di sini karena posisi sudah dihitung di atas.
-     */
+    
     uint32_t serial =
             wl_display_next_serial(srv->display);
 
@@ -739,10 +608,6 @@ void send_layer_surface_configure(struct compositor_surface *surf)
  *     output_width/output_height
  *       ↓
  *     send_layer_surface_configure()
- *       ↓
- *     layer_surface_calculate_size()
- *       ↓
- *     layer_surface_calculate_position()
  *       ↓
  *     zwlr_layer_surface_v1.configure
  *
