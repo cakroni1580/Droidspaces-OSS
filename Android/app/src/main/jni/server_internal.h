@@ -551,11 +551,6 @@ void layer_shell_bind(
 void layer_surface_notify_output_change(
         struct wayland_server *srv);
 
-void layer_shell_get_work_area(
-        struct wayland_server *srv,
-        struct compositor_surface *exclude,
-        struct trierarch_work_area *area);
-
 /*unmanaged api*/
 
 void compositor_surface_set_tiling(
@@ -568,14 +563,6 @@ compositor_surface_get_tiling(
 
 
 void send_layer_surface_configure(struct compositor_surface *surf);
-void surface_notify_preferred_buffer_scale_all(
-        struct wayland_server *srv);
-void compositor_surface_set_resize_edges(
-        struct compositor_surface *surf,
-        uint32_t edges);
-
-uint32_t compositor_surface_get_resize_edges(
-        struct compositor_surface *surf);
 
 
 #endif
