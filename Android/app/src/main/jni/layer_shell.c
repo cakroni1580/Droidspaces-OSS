@@ -609,7 +609,7 @@ void send_layer_surface_configure(struct compositor_surface *surf)
  *       ↓
  *     send_layer_surface_configure()
  *       ↓
- *     zwlr_layer_surface_v1.configure
+ *     layer_shell_get_layer_surface()
  *
  * Tidak ada configure dengan ukuran output mentah di sini.
  */
