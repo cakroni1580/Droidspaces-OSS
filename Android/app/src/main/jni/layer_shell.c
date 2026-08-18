@@ -593,7 +593,8 @@ layer_shell_impl = {
         layer_shell_get_layer_surface,
 };
 
-
+/*perubahan ukuran surface itu harus selalu di refresh oleh geometry tanpa harus melakukan recommit dan cached,
+ *karna send_layer_surface_configure itu ukuran size benar benar realtime*/
 bool layer_surface_get_geometry(
         struct compositor_surface *surf,
         uint32_t *width,
@@ -612,15 +613,34 @@ bool layer_surface_get_geometry(
     /*
      * CONTEXT:
      *
-     * Geometry sudah dipilih oleh compositor pada saat configure.
+     * Geometry harus selalu mengikuti physical output terbaru.
      *
-     * layer_surface_get_geometry() hanya membaca geometry tersebut.
-     * Ia TIDAK boleh menghitung ulang anchor/margin.
+     * Jangan menggunakan geometry hasil configure sebelumnya
+     * sebagai source of truth.
+     *
+     * Tidak ada wl_surface commit yang diperlukan di sini.
      */
     layer_surface_calculate_size(
             surf,
             width,
             height);
+
+    /*
+     * Position juga dihitung ulang dari geometry TERBARU.
+     *
+     * Ini penting untuk:
+     *
+     *   - CENTER anchor
+     *   - RIGHT anchor
+     *   - BOTTOM anchor
+     *   - kombinasi anchor + margin
+     *
+     * setelah physical output berubah.
+     */
+    layer_surface_calculate_position(
+            surf,
+            *width,
+            *height);
 
     *x = surf->wm_x;
     *y = surf->wm_y;
