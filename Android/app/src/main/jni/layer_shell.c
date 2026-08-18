@@ -128,6 +128,22 @@ static void layer_surface_resource_destroy(
                 surf->srv,
                 NULL);
     }
+    /*
+     * Resource layer-shell sudah dihancurkan.
+     *
+     * Jangan membawa configure serial lama ke resource baru.
+     */
+    if (surf->layer_surface) {
+        surf->layer_surface->pending_configure_serial = 0;
+        surf->layer_surface->pending_width = 0;
+        surf->layer_surface->pending_height = 0;
+
+        surf->layer_surface->configured_width = 0;
+        surf->layer_surface->configured_height = 0;
+
+        surf->layer_surface->configure_pending = false;
+        surf->layer_surface->configure_acked = false;
+    }
 
     /*
      * CONTEXT:
@@ -417,11 +433,76 @@ static void layer_surface_ack_configure(
     if (!surf || !surf->layer_surface)
         return;
 
+    struct layer_surface_state *state =
+            surf->layer_surface;
+
+    /*
+     * ============================================================
+     * CONFIGURE ACK STATE
+     * ============================================================
+     *
+     * Client harus ACK configure yang sebelumnya dikirim
+     * compositor.
+     *
+     * Jangan menganggap arbitrary serial sebagai valid ACK.
+     */
+    if (!state->configure_pending) {
+        LOGI(
+            "layer configure ack ignored "
+            "surf=%p serial=%u "
+            "reason=no-pending-configure",
+            (void *)surf,
+            serial);
+        return;
+    }
+
+    /*
+     * ACK serial yang lebih lama daripada configure terakhir
+     * tidak boleh mengembalikan geometry ke state lama.
+     *
+     * Contoh:
+     *
+     *     configure #10 = 540x1051
+     *     configure #11 = 540x514
+     *
+     * ACK #10 datang terlambat.
+     *
+     * State tetap #11.
+     */
+    if (serial != state->pending_configure_serial) {
+        LOGI(
+            "layer configure ack ignored "
+            "surf=%p serial=%u "
+            "pending=%u "
+            "pending_geometry=%ux%u",
+            (void *)surf,
+            serial,
+            state->pending_configure_serial,
+            state->pending_width,
+            state->pending_height);
+        return;
+    }
+
+    /*
+     * Configure menjadi ACTIVE hanya setelah ACK.
+     */
+    state->configured_width =
+            state->pending_width;
+
+    state->configured_height =
+            state->pending_height;
+
+    state->configure_pending = false;
+    state->configure_acked = true;
+
     LOGI(
-        "layer configure ack "
-        "surf=%p serial=%u",
+        "layer configure acked "
+        "surf=%p serial=%u "
+        "configured=%ux%u",
         (void *)surf,
-        serial);
+        serial,
+        state->configured_width,
+        state->configured_height);
 }
 
 /*
@@ -682,9 +763,33 @@ static void send_layer_surface_configure(
         return;
     }
 
+    /*
+     * ============================================================
+     * CONFIGURE STATE TRANSITION
+     * ============================================================
+     *
+     * output geometry -> pending configure
+     *
+     * Jangan mengubah configured_width/configured_height di sini.
+     *
+     * Geometry baru menjadi configured state setelah client ACK.
+     */
     uint32_t serial =
             wl_display_next_serial(
                     srv->display);
+
+    struct layer_surface_state *state =
+            surf->layer_surface;
+
+    /*
+     * Simpan configure terbaru.
+     *
+     * Configure terbaru menggantikan pending configure sebelumnya.
+     */
+    state->pending_configure_serial = serial;
+    state->pending_width = width;
+    state->pending_height = height;
+    state->configure_pending = true;
 
     zwlr_layer_surface_v1_send_configure(
             surf->layer_surface_res,
@@ -694,8 +799,11 @@ static void send_layer_surface_configure(
 
     LOGI(
         "layer configure "
-        "surf=%p mode=%s serial=%u "
+        "surf=%p mode=%s "
+        "serial=%u "
         "geometry=%ux%u@%d,%d "
+        "pending=1 "
+        "previous_configured=%ux%u "
         "anchor=0x%x "
         "margin=%d,%d,%d,%d "
         "exclusive=%d layer=%u",
@@ -707,13 +815,15 @@ static void send_layer_surface_configure(
         height,
         surf->wm_x,
         surf->wm_y,
-        surf->layer_surface->anchor,
-        surf->layer_surface->margin_top,
-        surf->layer_surface->margin_right,
-        surf->layer_surface->margin_bottom,
-        surf->layer_surface->margin_left,
-        surf->layer_surface->exclusive_zone,
-        surf->layer_surface->layer);
+        state->configured_width,
+        state->configured_height,
+        state->anchor,
+        state->margin_top,
+        state->margin_right,
+        state->margin_bottom,
+        state->margin_left,
+        state->exclusive_zone,
+        state->layer);
 }
 
 
@@ -837,6 +947,24 @@ static void layer_shell_get_layer_surface_request(
 
     state->resource = layer_res;
     state->layer = layer;
+    /*
+     * ============================================================
+     * INITIAL CONFIGURE STATE
+     * ============================================================
+     *
+     * Belum ada configure yang di-ACK.
+     *
+     * Jangan menganggap output geometry sebagai configured geometry.
+     */
+    state->pending_configure_serial = 0;
+    state->pending_width = 0;
+    state->pending_height = 0;
+
+    state->configured_width = 0;
+    state->configured_height = 0;
+
+    state->configure_pending = false;
+    state->configure_acked = false;
 
     /*
      * Existing Trierarch policy.
@@ -910,10 +1038,43 @@ static void layer_shell_get_layer_surface_request(
             &width,
             &height)) {
 
-        layer_shell_set_layer_surface(
-                surf,
+        struct layer_surface_state *state =
+                surf->layer_surface;
+
+        /*
+         * Jangan spam configure untuk geometry yang sama.
+         *
+         * Tetapi jika masih ada configure pending dengan geometry
+         * berbeda, configure baru tetap harus dikirim.
+         */
+        const bool same_as_configured =
+                state->configure_acked &&
+                state->configured_width == width &&
+                state->configured_height == height;
+
+        const bool same_as_pending =
+                state->configure_pending &&
+                state->pending_width == width &&
+                state->pending_height == height;
+
+        if (same_as_configured || same_as_pending) {
+            LOGI(
+                "layer output change "
+                "surf=%p geometry=%ux%u "
+                "skip duplicate configure "
+                "pending=%d configured=%ux%u",
+                (void *)surf,
                 width,
-                height);
+                height,
+                state->configure_pending,
+                state->configured_width,
+                state->configured_height);
+        } else {
+            layer_shell_set_layer_surface(
+                    surf,
+                    width,
+                    height);
+        }
     }
 
     LOGI(
@@ -998,11 +1159,6 @@ void layer_surface_notify_output_change(
         uint32_t width = 0;
         uint32_t height = 0;
 
-        /*
-         * STEP 1:
-         *
-         * Ambil ukuran terbaru dari output.c.
-         */
         if (!layer_shell_get_layer_surface(
                 surf,
                 &width,
@@ -1010,27 +1166,54 @@ void layer_surface_notify_output_change(
             continue;
         }
 
-        /*
-         * STEP 2:
-         *
-         * Teruskan state output ke layer-surface.
-         */
-        layer_shell_set_layer_surface(
-                surf,
-                width,
-                height);
+        struct layer_surface_state *state =
+               surf->layer_surface;
 
-        LOGI(
-            "layer output change "
-            "surf=%p routed "
-            "output=%ux%u",
-            (void *)surf,
-            width,
-            height);
+        /*
+         * ============================================================
+         * OUTPUT RESIZE → CONFIGURE
+         * ============================================================
+         *
+         * Output.c adalah source of truth.
+         *
+         * Jangan mengubah configured state secara langsung.
+         * Hanya kirim configure jika geometry benar-benar berubah.
+         */
+        const bool already_configured =
+                state->configure_acked &&
+                state->configured_width == width &&
+                state->configured_height == height;
+
+        const bool already_pending =
+                state->configure_pending &&
+                state->pending_width == width &&
+                state->pending_height == height;
+
+        if (!already_configured &&
+            !already_pending) {
+
+            LOGI(
+                "layer output resize "
+                "surf=%p "
+                "old_configured=%ux%u "
+                "new_output=%ux%u "
+                "pending=%d",
+                (void *)surf,
+                state->configured_width,
+                state->configured_height,
+                width,
+                height,
+                state->configure_pending);
+
+            layer_shell_set_layer_surface(
+                    surf,
+                    width,
+                    height);
+        }
     }
 
     pthread_mutex_unlock(
-            &srv->surfaces_mutex);
+           &srv->surfaces_mutex);
 }
 
 
