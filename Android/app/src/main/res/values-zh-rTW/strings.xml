@@ -539,4 +539,8 @@
     <string name="override_placeholder">[服務]\n環境=FOO=bar</string>
     <string name="saving_override">正在保存覆蓋設定…</string>
     <string name="applying_override">正在套用覆蓋設定…</string>
+    <string name="terminal_dark_theme">終端黑暗模式</string>
+    <string name="terminal_dark_theme_description">僅在終端頁面使用深色。</string>
+    <string name="fetching_distros">從rootfs倉庫獲取發行版本...</string>
+    <string name="resize_same_as_current">已使用 %1$d GB。輸入不同的大小以調整大小。</string>
 </resources>
