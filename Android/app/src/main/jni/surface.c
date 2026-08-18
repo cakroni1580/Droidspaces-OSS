@@ -324,8 +324,8 @@ static void surface_commit(struct wl_client *client, struct wl_resource *resourc
         LOGI(
             "layer initial configure from commit "
             "surf=%p",
-            (void *)surf);*/
-    }
+            (void *)surf);
+    }*/
 
     if (surf->current_buffer) {
         /*
