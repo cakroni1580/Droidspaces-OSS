@@ -346,42 +346,7 @@ static void layer_surface_ack_configure(
         (void *)surf,
         serial);
 }
-static void layer_surface_set_layer(
-        struct wl_client *client,
-        struct wl_resource *resource,
-        uint32_t layer)
-{
-    (void)client;
-    (void)resource;
-    (void)layer;
-    struct compositor_surface *surf =
-            wl_resource_get_user_data(resource);
-    if (!surf || !surf->layer_surface)
-            return;
-    if (layer > ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
-        wl_resource_post_error(
-                resource,
-                ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_SURFACE_STATE,
-                "invalid layer");
-        return;
-    }
-    surf->layer_surface->layer = layer;
-    switch (layer) {
-    case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
-        surf->z_order = TRIERARCH_LAYER_Z_BACKGROUND;
-        break;
-    case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
-        surf->z_order = TRIERARCH_LAYER_Z_BOTTOM;
-        break;
-    case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
-        surf->z_order = TRIERARCH_LAYER_Z_TOP;
-        break;
-    case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
-    default:
-        surf->z_order = TRIERARCH_LAYER_Z_OVERLAY;
-        break;
-    }
-}
+
 static const struct zwlr_layer_surface_v1_interface
 layer_surface_impl = {
     .destroy = layer_surface_destroy,
@@ -407,7 +372,9 @@ static void layer_shell_destroy(
     (void)client;
     wl_resource_destroy(resource);
 }
-static void layer_shell_get_layer_surface(
+send_layer_surface_configure
+
+static void layer_surface_set_layer(
         struct wl_client *client,
         struct wl_resource *resource,
         uint32_t id,
@@ -543,20 +510,8 @@ void send_layer_surface_configure(struct compositor_surface *surf)
         !surf->srv)
         return;
 
-    struct wayland_server *srv = surf->srv;
-
-    uint32_t width = 1;
-    uint32_t height = 1;
-
-    /*
-     * ================================================================
-     * GEOMETRY
-     * ================================================================
-     *    
-     * Size berasal dari layer-shell di refres dsri  physical output secara langsung.
-     */
-
     
+ 
     uint32_t serial =
             wl_display_next_serial(srv->display);
 
@@ -607,12 +562,49 @@ void send_layer_surface_configure(struct compositor_surface *surf)
  *       ↓
  *     output_width/output_height
  *       ↓
- *     send_layer_surface_configure()
+ *     layer_shell_get_layer_surface
  *       ↓
- *     layer_shell_get_layer_surface()
+ *     void send_layer_surface_configure
+         ↓
+ *     client menerima ukuran terbaru
  *
  * Tidak ada configure dengan ukuran output mentah di sini.
  */
+
+void layer_shell_get_layer_surface(
+        struct compositor_surface *surf)
+{
+    (void)client;
+    (void)resource;
+    (void)layer;
+    struct compositor_surface *surf =
+            wl_resource_get_user_data(resource);
+    if (!surf || !surf->layer_surface)
+            return;
+    if (layer > ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
+        wl_resource_post_error(
+                resource,
+                ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_SURFACE_STATE,
+                "invalid layer");
+        return;
+    }
+    surf->layer_surface->layer = layer;
+    switch (layer) {
+    case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
+        surf->z_order = TRIERARCH_LAYER_Z_BACKGROUND;
+        break;
+    case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
+        surf->z_order = TRIERARCH_LAYER_Z_BOTTOM;
+        break;
+    case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
+        surf->z_order = TRIERARCH_LAYER_Z_TOP;
+        break;
+    case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
+    default:
+        surf->z_order = TRIERARCH_LAYER_Z_OVERLAY;
+        break;
+    }
+}
 
 void layer_surface_notify_output_change(
         struct wayland_server *srv)
@@ -661,7 +653,7 @@ void layer_surface_notify_output_change(
          *
          * Semua perubahan output harus melewati jalur utama.
          */
-        send_layer_surface_configure(surf);
+        layer_shell_get_layer_surface(surf);
 
         LOGI(
             "layer output change routed through "
