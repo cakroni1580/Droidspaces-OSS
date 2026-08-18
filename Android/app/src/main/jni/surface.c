@@ -346,6 +346,46 @@ static void surface_commit(struct wl_client *client, struct wl_resource *resourc
                     surf->srv,
                     surf);
         }
+        /*
+         * ============================================================
+         * LAYER-SHELL CONFIGURED BUFFER STATE
+         * ============================================================
+         *
+         * Context:
+         *
+         *     configure -> ACK -> commit
+         *
+         * Geometry output bukan otomatis geometry buffer.
+         *
+         * Hanya configure yang sudah ACK yang boleh dianggap sebagai
+         * geometry layer-shell yang aktif.
+         */
+        if (surf->layer_surface &&
+             surf->layer_surface->configure_acked) {
+
+             const uint32_t configured_width =
+                    surf->layer_surface->configured_width;
+
+             const uint32_t configured_height =
+                    surf->layer_surface->configured_height;
+
+             LOGI(
+                 "layer committed configured geometry "
+                 "surf=%p geometry=%ux%u",
+                (void *)surf,
+                configured_width,
+                configured_height);
+
+             /*
+              * IMPORTANT:
+              *
+              * Jangan overwrite srv->output_width/output_height di sini.
+              *
+              * Output tetap milik output.c.
+              *
+              * State ini hanya menjadi referensi geometry layer surface.
+              */
+        }
 
         int32_t bw = buffer_ref_width(surf->current_buffer);
         int32_t bh = buffer_ref_height(surf->current_buffer);
