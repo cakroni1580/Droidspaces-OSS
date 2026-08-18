@@ -561,6 +561,14 @@ enum compositor_tiling_state
 compositor_surface_get_tiling(
         struct compositor_surface *surf);
 
+void surface_notify_preferred_buffer_scale_all(
+        struct wayland_server *srv);
+void compositor_surface_set_resize_edges(
+        struct compositor_surface *surf,
+        uint32_t edges);
+
+uint32_t compositor_surface_get_resize_edges(
+        struct compositor_surface *surf);
 
 /*void send_layer_surface_configure(struct compositor_surface *surf);*/
 
