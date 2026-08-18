@@ -497,51 +497,6 @@ layer_shell_impl = {
         layer_shell_get_layer_surface,
 };
 
-/*perubahan ukuran surface itu harus selalu di refresh oleh layershell secara langsung tanpa harus melakukan recommit ulang dan cached,
- *karna send_layer_surface_configure itu ukuran size benar benar realtime
- * tidsk boleh ada cslculate geometry dll di layershell.
- */
-
-void send_layer_surface_configure(struct compositor_surface *surf)
-{
-    if (!surf ||
-        !surf->layer_surface ||
-        !surf->layer_surface_res ||
-        !surf->srv)
-        return;
-
-    
- 
-    uint32_t serial =
-            wl_display_next_serial(srv->display);
-
-    zwlr_layer_surface_v1_send_configure(
-            surf->layer_surface_res,
-            serial,
-            width,
-            height);
-
-     LOGI(
-        "layer configure "
-        "surf=%p mode=%s serial=%u geometry=%ux%u@%d,%d "
-        "anchor=0x%x margin=%d,%d,%d,%d "
-        "exclusive=%d layer=%u",
-        (void *)surf,
-        srv->wm_mode == WM_MODE_DIRECT ? "DIRECT" : "NESTED",
-        serial,
-        width,
-        height,
-        surf->wm_x,
-        surf->wm_y,
-        surf->layer_surface->anchor,
-        surf->layer_surface->margin_top,
-        surf->layer_surface->margin_right,
-        surf->layer_surface->margin_bottom,
-        surf->layer_surface->margin_left,
-        surf->layer_surface->exclusive_zone,
-        surf->layer_surface->layer);
-}
-
 /*
  * CONTEXT:
  *
@@ -570,41 +525,6 @@ void send_layer_surface_configure(struct compositor_surface *surf)
  *
  * Tidak ada configure dengan ukuran output mentah di sini.
  */
-
-void layer_shell_get_layer_surface(
-        struct compositor_surface *surf)
-{
-    (void)client;
-    (void)resource;
-    (void)layer;
-    struct compositor_surface *surf =
-            wl_resource_get_user_data(resource);
-    if (!surf || !surf->layer_surface)
-            return;
-    if (layer > ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
-        wl_resource_post_error(
-                resource,
-                ZWLR_LAYER_SURFACE_V1_ERROR_INVALID_SURFACE_STATE,
-                "invalid layer");
-        return;
-    }
-    surf->layer_surface->layer = layer;
-    switch (layer) {
-    case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
-        surf->z_order = TRIERARCH_LAYER_Z_BACKGROUND;
-        break;
-    case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
-        surf->z_order = TRIERARCH_LAYER_Z_BOTTOM;
-        break;
-    case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
-        surf->z_order = TRIERARCH_LAYER_Z_TOP;
-        break;
-    case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
-    default:
-        surf->z_order = TRIERARCH_LAYER_Z_OVERLAY;
-        break;
-    }
-}
 
 void layer_surface_notify_output_change(
         struct wayland_server *srv)
@@ -665,6 +585,82 @@ void layer_surface_notify_output_change(
     }
 
     pthread_mutex_unlock(&srv->surfaces_mutex);
+}
+
+void layer_shell_get_layer_surface(
+        struct compositor_surface *surf)
+{
+    if (!surf ||
+        !surf->layer_surface ||
+        !surf->layer_surface_res ||
+        !surf->srv)
+        return;
+
+    struct wayland_server *srv = surf->srv;
+
+    /*
+     * ============================================================
+     * DISPLAY AUTHORITY
+     * ============================================================
+     *
+     * Jangan mengambil ukuran dari:
+     *
+     *   - GTK
+     *   - XDG
+     *   - work-area
+     *   - exclusive zone
+     *   - window geometry
+     *
+     * Android sudah memberikan physical display geometry
+     * melalui srv->output_width / srv->output_height.
+     */
+    uint32_t width = 1;
+    uint32_t height = 1;
+}
+
+/*perubahan ukuran surface itu harus selalu di refresh oleh layershell secara langsung tanpa harus melakukan recommit ulang dan cached,
+ *karna send_layer_surface_configure itu ukuran size benar benar realtime
+ * tidsk boleh ada cslculate geometry dll di layershell.
+ */
+
+void send_layer_surface_configure(struct compositor_surface *surf)
+{
+    if (!surf ||
+        !surf->layer_surface ||
+        !surf->layer_surface_res ||
+        !surf->srv)
+        return;
+
+    
+ 
+    uint32_t serial =
+            wl_display_next_serial(srv->display);
+
+    zwlr_layer_surface_v1_send_configure(
+            surf->layer_surface_res,
+            serial,
+            width,
+            height);
+
+     LOGI(
+        "layer configure "
+        "surf=%p mode=%s serial=%u geometry=%ux%u@%d,%d "
+        "anchor=0x%x margin=%d,%d,%d,%d "
+        "exclusive=%d layer=%u",
+        (void *)surf,
+        srv->wm_mode == WM_MODE_DIRECT ? "DIRECT" : "NESTED",
+        serial,
+        width,
+        height,
+        surf->wm_x,
+        surf->wm_y,
+        surf->layer_surface->anchor,
+        surf->layer_surface->margin_top,
+        surf->layer_surface->margin_right,
+        surf->layer_surface->margin_bottom,
+        surf->layer_surface->margin_left,
+        surf->layer_surface->exclusive_zone,
+        surf->layer_surface->layer);
 }
 
 void layer_shell_bind(
