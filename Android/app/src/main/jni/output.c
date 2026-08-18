@@ -121,6 +121,13 @@ void compositor_set_output_size(wayland_server_t *srv_opaque,
     xdg_output_notify_all(srv);
     surface_notify_preferred_buffer_scale_all(srv);
     fractional_scale_notify_all(srv);
+    /*
+     * Notify already-bound wl_output resources so Resolution takes effect without reconnecting
+     * Layershell tidak mengerti konsep android surfacedestroyed 
+     * layer_surface_notify_output_change memastikan surface size tetap valid meskipun dalam mode android surfacedestroyed.
+     *
+     */
+    layer_surface_notify_output_change(srv);
 }
 
 void compositor_set_output_override(wayland_server_t *srv_opaque, int32_t w, int32_t h) {
@@ -167,11 +174,4 @@ void compositor_set_output_user_scale(wayland_server_t *srv_opaque, int32_t scal
     xdg_output_notify_all(srv);
     surface_notify_preferred_buffer_scale_all(srv);
     fractional_scale_notify_all(srv);
-    /*
-     * Notify already-bound wl_output resources so Resolution takes effect without reconnecting
-     * Layershell tidak mengerti konsep android surfacedestroyed 
-     * layer_surface_notify_output_change memastikan surface size tetap valid meskipun dalam mode android surfacedestroyed.
-     *
-     */
-    layer_surface_notify_output_change(srv);
 }
