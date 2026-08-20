@@ -714,7 +714,7 @@ fun ContainerConfigForm(
             tonalElevation = 0.dp
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                modifier = Modifier.padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {

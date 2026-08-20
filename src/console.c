@@ -7,9 +7,7 @@
 
 #include "droidspace.h"
 
-/* ---------------------------------------------------------------------------
- * Console Monitor Loop
- * ---------------------------------------------------------------------------*/
+/* Console Monitor Loop */
 
 /* Read the current container init PID from the pidfile.
  * After an in-container reboot, the intermediate process updates the pidfile

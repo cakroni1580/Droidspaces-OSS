@@ -7,9 +7,7 @@
 
 #include "droidspace.h"
 
-/* ---------------------------------------------------------------------------
- * Internal Helpers
- * ---------------------------------------------------------------------------*/
+/* Internal Helpers */
 
 static void set_container_defaults(const char *term) {
   setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -139,12 +137,10 @@ void ds_env_save(const char *path, struct ds_config *cfg) {
   chmod(path, 0755);
 }
 
-/* ---------------------------------------------------------------------------
- * parse_env_file_to_config() - parse user environment variables into memory
+/* parse_env_file_to_config() - parse user environment variables into memory
  *
  * Called before fork() while host paths are still accessible.
- * Supports unlimited line length and variable count via dynamic allocation.
- * ---------------------------------------------------------------------------*/
+ * Supports unlimited line length and variable count via dynamic allocation. */
 void parse_env_file_to_config(const char *path, struct ds_config *cfg) {
   if (!path || path[0] == '\0' || !cfg)
     return;

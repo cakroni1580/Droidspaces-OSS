@@ -164,7 +164,7 @@ class PreferencesManager private constructor(context: Context) {
         }
 
     /**
-     * Reactive stream of the daemon-mode preference — emits the current value and
+     * Reactive stream of the daemon-mode preference, emits the current value and
      * every later change (including writes from [syncDaemonModeFromDisk] /
      * DaemonModeRepository), so the UI can collect it with
      * collectAsStateWithLifecycle() instead of a hand-rolled change listener.
@@ -281,10 +281,8 @@ class PreferencesManager private constructor(context: Context) {
         }
     }
 
-    // ---------------------------------------------------------------------------
     // Custom rootfs repository subscriptions
     // Stored as a JSON array string: [{"name":"...","url":"..."},...]
-    // ---------------------------------------------------------------------------
 
     fun getCustomRepos(): List<Pair<String, String>> {
         val raw = prefs.getString(KEY_CUSTOM_REPOS, null) ?: return emptyList()
@@ -302,7 +300,7 @@ class PreferencesManager private constructor(context: Context) {
     }
 
     fun addCustomRepo(name: String, url: String) {
-        // Only HTTPS repos — the rootfs manifest/payload must not be MITM-able (V13).
+        // Only HTTPS repos, the rootfs manifest/payload must not be MITM-able (V13).
         if (!url.startsWith("https://", ignoreCase = true)) return
         val current = getCustomRepos().toMutableList()
         if (current.any { it.second == url }) return

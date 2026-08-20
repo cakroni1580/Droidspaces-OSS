@@ -19,7 +19,7 @@ import java.util.Locale
  * The list of supported languages is driven entirely by the build-time generated
  * file assets/supported_locales.txt (written by the generateSupportedLocalesList
  * Gradle task). Adding a new translation via Weblate automatically makes it
- * appear in the language picker on the next build — no code changes needed.
+ * appear in the language picker on the next build, no code changes needed.
  */
 object LocaleHelper {
 
@@ -202,9 +202,7 @@ object LocaleHelper {
         return result
     }
 
-    // -------------------------------------------------------------------------
-    // Legacy compatibility stubs — kept so existing call sites don't break.
-    // -------------------------------------------------------------------------
+    // Legacy compatibility stubs, kept so existing call sites don't break.
 
     @Deprecated("No longer needed with AppCompatDelegate.setApplicationLocales()")
     val useSystemLanguageSettings: Boolean

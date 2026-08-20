@@ -36,7 +36,7 @@ fun InstallationScreen(
 ) {
     val context = LocalContext.current
 
-    // Install orchestration + state live in AppStateViewModel (DT-6). Read as locals
+    // Install orchestration + state live in AppStateViewModel. Read as locals
     // so the UI below is unchanged; these are Compose state reads and recompose.
     val currentStep = appStateViewModel.installCurrentStep
     val currentModuleStep = appStateViewModel.installCurrentModuleStep

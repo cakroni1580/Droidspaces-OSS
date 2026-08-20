@@ -276,7 +276,7 @@ object ContainerManager {
             // Build ContainerInfo from config
             val containerName = configMap["name"] ?: defaultName
             // Drop a container whose on-disk name carries shell metacharacters before
-            // it can reach a root command (VULN V10). Over-length-but-safe names still load.
+            // it can reach a root command. Over-length-but-safe names still load.
             if (!ValidationUtils.isSafeContainerName(containerName)) {
                 android.util.Log.w("ContainerManager", "Skipping container with unsafe name in config")
                 return null
@@ -468,7 +468,7 @@ object ContainerManager {
         newConfig: ContainerInfo
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // Reject control chars in single-line config values (VULN V11).
+            // Reject control chars in single-line config values.
             ValidationUtils.validateConfigValues(newConfig).errorMessage?.let {
                 return@withContext Result.failure(Exception(it))
             }

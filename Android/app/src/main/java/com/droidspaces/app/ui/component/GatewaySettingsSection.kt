@@ -90,7 +90,7 @@ fun GatewaySettingsSection(
                 enabled = !noCandidates
             )
 
-            // "Configure Gateway" entry — same row-card aesthetics as Privileged Mode,
+            // "Configure Gateway" entry, same row-card aesthetics as Privileged Mode,
             // showing only title + description.
             SettingsRowCard(
                 title = context.getString(R.string.gateway_configure),
@@ -176,7 +176,7 @@ private fun GatewayConfigureDialog(
                     style = MaterialTheme.typography.titleLarge
                 )
 
-                // 1 — Interface in Gateway (most important).
+                // 1. Interface in Gateway (most important).
                 ExplainedField(
                     title = context.getString(R.string.gateway_iface),
                     explanation = context.getString(R.string.gateway_iface_explain),
@@ -185,7 +185,7 @@ private fun GatewayConfigureDialog(
                     hint = context.getString(R.string.gateway_iface_hint),
                     error = errs.iface
                 )
-                // 2 — LAN Name.
+                // 2. LAN Name.
                 ExplainedField(
                     title = context.getString(R.string.gateway_net),
                     explanation = context.getString(R.string.gateway_net_explain),
@@ -194,7 +194,7 @@ private fun GatewayConfigureDialog(
                     hint = context.getString(R.string.gateway_net_hint),
                     error = errs.net
                 )
-                // 3 — Host Bridge.
+                // 3. Host Bridge.
                 ExplainedField(
                     title = context.getString(R.string.gateway_bridge),
                     explanation = context.getString(R.string.gateway_bridge_explain),

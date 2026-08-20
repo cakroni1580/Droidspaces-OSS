@@ -203,7 +203,7 @@ object ContainerOpenRCManager {
 
     // Every service name is validated against the shared allow-list
     // (ServiceManagerBase) before it is interpolated into the host-root
-    // `run '...'` payload — see FINDINGS_APP_VULN V2.
+    // `run '...'` payload.
     private suspend fun runRC(containerName: String, serviceName: String, buildCommand: (String) -> String): CommandResult {
         if (!ServiceManagerBase.isSafeServiceName(serviceName)) {
             return CommandResult(exitCode = 2, output = emptyList(), error = listOf("Invalid service name: $serviceName"))

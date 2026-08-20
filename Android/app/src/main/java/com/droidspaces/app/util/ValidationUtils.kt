@@ -33,7 +33,7 @@ object ValidationUtils {
             }
             name.length > MAX_CONTAINER_NAME_LENGTH -> {
                 val message = context?.getString(R.string.error_container_name_too_long)
-                    ?: "Name too long — max $MAX_CONTAINER_NAME_LENGTH characters"
+                    ?: "Name too long, max $MAX_CONTAINER_NAME_LENGTH characters"
                 ValidationResult.Error(message)
             }
             !name.matches(Regex("^[a-zA-Z0-9_\\s.-]+$")) -> {
@@ -48,8 +48,8 @@ object ValidationUtils {
     /**
      * The character-safety half of [validateContainerName], WITHOUT the length
      * limit. Used to drop a container whose on-disk config name carries shell
-     * metacharacters before it can reach a root command — while still loading
-     * over-length-but-safe legacy names. See VULN V10.
+     * metacharacters before it can reach a root command, while still loading
+     * over-length-but-safe legacy names.
      */
     fun isSafeContainerName(name: String): Boolean =
         name.isNotEmpty() && name.matches(Regex("^[a-zA-Z0-9_\\s.-]+$"))
@@ -92,8 +92,8 @@ object ValidationUtils {
      * Reject line breaks / control characters in the single-line container-config
      * values. Each is written as a `key=value` line into the root-owned
      * container.config parsed by the privileged backend, so a newline would inject
-     * an extra trusted key. `envFileContent` is intentionally excluded — it is
-     * legitimately multi-line and written to a separate `.env` file. See VULN V11.
+     * an extra trusted key. `envFileContent` is intentionally excluded, it is
+     * legitimately multi-line and written to a separate `.env` file.
      */
     fun validateConfigValues(config: ContainerInfo): ValidationResult {
         fun hasControl(v: String) = v.any { it.isISOControl() }
@@ -137,7 +137,7 @@ object ValidationUtils {
     private fun ifaceLikeError(value: String, context: Context?): String? = when {
         value.isBlank() -> null
         value.length > IFNAME_MAX ->
-            context?.getString(R.string.error_iface_too_long) ?: "Too long — max $IFNAME_MAX characters"
+            context?.getString(R.string.error_iface_too_long) ?: "Too long, max $IFNAME_MAX characters"
         !value.matches(IFNAME_REGEX) ->
             context?.getString(R.string.error_gateway_name_chars) ?: "Use only letters, digits, _ or -"
         else -> null

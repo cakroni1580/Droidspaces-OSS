@@ -26,7 +26,7 @@ class SystemStatsViewModel(application: Application) : AndroidViewModel(applicat
         private const val CONTAINER_INTERVAL_MS = 2000L
     }
 
-    // Per-container OS info (containerName -> OSInfo) — single source of truth for all UI
+    // Per-container OS info (containerName -> OSInfo), single source of truth for all UI
     var containerUsageMap = mutableStateMapOf<String, ContainerOSInfoManager.OSInfo>()
         private set
 

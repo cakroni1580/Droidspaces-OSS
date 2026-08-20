@@ -34,9 +34,7 @@
 #define DS_KSU_INSTALL_MAGIC2 0xCAFEBABEu
 #define DS_KSU_IOCTL_DISABLE_ESCAPE_TO_ROOT _IO('K', 21)
 
-/* ---------------------------------------------------------------------------
- * Android System Call Filtering (Seccomp)
- * ---------------------------------------------------------------------------*/
+/* Android System Call Filtering (Seccomp) */
 
 /**
  * ds_seccomp_apply_minimal()

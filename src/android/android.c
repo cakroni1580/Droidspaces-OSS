@@ -10,9 +10,7 @@
 #include <fcntl.h>
 #include <grp.h>
 
-/* ---------------------------------------------------------------------------
- * Android detection
- * ---------------------------------------------------------------------------*/
+/* Android detection */
 
 int is_android(void) {
   static int cached_result = -1;
@@ -36,9 +34,7 @@ int is_android(void) {
   return cached_result;
 }
 
-/* ---------------------------------------------------------------------------
- * Android optimizations
- * ---------------------------------------------------------------------------*/
+/* Android optimizations */
 
 void android_optimizations(int enable) {
   if (!is_android())
@@ -76,9 +72,7 @@ void android_optimizations(int enable) {
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Data partition remount (for suid support)
- * ---------------------------------------------------------------------------*/
+/* Data partition remount (for suid support) */
 
 void android_remount_data_suid(void) {
   if (!is_android())
@@ -94,9 +88,7 @@ void android_remount_data_suid(void) {
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Storage
- * ---------------------------------------------------------------------------*/
+/* Storage */
 
 int android_setup_storage(const char *rootfs_path) {
   if (!is_android()) {
@@ -150,11 +142,9 @@ int android_setup_storage(const char *rootfs_path) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * SELinux + Termux privilege helpers
+/* SELinux + Termux privilege helpers
  *
- * Shared by x11.c and pulseaudio-android.c.  Android-specific.
- * ---------------------------------------------------------------------------*/
+ * Shared by x11.c and pulseaudio-android.c.  Android-specific. */
 
 /* SELinux domains to try -- untrusted_app_27 first (matches real Termux) */
 static const char *const untrusted_domains[] = {

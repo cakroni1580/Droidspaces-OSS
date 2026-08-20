@@ -173,7 +173,7 @@ fun ContainerCard(
                 }
             }
 
-            // Options Row — depends only on stable container fields, so build once per container.
+            // Options Row, depends only on stable container fields, so build once per container.
             val options = remember(container) {
                 buildList {
                     if (container.disableIPv6) add(context.getString(R.string.ipv6_option))

@@ -520,16 +520,16 @@ Setting it to `0` tells Linux: "do not run iptables on bridged traffic." This ke
 
 ### Start order and automatic self-healing
 
-All wiring for a gateway-mode client is done **from the host side** by a single function, `gateway_wire_client()`: it ensures the bridge and the gateway-side cable, creates the client's app veth, and moves+renames the peer into the client's namespace as `eth0` (pinned MAC, brought up) — the client's own boot code only brings up `lo`. Because the host owns every step, the same function wires a client whether it is just starting or already running.
+All wiring for a gateway-mode client is done **from the host side** by a single function, `gateway_wire_client()`: it ensures the bridge and the gateway-side cable, creates the client's app veth, and moves+renames the peer into the client's namespace as `eth0` (pinned MAC, brought up). The client's own boot code only brings up `lo`. Because the host owns every step, the same function wires a client whether it is just starting or already running.
 
 This gives a deliberately simple rule keyed on **gateway liveness**:
 
 - **Gateway already running when a client starts** → the client wires immediately (its own monitor calls `gateway_wire_client`).
 - **Gateway not running when a client starts** → the client wires **nothing at all** (no bridge, no veth, no `eth0`) and just boots. The work is deferred entirely to the gateway.
 
-Healing is therefore driven by **the gateway itself**, not by the clients. On every boot cycle the gateway container's monitor calls `ds_net_rewire_gateway_clients()`: it scans the running containers, finds the ones that delegate to this gateway, and runs `gateway_wire_client` for each — establishing the gateway-side `eth1` cable and every client's `eth0` into the gateway's *current* namespace. So when the gateway **starts or reboots**, every running client is (re)wired with **no client restart required**.
+Healing is therefore driven by **the gateway itself**, not by the clients. On every boot cycle the gateway container's monitor calls `ds_net_rewire_gateway_clients()`: it scans the running containers, finds the ones that delegate to this gateway, and runs `gateway_wire_client` for each, establishing the gateway-side `eth1` cable and every client's `eth0` into the gateway's *current* namespace. So when the gateway **starts or reboots**, every running client is (re)wired with **no client restart required**.
 
-Skipping all client wiring while the gateway is down (rather than half-wiring a bridge and a danging veth) also closes a race: a client started before its gateway can have its gateway/LAN settings (`--gateway-net`, `--host-bridge`, …) edited before the gateway comes up, and the gateway then wires every client from each client's *current* config — never a stale one.
+Skipping all client wiring while the gateway is down (rather than half-wiring a bridge and a danging veth) also closes a race: a client started before its gateway can have its gateway/LAN settings (`--gateway-net`, `--host-bridge`, …) edited before the gateway comes up, and the gateway then wires every client from each client's *current* config, never a stale one.
 
 There is exactly **one actor** (the gateway) doing the wiring, so there is nothing to poll and no thundering herd. Wiring is serialised per segment (an advisory file lock) to keep concurrent client starts and the gateway's re-wire from racing. Both `eth1` (gateway side) and each `eth0` (client side) keep a **stable MAC** and are moved+renamed into their namespace in a single atomic step, so the container's own `netifd`/DHCP sees one persistent device rather than re-initialising a churning one.
 

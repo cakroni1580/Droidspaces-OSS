@@ -37,7 +37,7 @@ object ContainerInstaller {
         var createdPaths = mutableListOf<String>()
 
         try {
-            // Reject control chars in single-line config values (VULN V11).
+            // Reject control chars in single-line config values.
             ValidationUtils.validateConfigValues(config).errorMessage?.let {
                 logger.e(it)
                 return@withContext Result.failure(Exception(it))
@@ -275,7 +275,7 @@ object ContainerInstaller {
             }
         } catch (e: Exception) {
             // Fail CLOSED: if the validator itself can't be loaded, do not install an
-            // unverified rootfs — it is later run as root. See FINDINGS_APP_VULN V12.
+            // unverified rootfs, it is later run as root.
             logger.e("Failed to load rootfs validator: ${e.message}")
             throw Exception("Could not verify rootfs: validator unavailable (${e.message})")
         }
@@ -284,7 +284,7 @@ object ContainerInstaller {
             // Make script executable
             val chmodResult = Shell.cmd("chmod 755 \"${scriptFile.absolutePath}\" 2>&1").exec()
             if (!chmodResult.isSuccess) {
-                // Fail CLOSED — see FINDINGS_APP_VULN V12.
+                // Fail CLOSED: never run a validator we could not make executable.
                 logger.e("Failed to make rootfs validator executable")
                 throw Exception("Could not verify rootfs: validator not executable")
             }

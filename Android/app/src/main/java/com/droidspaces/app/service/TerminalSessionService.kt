@@ -60,7 +60,7 @@ class TerminalSessionService : Service() {
          * Swap every session's client to the app-scoped no-op so a disposed terminal
          * screen (its TerminalBackEnd -> Activity/TerminalView) is not retained by this
          * long-lived service. Sessions keep running; the UI re-attaches its own client
-         * on re-entry. See FINDINGS_APP_VULN V16.
+         * on re-entry.
          */
         fun detachAllClients() {
             sessions.values.forEach { it.updateTerminalSessionClient(NoOpTerminalSessionClient) }

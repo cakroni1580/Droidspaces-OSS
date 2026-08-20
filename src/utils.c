@@ -15,9 +15,7 @@
 #include <sys/xattr.h>
 #include <time.h>
 
-/* ---------------------------------------------------------------------------
- * String helpers
- * ---------------------------------------------------------------------------*/
+/* String helpers */
 
 void safe_strncpy(char *dst, const char *src, size_t size) {
   if (!dst || size == 0)
@@ -93,8 +91,7 @@ void sanitize_container_name(const char *name, char *out, size_t size) {
   out[i] = '\0';
 }
 
-/* ---------------------------------------------------------------------------
- * Relative-path resolution
+/* Relative-path resolution
  *
  * The daemon calls chdir("/") inside daemonize(), so any relative path
  * captured from the user's CWD must be made absolute BEFORE we reach the
@@ -106,8 +103,7 @@ void sanitize_container_name(const char *name, char *out, size_t size) {
  *      This works for paths that already exist on disk.
  *   2. For paths that do not exist yet (e.g. a new rootfs image being
  *      created), fall back to a plain cwd-join.  We still strip leading ./
- *      sequences so the result is always absolute.
- * ---------------------------------------------------------------------------*/
+ *      sequences so the result is always absolute. */
 
 char *ds_resolve_path_arg(const char *path) {
   if (!path || !*path)
@@ -416,9 +412,7 @@ int remove_recursive(const char *path) {
   return nftw(path, remove_recursive_handler, 64, FTW_DEPTH | FTW_PHYS);
 }
 
-/* ---------------------------------------------------------------------------
- * File I/O
- * ---------------------------------------------------------------------------*/
+/* File I/O */
 
 int write_file(const char *path, const char *content) {
   int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
@@ -512,9 +506,7 @@ int read_file(const char *path, char *buf, size_t size) {
   return (int)total_read;
 }
 
-/* ---------------------------------------------------------------------------
- * UUID generation  - 32 hex chars from /dev/urandom
- * ---------------------------------------------------------------------------*/
+/* UUID generation  - 32 hex chars from /dev/urandom */
 
 int generate_uuid(char *buf, size_t size) {
   if (!buf || size < DS_UUID_LEN + 1)
@@ -552,9 +544,7 @@ int generate_uuid(char *buf, size_t size) {
   return -1;
 }
 
-/* ---------------------------------------------------------------------------
- * PID collection - read numeric entries from /proc
- * ---------------------------------------------------------------------------*/
+/* PID collection - read numeric entries from /proc */
 
 int collect_pids(pid_t **pids_out, size_t *count_out) {
   if (!pids_out || !count_out)
@@ -611,9 +601,7 @@ int collect_pids(pid_t **pids_out, size_t *count_out) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * /proc path helpers
- * ---------------------------------------------------------------------------*/
+/* /proc path helpers */
 
 int build_proc_root_path(pid_t pid, const char *suffix, char *buf,
                          size_t size) {
@@ -677,9 +665,7 @@ int parse_os_release(const char *rootfs_path, char *id_out, char *ver_out,
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Grep file for a pattern (simple substring search)
- * ---------------------------------------------------------------------------*/
+/* Grep file for a pattern (simple substring search) */
 
 int grep_file(const char *path, const char *pattern) {
   char buf[16384];
@@ -688,9 +674,7 @@ int grep_file(const char *path, const char *pattern) {
   return strstr(buf, pattern) ? 1 : 0;
 }
 
-/* ---------------------------------------------------------------------------
- * PID file helpers
- * ---------------------------------------------------------------------------*/
+/* PID file helpers */
 
 int read_and_validate_pid(const char *pidfile, pid_t *pid_out) {
   if (pid_out)
@@ -736,9 +720,7 @@ int read_and_validate_pid(const char *pidfile, pid_t *pid_out) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Mount sidecar files (.mount)
- * ---------------------------------------------------------------------------*/
+/* Mount sidecar files (.mount) */
 
 /* Convert a pidfile path to a sibling sidecar path with the given extension:
  * foo.pid -> foo<ext> (replacing a trailing .pid, else appending). */
@@ -776,9 +758,7 @@ int remove_mount_path(const char *pidfile) {
   return unlink(mpath);
 }
 
-/* ---------------------------------------------------------------------------
- * Init-type sidecar files (.init)
- * ---------------------------------------------------------------------------*/
+/* Init-type sidecar files (.init) */
 
 /* foo.pid -> foo.init */
 static void pidfile_to_initfile(const char *pidfile, char *buf, size_t size) {
@@ -858,8 +838,7 @@ int remove_init_type(const char *pidfile) {
   return unlink(ipath);
 }
 
-/* ---------------------------------------------------------------------------
- * Kernel firmware search path management
+/* Kernel firmware search path management
  *
  * Android kernels patch firmware_class.c to support a comma-separated list
  * of custom search paths in the single 256-byte fw_path_para buffer
@@ -870,8 +849,7 @@ int remove_init_type(const char *pidfile) {
  *
  * Only called when --hw-access is active AND /lib/firmware exists in the
  * rootfs - both conditions are enforced at every call site.
- * Not supported on desktop Linux - both functions are no-ops there.
- * ---------------------------------------------------------------------------*/
+ * Not supported on desktop Linux - both functions are no-ops there. */
 
 /* Android kernel fw_path_para is 256 bytes including the NUL terminator. */
 #define FW_PATH_BUF_SIZE 256
@@ -990,9 +968,7 @@ void firmware_path_remove(const char *fw_path) {
   write_file(DS_FW_PATH_FILE, new_path);
 }
 
-/* ---------------------------------------------------------------------------
- * Safe Command Execution (fork + execvp)
- * ---------------------------------------------------------------------------*/
+/* Safe Command Execution (fork + execvp) */
 
 static int internal_run(char *const argv[], int quiet) {
   pid_t pid = fork();
@@ -1070,9 +1046,7 @@ int run_command_log(char *const argv[]) {
   return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
-/* ---------------------------------------------------------------------------
- * FD Passing (SCM_RIGHTS)
- * ---------------------------------------------------------------------------*/
+/* FD Passing (SCM_RIGHTS) */
 
 int ds_send_fd(int sock, int fd) {
   struct msghdr msg = {0};
@@ -1120,9 +1094,7 @@ int ds_recv_fd(int sock) {
   return *((int *)CMSG_DATA(cmsg));
 }
 
-/* ---------------------------------------------------------------------------
- * System helpers
- * ---------------------------------------------------------------------------*/
+/* System helpers */
 
 int get_kernel_version(int *major, int *minor) {
   struct utsname uts;
@@ -1319,8 +1291,8 @@ void ds_close_container_log(void) {
 }
 
 void print_ds_banner(void) {
-  printf(C_CYAN C_BOLD "— Welcome to " C_WHITE DS_PROJECT_NAME
-                       " v" DS_VERSION C_CYAN " ! —" C_RESET "\r\n\r\n");
+  printf(C_CYAN C_BOLD "Welcome to " C_WHITE DS_PROJECT_NAME
+                       " v" DS_VERSION C_CYAN " !" C_RESET "\r\n\r\n");
   fflush(stdout);
 }
 
@@ -1621,8 +1593,7 @@ int copy_file(const char *src, const char *dst) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * show_container_usage
+/* show_container_usage
  *
  * Prints uptime, CPU%, and RAM usage for a running container.
  * Works entirely from the host side - no namespace entry required.
@@ -1645,8 +1616,7 @@ int copy_file(const char *src, const char *dst) {
  *   UPTIME=<Xd Xh Xm Xs | Xh Xm Xs>
  *   RAM_USED_KB=<kb>
  *   RAM_TOTAL_KB=<kb>
- *   CPU_PERMILL=<0-1000>
- * ---------------------------------------------------------------------------*/
+ *   CPU_PERMILL=<0-1000> */
 long ds_get_container_uptime(pid_t pid) {
   if (pid <= 0)
     return -1;
@@ -1722,16 +1692,12 @@ int show_container_usage(struct ds_config *cfg) {
     return -1;
   }
 
-  /* -----------------------------------------------------------------------
-   * UPTIME
-   * -----------------------------------------------------------------------*/
+  /* UPTIME */
   long uptime_sec = ds_get_container_uptime(pid);
   char uptime_str[128];
   ds_format_uptime(uptime_sec, uptime_str, sizeof(uptime_str));
 
-  /* -----------------------------------------------------------------------
-   * PID namespace of container init
-   * -----------------------------------------------------------------------*/
+  /* PID namespace of container init */
   char ns_init_path[PATH_MAX];
   snprintf(ns_init_path, sizeof(ns_init_path), "/proc/%d/ns/pid", (int)pid);
   char container_ns[256] = {0};
@@ -1744,9 +1710,7 @@ int show_container_usage(struct ds_config *cfg) {
   }
   container_ns[ns_len] = '\0';
 
-  /* -----------------------------------------------------------------------
-   * WALK 1: collect RAM + CPU sample 1 in a single /proc pass
-   * -----------------------------------------------------------------------*/
+  /* WALK 1: collect RAM + CPU sample 1 in a single /proc pass */
   long ram_used_kb = 0;
   long long cpu_t1 = 0;
   long long cpu_host_t1 = 0;
@@ -1836,9 +1800,7 @@ int show_container_usage(struct ds_config *cfg) {
   struct timespec ts = {0, 250000000L};
   nanosleep(&ts, NULL);
 
-  /* -----------------------------------------------------------------------
-   * WALK 2: CPU sample 2 only
-   * -----------------------------------------------------------------------*/
+  /* WALK 2: CPU sample 2 only */
   long long cpu_t2 = 0;
   long long cpu_host_t2 = 0;
 
@@ -1891,9 +1853,7 @@ int show_container_usage(struct ds_config *cfg) {
   if (cpu_permill > 1000)
     cpu_permill = 1000;
 
-  /* -----------------------------------------------------------------------
-   * Output - machine-parseable key=value, one per line
-   * -----------------------------------------------------------------------*/
+  /* Output - machine-parseable key=value, one per line */
   printf("UPTIME_SEC=%ld\n", uptime_sec);
   printf("UPTIME=%s\n", uptime_str);
   printf("RAM_USED_KB=%ld\n", ram_used_kb);
@@ -1903,9 +1863,7 @@ int show_container_usage(struct ds_config *cfg) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Bind Mount Sorting
- * ---------------------------------------------------------------------------*/
+/* Bind Mount Sorting */
 
 static int compare_bind_mounts(const void *a, const void *b) {
   const struct ds_bind_mount *ma = (const struct ds_bind_mount *)a;
@@ -2437,12 +2395,10 @@ void ds_free_split_flags(char **argv, int argc) {
   free(argv);
 }
 
-/* ---------------------------------------------------------------------------
- * Daemon lifecycle helpers
+/* Daemon lifecycle helpers
  *
  * Shared building blocks for x11.c, virgl-android.c, pulseaudio-android.c,
- * monitor.c, and daemon.c.  Generic (not Android-specific).
- * ---------------------------------------------------------------------------*/
+ * monitor.c, and daemon.c.  Generic (not Android-specific). */
 
 /* Read a daemon PID from <pids_dir>/<filename>; returns pid or -1. */
 pid_t ds_daemon_read_pid(const char *filename) {
@@ -2543,15 +2499,20 @@ void ds_daemon_child_preamble(void) {
 }
 
 int ds_peer_in_pidns(pid_t peer_pid) {
+  /* This is a trust boundary: unless we can positively confirm the peer shares
+   * our PID namespace, deny. A pid of 0 means the peer is not translatable into
+   * our namespace (i.e. outside it), and a failed readlink (e.g. the pid died
+   * and was reaped) means we cannot prove membership -- both must fail closed.
+   * Failing open here lets a caller recycle a dead pid to bypass the guard. */
   if (peer_pid <= 0)
-    return 1; /* unknown -> fail open */
+    return 0; /* not translatable into our ns -> deny */
 
   char path[64], self_ns[64], peer_ns[64];
   ssize_t sn = readlink("/proc/self/ns/pid", self_ns, sizeof(self_ns) - 1);
   snprintf(path, sizeof(path), "/proc/%d/ns/pid", (int)peer_pid);
   ssize_t pn = readlink(path, peer_ns, sizeof(peer_ns) - 1);
   if (sn <= 0 || pn <= 0)
-    return 1; /* cannot determine -> fail open, never wrongly deny */
+    return 0; /* cannot confirm -> deny */
 
   self_ns[sn] = '\0';
   peer_ns[pn] = '\0';

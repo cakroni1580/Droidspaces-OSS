@@ -49,7 +49,7 @@ Droidspaces 在 Android 上旨在提供"零终端"体验。从首次安装到运
 7. **完成**：应用将解压 tarball 并自动应用**解压后修复**（DNS、屏蔽无用/危险的服务以及安全 Udev）。
 
 > [!TIP]
-> 官方仓库包含专为 Android 预配置的发行版。如需更多选择，你可以将 LXC 镜像作为自定义仓库添加——详见使用指南中的 [Rootfs 仓库](./Usage-Android-App.md#rootfs-repository) 章节。
+> 官方仓库包含专为 Android 预配置的发行版。如需更多选择，你可以将 LXC 镜像作为自定义仓库添加——详见使用指南中的 [Rootfs 仓库](./Usage-Android-App.md#rootfs-仓库) 章节。
 
 ### 方式 B：从本地 Tarball 安装
 

@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 /**
  * Shared "Cancel / Confirm" dialog footer: two equal-weight rounded [Surface]
  * buttons. Replaces the identical two-Surface footer that was copy-pasted across
- * the app's dialogs (DT-5). The confirm button dims and disables via
+ * the app's dialogs. The confirm button dims and disables via
  * [confirmEnabled]; [cancelBorderAlpha] and [textFontWeight] keep the small
  * per-dialog cosmetic differences.
  */
@@ -37,33 +37,57 @@ fun DialogFooterRow(
     cancelBorderAlpha: Float = 0.4f,
     textFontWeight: FontWeight = FontWeight.SemiBold,
     confirmColor: Color = MaterialTheme.colorScheme.primary,
-    confirmContentColor: Color = MaterialTheme.colorScheme.onPrimary,
 ) {
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Surface(
-            modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(onClick = onDismiss),
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = cancelBorderAlpha)),
-            tonalElevation = 0.dp
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        tonalElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                Text(dismissLabel, style = MaterialTheme.typography.labelLarge, fontWeight = textFontWeight)
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(onClick = onDismiss),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = cancelBorderAlpha)),
+                tonalElevation = 0.dp
+            ) {
+                Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
+                    Text(dismissLabel, style = MaterialTheme.typography.labelLarge, fontWeight = textFontWeight)
+                }
             }
-        }
-        Surface(
-            modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(enabled = confirmEnabled, onClick = onConfirm),
-            shape = RoundedCornerShape(14.dp),
-            color = if (confirmEnabled) confirmColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-            tonalElevation = 0.dp
-        ) {
-            Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                Text(
-                    confirmLabel,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = textFontWeight,
-                    color = if (confirmEnabled) confirmContentColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                )
+
+            val confirmBtnColor = if (confirmEnabled) confirmColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+            val confirmAccent = if (confirmEnabled) confirmColor else MaterialTheme.colorScheme.outlineVariant
+            val confirmTextColor = if (confirmEnabled) confirmColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(enabled = confirmEnabled, onClick = onConfirm),
+                shape = RoundedCornerShape(16.dp),
+                color = confirmBtnColor,
+                border = BorderStroke(1.dp, confirmAccent.copy(alpha = 0.35f)),
+                tonalElevation = 0.dp
+            ) {
+                Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        confirmLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = textFontWeight,
+                        color = confirmTextColor
+                    )
+                }
             }
         }
     }

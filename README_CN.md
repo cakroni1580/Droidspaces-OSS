@@ -175,7 +175,7 @@ Droidspaces 的设计目标是原生运行在任何搭载 Linux 内核的设备�
 | **初始化系统支持** | 以 PID 1 运行 systemd、OpenRC 或任何其他初始化系统。完整的服务程序管理和规范的启动/关机/重启流程。 |
 | **深度 Android 集成** | 支持两种守护进程模式：**原生 init.rc**（最底层的集成方式，自动生成/不可被终止的持久性）和**用户空间守护进程**（应用内可切换，通过 `post-fs-data.sh` 启动，无需修改镜像）。**两种模式均绕过 root 域 seccomp 限制，确保容器生命周期稳定** [[init.rc 开发者指南](./init/README_CN.md)]。 |
 | **命名空间隔离** | 通过 PID、MNT、UTS、IPC 以及 Cgroup 命名空间实现完全隔离。每个容器拥有自己的进程树、挂载表、主机名、IPC 资源和 cgroup 层级。 |
-| **网络隔离** | **3 种网络模式（Host、NAT、None）**。通过 `CLONE_NEWNET` 实现纯网络隔离（NAT/None 模式）或共享宿主机网络（Host 模式）。在 Android 和 Linux 版本上均可使用。 |
+| **网络隔离** | **4 种网络模式（主机模式、NAT 模式、无网络模式、网关模式）**。通过 `CLONE_NEWNET` 实现纯网络隔离（NAT 模式、无网络模式和网关模式）或共享宿主机网络（主机模式）。NAT 模式会自动检测活跃上行链路（也可用 `--upstream` 手动固定）；网关模式可将 LAN/DHCP/防火墙委托给 OpenWRT 等另一个容器。在 Android 和 Linux 上均可使用。 |
 | **Android 显示与 GPU** | 三种加速模式：**llvmpipe**（软件渲染，适用所有设备）、**VirGL**（Mali/PowerVR）和 **Turnip**（原生高通/Adreno）。自 v6.3.0 起，X 服务器和 VirGL 服务器在容器启动时自动拉起，无需任何 Termux 命令。环境变量（`DISPLAY=:5`、`GALLIUM_DRIVER=virpipe`）自动注入。[[更多信息](./Documentation/zh-CN/Graphics-and-Audio.md)] |
 | **Android 音效** | PulseAudio 守护进程以 Termux 用户身份在宿主机上运行，使 Android 音频 HAL 授予其设备访问权限。套接字以绑定挂载方式挂载到容器的 `/tmp/.pulse-socket`，`PULSE_SERVER` 自动注入，音效开箱即用。[[更多信息](./Documentation/zh-CN/Graphics-and-Audio.md#pulseaudio)] |
 | **Linux GPU 加速** | 在 Linux 桌面端上无需额外配置 AMD 和 Intel GPU 硬件加速。[[更多信息](./Documentation/zh-CN/Graphics-and-Audio.md)] |
@@ -215,7 +215,7 @@ Droidspaces 的设计目标是原生运行在任何搭载 Linux 内核的设备�
 | **Android 端容器持久性** | **真正的不可终止。存活超过 15 天。完全免疫开发者选项中的"不保留活动"和"无后台进程"。** | 低（会被 Android LMK / 电池优化杀死） | 低（被 Android LMK / 电池优化杀死） | 低（会被 Android LMK / 电池优化杀死） | 低（被 Android LMK / 电池优化杀死） |
 | **数据持久性（应用卸载）** | **零数据丢失。所有容器、配置和数据保存在 `/data/local/Droidspaces`，完全独立于应用。二进制和守护进程在自己的进程会话中运行（`setsid`），与应用的进程组分离。卸载应用不会停止任何东西，也不会删除任何数据。** | 卸载 Termux 后一切消亡。LXC 配置和 rootfs 存储在 Termux 内部（`/data/data/com.termux`），卸载 Termux 会清除一切。 | 卸载 Termux 后一切消亡。`/data/docker` 中的容器数据保留，但若不重新安装整套工具链则无法访问。 | 若 rootfs 在 `/data/local/` 中则安全。若存储在 Termux 主目录内则不安全。 | 卸载 Termux 后一切消亡。PRoot rootfs 通常位于 `/data/data/com.termux`，卸载 Termux 时一并删除。 |
 | **开机自启** | **支持（原生 `init.rc` / `service.d`）。即使手机锁定、`/data` 加密，甚至在任何用户应用启动之前，即可自动启动容器。** | 不支持 | 不支持 | 不支持 | 不支持 |
-| **Android 端网络隔离** | **同类首创。完整的 NAT/Veth + 互联网访问开箱即用。无需手动配置。** | 仅主机网络模式下互联网可用（`lxc.net.0.type = none`）。真正的网络隔离（veth + NAT）通常需要手动设置网桥、iptables 和 ip_forward，且在大多数设备上仍然不可用。 | 需要 `--network host` 才能上网；真正的带互联网访问的网络隔离在 Android 上通常无法可靠工作。 | 无（没有网络命名空间） | 无（没有网络命名空间） |
+| **Android 端网络隔离** | **同类首创。完整的 NAT/Veth + 互联网访问开箱即用。无需手动配置。** | 仅主机模式下互联网可用（`lxc.net.0.type = none`）。真正的网络隔离（veth + NAT）通常需要手动设置网桥、iptables 和 ip_forward，且在大多数设备上仍然不可用。 | 需要 `--network host` 才能上网；真正的带互联网访问的网络隔离在 Android 上通常无法可靠工作。 | 无（没有网络命名空间） | 无（没有网络命名空间） |
 | **硬件与原生 GPU 直通** | **完全（一键开关）。Adreno Turnip、USB、传感器、网络接口、块设备。完整的 `systemd-udevd` 支持，如同真正的 Linux PC。** | 手动绑定挂载，无 udev | 手动绑定挂载，无 udev | 手动绑定挂载，无 udev | 无 |
 | **Termux-X11 支持** | **完全（一键开关）。X 服务器和 VirGL 服务器在容器启动时自动拉起。环境变量（`DISPLAY=:5`、`GALLIUM_DRIVER=virpipe`）自动注入。** | 手动套接字透传 | 手动套接字透传 | 手动套接字透传 | 手动套接字透传 |
 | **特权模式** | **完全 + 可定制（`--nomask`、`--nocaps`、`--noseccomp` 等）** | 手动配置 | 支持（`--privileged`） | 完全（无任何防护） | 不支持 |
@@ -387,6 +387,7 @@ GPU 加速方式、音效配置、桌面环境自动启动原理以及 Linux 桌
 | 文档 | 描述 |
 |----------|-------------|
 | [功能深度解析](./Documentation/zh-CN/Features.md) | 每个主要功能的详细说明。 |
+| [从零开始的网络基础](./Documentation/zh-CN/Networking-From-Zero.md) | 面向初学者解释 Droidspaces 背后的网络概念——NAT、自动上行检测、`--upstream` 固定以及基于 OpenWRT 的网关模式。 |
 | [显示、音频与桌面指南](./Documentation/zh-CN/Graphics-and-Audio.md) | Android 和 Linux 上的 GPU 加速、PulseAudio 音效与桌面环境自动启动。 |
 | [你可以做的酷炫事情（Tailscale、Docker 等）](./Documentation/zh-CN/Cool-things-you-can-do.md) | 在容器内运行 Tailscale、Docker 等工具的实用配置方案。 |
 | [卸载指南](./Documentation/zh-CN/Uninstallation.md) | 如何从系统中移除 Droidspaces。 |

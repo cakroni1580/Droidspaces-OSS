@@ -27,7 +27,7 @@ import kotlinx.coroutines.delay
  * - Hardware-accelerated indicator with graphicsLayer
  * - Material You theming integration
  * - No redundant state management (removed unused triggerRefresh)
- * - Smooth spring animation on release — indicator slides to resting
+ * - Smooth spring animation on release, indicator slides to resting
  *   position instead of teleporting (fixes the jump-on-release bug)
  *
  * Performance characteristics:
@@ -67,7 +67,7 @@ fun PullToRefreshWrapper(
     //
     // M3's PullToRefreshContainer internally uses an Animatable for verticalOffset,
     // but in some BOM versions the Animatable snaps (instead of animating) when
-    // isRefreshing flips to true — causing the visible "jump". We work around this
+    // isRefreshing flips to true, causing the visible "jump". We work around this
     // by reading state.verticalOffset and re-applying it through animateFloatAsState
     // with a spring so the transition from any pull distance to the resting position
     // is always a smooth slide.

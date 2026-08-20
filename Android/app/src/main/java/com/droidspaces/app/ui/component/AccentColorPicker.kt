@@ -30,7 +30,7 @@ fun AccentColorPicker(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        // Section header — transparent container so it matches the surrounding
+        // Section header, transparent container so it matches the surrounding
         // Settings rows (Language / SwitchItem) instead of the darker default surface.
         ListItem(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),

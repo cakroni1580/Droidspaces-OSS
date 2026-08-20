@@ -33,9 +33,7 @@
 #include <sys/eventfd.h>
 #include <sys/ioctl.h>
 
-/* ---------------------------------------------------------------------------
- * DHCP wire protocol constants  (RFC 2131 / RFC 2132)
- * ---------------------------------------------------------------------------*/
+/* DHCP wire protocol constants  (RFC 2131 / RFC 2132) */
 
 #define DHCP_SERVER_PORT 67
 #define DHCP_CLIENT_PORT 68
@@ -67,12 +65,10 @@
 #define DHCP_T1_SEC 43200u    /* 12 h */
 #define DHCP_T2_SEC 75600u    /* 21 h */
 
-/* ---------------------------------------------------------------------------
- * DHCP packet layout  (RFC 2131 §2 fixed-format fields)
+/* DHCP packet layout  (RFC 2131 §2 fixed-format fields)
  *
  * Total: 44 + 16 + 64 + 128 + 4 + 308 = 564 bytes ≤ 576 minimum MTU.
- * The options field is large enough for all options we ever send.
- * ---------------------------------------------------------------------------*/
+ * The options field is large enough for all options we ever send. */
 
 struct dhcp_pkt {
   uint8_t op;    /* 1=REQUEST, 2=REPLY               */
@@ -93,12 +89,10 @@ struct dhcp_pkt {
   uint8_t options[308];
 } __attribute__((packed));
 
-/* ---------------------------------------------------------------------------
- * Module-level state - one context per monitor process
+/* Module-level state - one context per monitor process
  *
  * Droidspaces runs a separate monitor process per container, so a single
- * global context is sufficient and avoids any cross-container state sharing.
- * ---------------------------------------------------------------------------*/
+ * global context is sufficient and avoids any cross-container state sharing. */
 
 typedef struct {
   int sock;
@@ -123,9 +117,7 @@ typedef struct {
 static ds_dhcp_ctx_t g_dhcp;
 static pthread_mutex_t g_dhcp_lock = PTHREAD_MUTEX_INITIALIZER;
 
-/* ---------------------------------------------------------------------------
- * Option helpers
- * ---------------------------------------------------------------------------*/
+/* Option helpers */
 
 /* Append a single DHCP option into buf[*pos].  Returns 0 on success. */
 static int opt_put(uint8_t *buf, int *pos, int buflen, uint8_t code,
@@ -174,9 +166,7 @@ static int opt_get(const uint8_t *opts, int opts_len, uint8_t code,
   return -1;
 }
 
-/* ---------------------------------------------------------------------------
- * Checksum helpers
- * ---------------------------------------------------------------------------*/
+/* Checksum helpers */
 static uint16_t checksum(const void *data, size_t len) {
   uint32_t sum = 0;
   const uint16_t *buf = (const uint16_t *)data;
@@ -191,12 +181,10 @@ static uint16_t checksum(const void *data, size_t len) {
   return (uint16_t)(~sum);
 }
 
-/* ---------------------------------------------------------------------------
- * Reply builder
+/* Reply builder
  *
  * Constructs a DHCPOFFER or DHCPACK into *reply.
- * Returns the total packet length to send.
- * ---------------------------------------------------------------------------*/
+ * Returns the total packet length to send. */
 
 static int build_reply(struct dhcp_pkt *reply, const struct dhcp_pkt *req,
                        uint8_t msg_type, const ds_dhcp_ctx_t *ctx) {
@@ -245,13 +233,11 @@ static int build_reply(struct dhcp_pkt *reply, const struct dhcp_pkt *req,
   return (int)offsetof(struct dhcp_pkt, options) + pos;
 }
 
-/* ---------------------------------------------------------------------------
- * Reply transmitter
+/* Reply transmitter
  *
  * Always broadcasts to 255.255.255.255:68.  The veth pair is a private
  * point-to-point link so broadcast reaches only the container - no ARP
- * dependency during initial address acquisition.
- * ---------------------------------------------------------------------------*/
+ * dependency during initial address acquisition. */
 
 static int send_reply(int sock, int ifindex, const struct dhcp_pkt *pkt,
                       int pkt_len, const ds_dhcp_ctx_t *ctx) {
@@ -315,9 +301,7 @@ static int send_reply(int sock, int ifindex, const struct dhcp_pkt *pkt,
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Core server loop (runs as joinable thread)
- * ---------------------------------------------------------------------------*/
+/* Core server loop (runs as joinable thread) */
 
 static void *dhcp_server_loop(void *arg) {
   ds_dhcp_ctx_t *ctx = (ds_dhcp_ctx_t *)arg;
@@ -533,9 +517,7 @@ out:
   return NULL;
 }
 
-/* ---------------------------------------------------------------------------
- * Public API
- * ---------------------------------------------------------------------------*/
+/* Public API */
 
 void ds_dhcp_server_start(struct ds_config *cfg, const char *veth_host,
                           uint32_t offer_ip_be, uint32_t gw_ip_be) {

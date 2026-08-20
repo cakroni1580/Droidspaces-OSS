@@ -54,7 +54,7 @@ class ContainerUsageViewModel(application: Application) : AndroidViewModel(appli
         updateJob = viewModelScope.launch(Dispatchers.IO) {
             while (true) {
                 // Collect usage for all monitored containers concurrently, but AWAIT the
-                // whole tick before sleeping — so slow collectors can't let successive
+                // whole tick before sleeping, so slow collectors can't let successive
                 // ticks pile up an unbounded number of in-flight child coroutines.
                 val results = coroutineScope {
                     containerNames.map { containerName ->

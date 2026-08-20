@@ -15,7 +15,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-/* ---- helpers ---------------------------------------------------------- */
+/* helpers */
 
 /*
  * Resolve the Termux UID from packages.list.
@@ -72,7 +72,7 @@ static void inject_skcodec_preload(void) {
   ds_log("[PulseAudio] LD_PRELOAD += %s (Samsung OpenSL ES fix)", lib);
 }
 
-/* ---- daemon child ----------------------------------------------------- */
+/* daemon child */
 
 struct pulse_args {
   int uid;
@@ -141,7 +141,7 @@ static void pulse_child_wrapper(int ready_fd, void *user_data) {
   _exit(1);
 }
 
-/* ---- pactl post-start helper ------------------------------------------ */
+/* pactl post-start helper */
 
 /*
  * Run 'pactl set-default-sink AAudio_sink' once the socket is up.
@@ -178,7 +178,7 @@ static void run_pactl_set_default(int uid) {
   waitpid(p, NULL, 0);
 }
 
-/* ---- stale config nuke ------------------------------------------------ */
+/* stale config nuke */
 
 #define PA_CONFIG_DIR TX11_HOME "/.config/pulse"
 
@@ -195,7 +195,7 @@ static void nuke_pulse_config(void) {
   remove_recursive(PA_CONFIG_DIR);
 }
 
-/* ---- spawn ------------------------------------------------------------ */
+/* spawn */
 
 static pid_t spawn_pulse(int uid) {
   struct pulse_args args = {.uid = uid};
@@ -203,7 +203,7 @@ static pid_t spawn_pulse(int uid) {
                          "PulseAudio");
 }
 
-/* ---- public API ------------------------------------------------------- */
+/* public API */
 
 int ds_pulse_daemon_start(struct ds_config *cfg) {
   if (!cfg || !cfg->pulseaudio || !is_android())
@@ -257,7 +257,7 @@ void ds_pulse_daemon_stop(struct ds_config *cfg) {
                         "pulse.ppid", TX11_PULSE_SOCKET, "[PulseAudio]");
 }
 
-/* ---- socket bridge ---------------------------------------------------- */
+/* socket bridge */
 
 int ds_setup_pulse_socket(struct ds_config *cfg) {
   if (!is_android() || !cfg->pulseaudio)

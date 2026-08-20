@@ -11,7 +11,7 @@ import com.droidspaces.app.R
 object IconUtils {
 
     // Returns drawable res ID for a distro name, or null for fallback (Storage icon).
-    // Safe to call from any thread — no Compose context needed.
+    // Safe to call from any thread, no Compose context needed.
     fun getDistroIconRes(name: String?): Int? {
         val s = name ?: return null
         return when {

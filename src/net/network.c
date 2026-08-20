@@ -24,9 +24,7 @@
 #include <sys/file.h>
 #include <sys/ioctl.h>
 
-/* ---------------------------------------------------------------------------
- * Internal helpers
- * ---------------------------------------------------------------------------*/
+/* Internal helpers */
 
 /* Host-side veth prefix for an application container.  NAT containers use
  * "ds-v"; gateway clients use "ds-c" so the NAT-mode "last container" refcount
@@ -244,9 +242,7 @@ static int netns_has_link(const char *netns_path, const char *ifname) {
   return present;
 }
 
-/* ---------------------------------------------------------------------------
- * Uplink routing globals - shared by android routing setup and monitor
- * ---------------------------------------------------------------------------*/
+/* Uplink routing globals - shared by android routing setup and monitor */
 
 static int g_current_gw_table = 0;
 static pthread_mutex_t g_gw_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -297,8 +293,7 @@ static int iface_is_running(const char *ifname) {
   return ret;
 }
 
-/* ---------------------------------------------------------------------------
- * Built-in uplink classification (no user configuration)
+/* Built-in uplink classification (no user configuration)
  *
  * k_uplink_patterns: the only interface families that terminate internet
  * access on Android, highest precedence first - Wi-Fi STA, ethernet
@@ -311,8 +306,7 @@ static int iface_is_running(const char *ifname) {
  * the router, these face clients, not the internet).  tun/ppp are VPN
  * tunnels which container traffic intentionally bypasses (see the
  * DS_RULE_PRIO_* rationale in droidspace.h).  The rest are loopback,
- * placeholders, and our own bridge/veth devices.
- * ---------------------------------------------------------------------------*/
+ * placeholders, and our own bridge/veth devices. */
 
 static const char *const k_uplink_patterns[] = {
     "wlan*", "eth*", "v4-*", "rmnet*", "*ccmni*",
@@ -332,9 +326,7 @@ static int uplink_name_excluded(const char *ifname) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Public helper: populate a ds_net_handshake from a container init PID
- * ---------------------------------------------------------------------------*/
+/* Public helper: populate a ds_net_handshake from a container init PID */
 
 void ds_net_derive_handshake(pid_t init_pid, struct ds_config *cfg,
                              struct ds_net_handshake *hs) {
@@ -352,9 +344,7 @@ void ds_net_derive_handshake(pid_t init_pid, struct ds_config *cfg,
     hs->ip_str[0] = '\0';
 }
 
-/* ---------------------------------------------------------------------------
- * Host-side networking setup (before container boot)
- * ---------------------------------------------------------------------------*/
+/* Host-side networking setup (before container boot) */
 
 int ds_get_dns_servers(const char *custom_dns, char *out, size_t size) {
   out[0] = '\0';
@@ -387,9 +377,7 @@ int ds_get_dns_servers(const char *custom_dns, char *out, size_t size) {
   return count;
 }
 
-/* ---------------------------------------------------------------------------
- * Static NAT IP: validation, collision check, and resolution
- * ---------------------------------------------------------------------------*/
+/* Static NAT IP: validation, collision check, and resolution */
 
 int ds_net_validate_static_ip(const char *ip_str, char *errbuf,
                               size_t errsize) {
@@ -582,14 +570,12 @@ int fix_networking_host(struct ds_config *cfg) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Android-specific policy routing
+/* Android-specific policy routing
  *
  * Detects the active uplink (the routing table netd designates as the
  * default internet network), then injects low-priority ip rules to direct
  * container traffic through that table.  Fully automatic - the route
- * monitor keeps the rule in sync across wifi <-> mobile-data handoffs.
- * ---------------------------------------------------------------------------*/
+ * monitor keeps the rule in sync across wifi <-> mobile-data handoffs. */
 
 /* Forward declaration - defined later in this file after route monitor globals
  */
@@ -671,9 +657,7 @@ static void ds_net_setup_android_routing(ds_nl_ctx_t *ctx) {
             "- container reachability may be degraded");
 }
 
-/* ---------------------------------------------------------------------------
- * TX checksum disable (Samsung/MTK kernel workaround)
- * ---------------------------------------------------------------------------*/
+/* TX checksum disable (Samsung/MTK kernel workaround) */
 
 int ds_net_disable_tx_checksum(const char *ifname) {
   int fd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
@@ -694,8 +678,7 @@ int ds_net_disable_tx_checksum(const char *ifname) {
   return (ret < 0) ? -errno : 0;
 }
 
-/* ---------------------------------------------------------------------------
- * install_netfilter_rules
+/* install_netfilter_rules
  *
  * Install (or reinstall) the host-side netfilter rules for this container's
  * topology.  Counterpart to install_policy_rules(): the single source of truth
@@ -703,8 +686,7 @@ int ds_net_disable_tx_checksum(const char *ifname) {
  * monitor after netd flushes the tables.  Every helper is idempotent.
  *
  * Reads the g_host_* snapshot rather than cfg, so the monitor thread can call
- * it without reaching into a struct the reboot path rewrites in place.
- * ---------------------------------------------------------------------------*/
+ * it without reaching into a struct the reboot path rewrites in place. */
 
 /* Interface the filter rules match on: bridge mode filters on the bridge,
  * bridgeless PTP filters on the veth itself.  Shared by the installer and the
@@ -733,8 +715,7 @@ static void install_netfilter_rules(void) {
                             g_host_container_ip);
 }
 
-/* ---------------------------------------------------------------------------
- * setup_veth_host_side
+/* setup_veth_host_side
  *
  * Called from the Monitor process AFTER receiving the "ready" signal from the
  * container init (via net_ready_pipe).
@@ -746,8 +727,7 @@ static void install_netfilter_rules(void) {
  *   4. Disable TX checksum on host veth (Samsung/MTK workaround)
  *   5. Attach host veth to bridge, bring up
  *   6. Move peer veth into container's network namespace
- *   7. Android policy routing
- * ---------------------------------------------------------------------------*/
+ *   7. Android policy routing */
 
 int setup_veth_host_side(struct ds_config *cfg, pid_t child_pid) {
   char veth_host[IFNAMSIZ], veth_peer[IFNAMSIZ];
@@ -962,15 +942,13 @@ int setup_veth_host_side(struct ds_config *cfg, pid_t child_pid) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Gateway segment lock
+/* Gateway segment lock
  *
  * One advisory file lock per delegated LAN segment (keyed on the bridge name).
  * Serialises (re)creation of the single shared gateway-side veth + bridge
  * across the independent monitor processes that touch a segment - concurrent
  * client starts, and the gateway re-wiring its clients on (re)boot - so they
- * cannot race each other into EEXIST half-states.
- * ---------------------------------------------------------------------------*/
+ * cannot race each other into EEXIST half-states. */
 
 static int gateway_segment_lock(const char *bridge) {
   char path[PATH_MAX];
@@ -996,9 +974,7 @@ static void gateway_segment_unlock(int fd) {
   close(fd);
 }
 
-/* ---------------------------------------------------------------------------
- * Gateway liveness
- * ---------------------------------------------------------------------------*/
+/* Gateway liveness */
 
 /* Resolve the gateway container's init pid, or 0 if it is not running. */
 static pid_t gateway_pid_of(const char *name) {
@@ -1015,8 +991,7 @@ static pid_t gateway_pid_of(const char *name) {
   return p > 0 ? p : 0;
 }
 
-/* ---------------------------------------------------------------------------
- * gateway_ensure_lan_uplink_locked
+/* gateway_ensure_lan_uplink_locked
  *
  * Ensure the shared half of a delegated LAN segment is wired into the running
  * gateway container.  The caller holds the segment lock and has already
@@ -1032,8 +1007,7 @@ static pid_t gateway_pid_of(const char *name) {
  * just-rebooted) netns.  This is what heals clients after a gateway restart,
  * with no client restart.
  *
- * Returns 0 when the gateway-side cable is up, -1 on a netlink failure.
- * ---------------------------------------------------------------------------*/
+ * Returns 0 when the gateway-side cable is up, -1 on a netlink failure. */
 
 static int gateway_ensure_lan_uplink_locked(struct ds_config *cfg,
                                             pid_t gw_pid) {
@@ -1169,8 +1143,7 @@ static int gateway_ensure_lan_uplink_locked(struct ds_config *cfg,
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * gateway_wire_client
+/* gateway_wire_client
  *
  * Fully wire ONE gateway-mode client into its delegated LAN, entirely from the
  * host side.  Because the host owns every step - including renaming the peer to
@@ -1183,8 +1156,7 @@ static int gateway_ensure_lan_uplink_locked(struct ds_config *cfg,
  * pin the client's stable MAC, attach the host end to the bridge, then
  * move+rename the peer into the client netns as eth0 (up).  Returns 0 on
  * success.  Caller passes the client's init pid and the confirmed-running
- * gateway's init pid.
- * ---------------------------------------------------------------------------*/
+ * gateway's init pid. */
 
 static int gateway_wire_client(struct ds_config *cfg, pid_t client_pid,
                                pid_t gateway_pid) {
@@ -1277,8 +1249,7 @@ out:
   return ret;
 }
 
-/* ---------------------------------------------------------------------------
- * setup_gateway_veth_side
+/* setup_gateway_veth_side
  *
  * Called at client start.  OpenWrt gateway mode: Droidspaces owns only the L2
  * plumbing (bridge + veths), never NAT/DHCP/DNS/firewall - the gateway
@@ -1289,8 +1260,7 @@ out:
  * client itself when it (re)boots (ds_net_rewire_gateway_clients).  Deferring
  * instead of half-wiring also closes a race - a client started before its
  * gateway must not bake in gateway/LAN settings the user may still edit before
- * the gateway comes up.
- * ---------------------------------------------------------------------------*/
+ * the gateway comes up. */
 
 int setup_gateway_veth_side(struct ds_config *cfg, pid_t child_pid) {
   if (!cfg || !cfg->gateway_container[0]) {
@@ -1316,8 +1286,7 @@ int setup_gateway_veth_side(struct ds_config *cfg, pid_t child_pid) {
   return gateway_wire_client(cfg, child_pid, gw_pid);
 }
 
-/* ---------------------------------------------------------------------------
- * ds_net_rewire_gateway_clients
+/* ds_net_rewire_gateway_clients
  *
  * Gateway self-heal, driven by the gateway itself.  On every boot the gateway
  * container's monitor calls this: it scans the running containers for the ones
@@ -1328,8 +1297,7 @@ int setup_gateway_veth_side(struct ds_config *cfg, pid_t child_pid) {
  *
  * This restores clients after the gateway (re)boots - its old netns died and
  * took the LAN cable with it - and wires clients that were started while the
- * gateway was down.  One actor, no client restart.
- * ---------------------------------------------------------------------------*/
+ * gateway was down.  One actor, no client restart. */
 void ds_net_rewire_gateway_clients(const char *gateway_name,
                                    pid_t gateway_pid) {
   if (!gateway_name || !gateway_name[0] || gateway_pid <= 0)
@@ -1362,8 +1330,7 @@ void ds_net_rewire_gateway_clients(const char *gateway_name,
   closedir(d);
 }
 
-/* ---------------------------------------------------------------------------
- * ds_net_gateway_teardown
+/* ds_net_gateway_teardown
  *
  * Called when a container that ACTS AS A GATEWAY stops.  The gateway-side veth
  * ds-g<hash> lives in the host netns; its peer is the gateway's eth1.  When the
@@ -1379,8 +1346,7 @@ void ds_net_rewire_gateway_clients(const char *gateway_name,
  * bridge once no client veths remain on it.  Per-segment work runs under the
  * same advisory lock client setup/cleanup use, and bridges are de-duplicated
  * since many clients can share one segment.  A no-op for a container that is
- * nobody's gateway.
- * ---------------------------------------------------------------------------*/
+ * nobody's gateway. */
 void ds_net_gateway_teardown(const char *gateway_name) {
   if (!gateway_name || !gateway_name[0])
     return;
@@ -1461,11 +1427,9 @@ void ds_net_gateway_teardown(const char *gateway_name) {
   closedir(d);
 }
 
-/* ---------------------------------------------------------------------------
- * setup_veth_child_side_named
+/* setup_veth_child_side_named
  *
- * Called from internal_boot() INSIDE the container's new network namespace.
- * ---------------------------------------------------------------------------*/
+ * Called from internal_boot() INSIDE the container's new network namespace. */
 
 int setup_veth_child_side_named(struct ds_config *cfg, const char *peer_name,
                                 const char *ip_str) {
@@ -1530,8 +1494,7 @@ int setup_veth_child_side_named(struct ds_config *cfg, const char *peer_name,
 
 /* Compatibility wrapper */
 
-/* ---------------------------------------------------------------------------
- * /etc/resolv.conf wiring (inside container, after pivot_root)
+/* /etc/resolv.conf wiring (inside container, after pivot_root)
  *
  * Single source of truth for the container's resolver. Two cases:
  *
@@ -1547,8 +1510,7 @@ int setup_veth_child_side_named(struct ds_config *cfg, const char *peer_name,
  *      /run/droidspaces/resolv.conf and symlink it.
  *
  * This replaces the old /run/resolvconf duct-tape, which clobbered the distro's
- * resolver and left a dangling symlink in gateway mode.
- * ---------------------------------------------------------------------------*/
+ * resolver and left a dangling symlink in gateway mode. */
 static void setup_resolv_conf(struct ds_config *cfg) {
   const char *target;
 
@@ -1581,9 +1543,7 @@ static void setup_resolv_conf(struct ds_config *cfg) {
             strerror(errno));
 }
 
-/* ---------------------------------------------------------------------------
- * Rootfs-side networking setup (inside container, after pivot_root)
- * ---------------------------------------------------------------------------*/
+/* Rootfs-side networking setup (inside container, after pivot_root) */
 
 int fix_networking_rootfs(struct ds_config *cfg) {
   /* 1. Hostname */
@@ -1647,9 +1607,7 @@ int fix_networking_rootfs(struct ds_config *cfg) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Runtime introspection
- * ---------------------------------------------------------------------------*/
+/* Runtime introspection */
 
 int detect_ipv6_in_container(pid_t pid) {
   char path[PATH_MAX];
@@ -1664,8 +1622,7 @@ int detect_ipv6_in_container(pid_t pid) {
   return (buf[0] == '0') ? 1 : 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Uplink Route Monitor
+/* Uplink Route Monitor
  *
  * Watches FIB rule, route, link, and IPv4 address changes on the host.
  * When a relevant change is detected it re-probes which uplink is currently
@@ -1680,8 +1637,7 @@ int detect_ipv6_in_container(pid_t pid) {
  *   RTM_NEWADDR / RTM_DELADDR   - IPv4 address assigned or removed
  *
  * A 1.5s heartbeat covers devices with broken netlink notifications and
- * re-asserts ip_forward, which Android periodically resets.
- * ---------------------------------------------------------------------------*/
+ * re-asserts ip_forward, which Android periodically resets. */
 
 /* Last detected uplink interface.  Suppresses the "[NET] active uplink:"
  * log line on every heartbeat - only log when the result changes. */
@@ -2257,9 +2213,7 @@ void ds_net_start_route_monitor(void) {
   pthread_mutex_unlock(&g_gw_mutex);
 }
 
-/* ---------------------------------------------------------------------------
- * Network cleanup (called on container stop)
- * ---------------------------------------------------------------------------*/
+/* Network cleanup (called on container stop) */
 
 void ds_net_cleanup(struct ds_config *cfg, pid_t container_pid) {
   /* If this container is a gateway for others, explicitly tear down the

@@ -93,7 +93,7 @@ CONFIG_FW_LOADER=y
 CONFIG_FW_LOADER_USER_HELPER=y
 CONFIG_FW_LOADER_COMPRESS=y
 
-# Droidspaces 网络隔离支持 - NAT/None 模式
+# Droidspaces 网络隔离支持 - NAT 模式和无网络模式
 CONFIG_NET_NS=y
 CONFIG_VETH=y
 CONFIG_BRIDGE=y
@@ -121,6 +121,9 @@ CONFIG_IP_NF_NAT=y
 
 # 在旧内核上禁用此选项以使互联网正常工作
 CONFIG_ANDROID_PARANOID_NETWORK=n
+
+# 修复 Docker unsafe procfs 错误
+CONFIG_USER_NS=y
 ```
 
 <a id="additional-kernel-configuration-for-ufwfail2ban"></a>
@@ -246,6 +249,9 @@ CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
 
 # --- 以下配置为可选但建议开启 ---
 
+# 修复 Docker unsafe procfs 错误
+CONFIG_USER_NS=y
+
 # UFW 支持
 CONFIG_NETFILTER_XT_TARGET_REJECT=y
 CONFIG_NETFILTER_XT_TARGET_LOG=y
@@ -299,7 +305,7 @@ su -c droidspaces check
 - Root 访问权限
 - 内核版本（最低 3.18）
 - PID、MNT、UTS、IPC 命名空间
-- 网络命名空间（可选，NAT/None 模式需要）
+- 网络命名空间（可选，NAT 模式和无网络模式需要）
 - Cgroup 命名空间（可选，用于现代 cgroup 隔离）
 - devtmpfs 支持
 - OverlayFS 支持（可选，用于易失模式）
@@ -327,7 +333,7 @@ su -c droidspaces check
 | Cgroup device | `CONFIG_CGROUP_DEVICE=y` | **致命。** 容器无法启动。 |
 | devtmpfs | `CONFIG_DEVTMPFS=y` | **致命。** Droidspaces 无法设置 `/dev`。 |
 | OverlayFS | `CONFIG_OVERLAY_FS` | 易失模式不可用。 |
-| 网络命名空间 | `CONFIG_NET_NS=y` | NAT 和 None 模式不可用。 |
+| 网络命名空间 | `CONFIG_NET_NS=y` | NAT 模式和无网络模式不可用。 |
 | VETH / Bridge | `CONFIG_VETH` / `CONFIG_BRIDGE` | NAT 模式不可用。 |
 | Seccomp | `CONFIG_SECCOMP=y` | Seccomp 防护盾已禁用。存在安全风险。 |
 

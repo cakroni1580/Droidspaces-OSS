@@ -33,10 +33,10 @@ import com.termux.terminal.TerminalSessionClient
 object DroidspacesTerminalSession {
 
     // Container names allow letters, digits, spaces, '_', '.', '-' (mirrors
-    // ValidationUtils.validateContainerName) — none are shell metacharacters, so
+    // ValidationUtils.validateContainerName), none are shell metacharacters, so
     // a validated name is safe inside the "..." payload. A username discovered
     // from the container's /etc/passwd is NOT validated elsewhere, so it is
-    // checked here too. See FINDINGS_APP_VULN V7.
+    // checked here too.
     private val SAFE_NAME = Regex("^[a-zA-Z0-9_\\s.-]+$")
     private val SAFE_USER = Regex("^[A-Za-z0-9_.@:+-]+$")
 
@@ -49,7 +49,7 @@ object DroidspacesTerminalSession {
         return if (safeName != null) {
             // Reject any username carrying shell metacharacters; fall back to root.
             val user = containerUser?.takeIf { SAFE_USER.matches(it) } ?: "root"
-            // safeName cannot contain " / ' / $ / ` — keep the escape as belt-and-suspenders.
+            // safeName cannot contain " / ' / $ / `, keep the escape as belt-and-suspenders.
             val escapedName = safeName.replace("\"", "\\\"")
 
             // Equivalent to: sh -c "su -c 'droidspaces -n "Name" enter user'"

@@ -1077,7 +1077,7 @@ int ds_daemon_run(int foreground, char **argv) {
      */
     if (!ds_peer_authorized(conn, "droidspaces")) {
       const char *msg = "permission denied: only root or 'droidspaces' group "
-                        "members may connect.";
+                        "members from the host PID ns may connect.\n";
       send_frame(conn, MSG_ERR, msg, (uint32_t)strlen(msg));
       send_exit(conn, 1);
       close(conn);

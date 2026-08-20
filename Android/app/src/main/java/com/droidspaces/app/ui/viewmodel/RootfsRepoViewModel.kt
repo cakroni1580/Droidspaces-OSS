@@ -56,7 +56,7 @@ class RootfsRepoViewModel(application: Application) : AndroidViewModel(applicati
             when (val result = RootfsRepository.fetchAllAssets(getApplication())) {
                 is RepoResult.Success -> {
                     // Emit Success immediately so the UI renders and the
-                    // loading spinner stops — cards appear without delay.
+                    // loading spinner stops and cards appear without delay.
                     uiState = RepoUiState.Success(result.assets)
 
                     // Heavy filesystem scan runs off the main thread so the

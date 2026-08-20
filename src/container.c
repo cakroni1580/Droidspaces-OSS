@@ -7,13 +7,11 @@
 
 #include "droidspace.h"
 
-/* ---------------------------------------------------------------------------
- * External Command Lock - CLI-only ownership
+/* External Command Lock - CLI-only ownership
  *
  * The lock represents exactly ONE thing: an external CLI command is actively
  * managing this container. ONLY the CLI parent creates/removes locks.
- * The monitor is READ-ONLY for locks.
- * ---------------------------------------------------------------------------*/
+ * The monitor is READ-ONLY for locks. */
 
 /* Build lock path with defensive truncation.
  * Precision: 2048 (pids_dir) + 256 (name) + 5 (.lock) = 2309 < PATH_MAX (4096)
@@ -84,9 +82,7 @@ static void release_external_lock(const char *name) {
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Configuration & Metadata Recovery
- * ---------------------------------------------------------------------------*/
+/* Configuration & Metadata Recovery */
 
 /**
  * Enhanced config loader that performs a global /proc scan if host metadata
@@ -142,9 +138,7 @@ int is_external_lock_active(const char *name) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Cleanup
- * ---------------------------------------------------------------------------*/
+/* Cleanup */
 
 /* Poll for a socket path to appear, bailing early if the server process dies.
  * Returns 0 on socket ready, -1 on server death or timeout. */
@@ -279,9 +273,7 @@ void cleanup_container_resources(struct ds_config *cfg, pid_t pid,
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Introspection
- * ---------------------------------------------------------------------------*/
+/* Introspection */
 
 int is_valid_container_pid(pid_t pid) {
   char path[PATH_MAX];
@@ -304,9 +296,7 @@ int is_valid_container_pid(pid_t pid) {
   return 1;
 }
 
-/* ---------------------------------------------------------------------------
- * Start
- * ---------------------------------------------------------------------------*/
+/* Start */
 
 int start_rootfs(struct ds_config *cfg) {
 
@@ -983,9 +973,7 @@ int stop_rootfs(struct ds_config *cfg, int skip_unmount) {
   return stop_rootfs_with_timeout(cfg, skip_unmount, DS_STOP_TIMEOUT);
 }
 
-/* ---------------------------------------------------------------------------
- * Namespace Entry (shared for enter and run)
- * ---------------------------------------------------------------------------*/
+/* Namespace Entry (shared for enter and run) */
 
 int enter_namespace(pid_t pid, struct ds_config *cfg) {
   /* Verify process is still alive before trying to enter namespaces */
@@ -1048,9 +1036,7 @@ int enter_namespace(pid_t pid, struct ds_config *cfg) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Enter / Run
- * ---------------------------------------------------------------------------*/
+/* Enter / Run */
 
 int enter_rootfs(struct ds_config *cfg, const char *user) {
   pid_t pid = 0;
@@ -1140,9 +1126,8 @@ int enter_rootfs(struct ds_config *cfg, const char *user) {
     ds_apply_capability_hardening(cfg->hw_access, cfg->privileged_mask);
     ds_log_silent = 0;
 
-    /* ---------------------------------------------------------------
-     * LXC-STYLE SESSION SETUP - intermediate becomes session leader
-     * ---------------------------------------------------------------
+    /* LXC-STYLE SESSION SETUP - intermediate becomes session leader
+     *
      * Ubuntu 24.04+ login (util-linux) calls vhangup() as part of its
      * "secure login" sequence: hang up the old session, reopen the
      * terminal fresh, then setsid()+TIOCSCTTY to own it.
@@ -1439,9 +1424,7 @@ int run_in_rootfs(struct ds_config *cfg, int argc, char **argv,
   return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
-/* ---------------------------------------------------------------------------
- * Other operations
- * ---------------------------------------------------------------------------*/
+/* Other operations */
 
 static const char *get_architecture(void) {
   static struct utsname uts;

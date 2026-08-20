@@ -110,10 +110,22 @@ sudo droidspaces --name=web,db,app stop
 
 | 选项 | 简写 | 说明 |
 |--------|------|-------------|
-| `--net=MODE` | | 网络模式：`host`（默认）、`nat` 或 `none`。 |
+| `--net=MODE` | | 网络模式：主机模式 `host`（默认）、NAT 模式 `nat`、无网络模式 `none` 或网关模式 `gateway`。 |
+| `--upstream=IFACE` | | 将 NAT WAN 固定到指定接口；禁用自动上行链路检测。逗号分隔、按优先级排序，并支持通配符。示例：`--upstream=wlan0,rmnet*`。仅 NAT 模式有效。 |
 | `--port HOST:CONT[/proto]` | | 将主机端口转发到容器（NAT 模式）。支持 TCP/UDP。 |
 | `--dns=SERVERS` | `-d` | 自定义 DNS 服务器，逗号分隔。示例：`--dns=1.1.1.1,8.8.8.8` |
-| `--disable-ipv6` | | 禁用 IPv6 网络支持（仅限 Host 模式）。 |
+| `--disable-ipv6` | | 禁用 IPv6 网络支持（仅限主机模式）。 |
+
+#### 网关模式
+
+将某个容器的 LAN 委托给另一个正在运行的容器（例如 OpenWRT），由后者负责 DHCP、DNS、防火墙和路由。Droidspaces 只负责 L2 管道。完整指南请参阅[从零开始的网络基础](Networking-From-Zero.md)。
+
+| 选项 | 简写 | 说明 |
+|--------|------|-------------|
+| `--gateway=NAME` | | `--net=gateway` 的**必选项**。充当路由器的运行中容器。 |
+| `--gateway-net=NAME` | | LAN 网段名称 / 宿主网桥后缀（默认：`lan`）。共享同一值的客户端共享一个 LAN；不同值是相互隔离的网段。 |
+| `--gateway-iface=IFACE` | | 网关容器*内部*看到的接口名称（默认：`eth1`）。每个网段都需要唯一名称。 |
+| `--gateway-bridge=BR` | | 覆盖宿主网桥名称（默认：`ds-{gateway-net}`）。 |
 
 ### 功能开关
 
@@ -238,6 +250,27 @@ sudo droidspaces \
   --net=nat \
   --port=8080:80 \
   start
+```
+
+### 固定上行链路的 NAT
+强制容器通过指定接口访问互联网，而不是跟随宿主当前活跃网络。可以固定 VPN 隧道（`tun0`）作为断路保护，也可以固定 `rmnet*`，让手机使用 Wi-Fi 时容器仍走移动数据：
+```bash
+sudo droidspaces \
+  --name=vpnbox \
+  --rootfs-img=/path/to/rootfs.img \
+  --net=nat \
+  --upstream=tun0 \
+  start
+```
+
+### 网关模式（LAN 由 OpenWRT 管理）
+先启动路由器容器（NAT 模式），再把客户端接入它：
+```bash
+# 1. 路由器
+sudo droidspaces --name=openwrt --rootfs=/data/openwrt --net=nat start
+
+# 2. LAN/DHCP/防火墙由 openwrt 管理的客户端
+sudo droidspaces --name=kali --rootfs=/data/kali --net=gateway --gateway=openwrt start
 ```
 
 ### 临时测试环境

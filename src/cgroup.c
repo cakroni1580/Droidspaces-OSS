@@ -342,8 +342,7 @@ int ds_cgroup_attach(pid_t target_pid) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * ds_cgroup_detach
+/* ds_cgroup_detach
  *
  * Removes ds-enter-<pid> leaf cgroup dirs created by ds_cgroup_attach().
  * Must be called after waitpid() so the leaf is guaranteed empty.
@@ -351,8 +350,7 @@ int ds_cgroup_attach(pid_t target_pid) {
  * The old implementation reconstructed the path manually and got the depth
  * wrong (missed intermediate scopes like init.scope), causing stale dirs.
  * This version does a recursive scan of /sys/fs/cgroup and removes every
- * dir named "ds-enter-<pid>" regardless of depth - works for both v1 and v2.
- * ---------------------------------------------------------------------------*/
+ * dir named "ds-enter-<pid>" regardless of depth - works for both v1 and v2. */
 
 /* Wait up to 500ms for cgroup.events populated=0 (cgroupv2),
  * or tasks file empty (cgroupv1), before rmdir. */
@@ -415,8 +413,7 @@ void ds_cgroup_detach(pid_t child_pid, const char *container_name) {
   find_and_rmdir("/sys/fs/cgroup", target);
 }
 
-/* ---------------------------------------------------------------------------
- * ds_cgroup_cleanup_container
+/* ds_cgroup_cleanup_container
  *
  * Removes the entire /sys/fs/cgroup/droidspaces/<container_name>/ subtree
  * that was created at container start for cgroup namespace isolation.
@@ -427,8 +424,7 @@ void ds_cgroup_detach(pid_t child_pid, const char *container_name) {
  * is empty and the walk always succeeds.
  *
  * Safe to call on every stop regardless of whether the directory exists
- * (all rmdir calls are silently ignored on ENOENT).
- * ---------------------------------------------------------------------------*/
+ * (all rmdir calls are silently ignored on ENOENT). */
 
 /* Recursive bottom-up rmdir of a cgroup subtree.  cgroup directories can
  * only be removed from the leaves upward - attempting to rmdir a non-empty

@@ -14,9 +14,7 @@
 static void loop_detach(const char *loop_dev);
 static int get_backing_dev(const char *mnt, char *dev_out, size_t dev_size);
 
-/* ---------------------------------------------------------------------------
- * Helpers
- * ---------------------------------------------------------------------------*/
+/* Helpers */
 
 /* Check if a path is a mountpoint */
 int is_mountpoint(const char *path) {
@@ -88,9 +86,7 @@ static int find_available_mountpoint(const char *name, char *mount_path,
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Generic mount wrappers
- * ---------------------------------------------------------------------------*/
+/* Generic mount wrappers */
 
 int domount(const char *src, const char *tgt, const char *fstype,
             unsigned long flags, const char *data) {
@@ -416,9 +412,7 @@ static void prune_host_devices(const char *dev_path, int privileged_mask) {
   closedir(dir);
 }
 
-/* ---------------------------------------------------------------------------
- * /dev setup
- * ---------------------------------------------------------------------------*/
+/* /dev setup */
 
 int setup_dev(const char *rootfs, int hw_access, int gpu_mode,
               int privileged_mask) {
@@ -864,9 +858,7 @@ int setup_custom_binds(struct ds_config *cfg, const char *rootfs) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Rootfs Image Handling - Pure C loop device management (no host tools)
- * ---------------------------------------------------------------------------*/
+/* Rootfs Image Handling - Pure C loop device management (no host tools) */
 
 /* Probe superblock magic bytes to identify the filesystem type. */
 static const char *detect_fs_type(const char *img_path) {

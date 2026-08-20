@@ -10,15 +10,11 @@
 #include <stdarg.h>
 #include <sys/prctl.h>
 
-/* ---------------------------------------------------------------------------
- * Static status variables
- * ---------------------------------------------------------------------------*/
+/* Static status variables */
 
 static int is_root = 0;
 
-/* ---------------------------------------------------------------------------
- * Output buffering (for one-shot terminal output)
- * ---------------------------------------------------------------------------*/
+/* Output buffering (for one-shot terminal output) */
 
 #define CHECK_BUF_SIZE 16384
 static char check_buf[CHECK_BUF_SIZE];
@@ -40,9 +36,7 @@ static void check_append(const char *fmt, ...) {
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Requirement checks
- * ---------------------------------------------------------------------------*/
+/* Requirement checks */
 
 static int check_root(void) {
   is_root = (getuid() == 0);
@@ -91,21 +85,18 @@ static int check_seccomp(void) {
   return (prctl(PR_GET_SECCOMP, 0, 0, 0, 0) >= 0 || errno == EINVAL);
 }
 
-/* ---------------------------------------------------------------------------
-+ * Live kernel probes for NAT networking capability
-+ *
-+ * Mirrors the logic in ds_nl_probe_nat_capability() but split into two
-+ * independent functions so check.c can report bridge and veth separately.
-+ *
-+ * Both probes attempt a real RTM_NEWLINK roundtrip and immediately clean up.
-+ * This is accurate even when modules are built-in (=y) rather than loadable
-+ * (=m), which is the common case on Android.
-+ *
-+ * Both require root to open a NETLINK_ROUTE socket - guarded early.
-+ * If a stale probe interface from a previous crashed session is present,
-+ * its existence already proves kernel support - treated as green.
-+ *
----------------------------------------------------------------------------*/
+/* Live kernel probes for NAT networking capability
+ *
+ * Mirrors the logic in ds_nl_probe_nat_capability() but split into two
+ * independent functions so check.c can report bridge and veth separately.
+ *
+ * Both probes attempt a real RTM_NEWLINK roundtrip and immediately clean up.
+ * This is accurate even when modules are built-in (=y) rather than loadable
+ * (=m), which is the common case on Android.
+ *
+ * Both require root to open a NETLINK_ROUTE socket - guarded early.
+ * If a stale probe interface from a previous crashed session is present,
+ * its existence already proves kernel support - treated as green. */
 static int check_bridge_support(void) {
   if (!is_root)
     return 0;
@@ -156,9 +147,7 @@ static int check_kernel_version_supported(void) {
   return 1;
 }
 
-/* ---------------------------------------------------------------------------
- * Minimal check for 'start' (used internaly)
- * ---------------------------------------------------------------------------*/
+/* Minimal check for 'start' (used internaly) */
 
 int check_requirements(void) { return check_requirements_hw(0); }
 
@@ -225,9 +214,7 @@ int check_requirements_hw(int hw_access) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Detailed 'check' command
- * ---------------------------------------------------------------------------*/
+/* Detailed 'check' command */
 
 /* Helper to check and close an FD-based feature probe */
 static int check_fd_feature(int fd) {
@@ -263,7 +250,7 @@ int check_requirements_detailed(void) {
   check_root();
 
   check_append("\n" C_BOLD
-               "Droidspaces v%s — Checking system requirements..." C_RESET
+               "Droidspaces v%s - Checking system requirements..." C_RESET
                "\n\n",
                DS_VERSION);
 

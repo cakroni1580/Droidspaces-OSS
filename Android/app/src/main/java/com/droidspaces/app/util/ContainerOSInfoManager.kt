@@ -17,7 +17,7 @@ object ContainerOSInfoManager {
     // In-memory cache for OS info (container name -> OSInfo)
     private val cache = mutableMapOf<String, OSInfo>()
 
-    // Increments every time the icon cache is updated — Composables observe this to re-read icons
+    // Increments every time the icon cache is updated, Composables observe this to re-read icons
     val iconCacheVersion = mutableIntStateOf(0)
 
     // Context for accessing preferences (set when needed)
@@ -57,7 +57,7 @@ object ContainerOSInfoManager {
             val osInfo = parseOSRelease(result.out)
             val existing = cache[containerName]
             if (existing != null) {
-                // Merge into existing full entry — preserve hostname + all live data
+                // Merge into existing full entry, preserve hostname + all live data
                 val updated = existing.copy(
                     prettyName = osInfo.prettyName ?: existing.prettyName,
                     name = osInfo.name ?: existing.name

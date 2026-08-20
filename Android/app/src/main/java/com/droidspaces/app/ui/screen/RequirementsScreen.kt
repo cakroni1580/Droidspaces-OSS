@@ -63,7 +63,7 @@ fun RequirementsScreen(
     // was nuked after the last check elsewhere.
     LaunchedEffect(Unit) { appStateViewModel.checkBackendStatus(force = true) }
     // The check runs the droidspaces binary, so it's only meaningful when the
-    // backend is actually usable — gate the button on that (see test plan §2).
+    // backend is actually usable, so gate the button on that (see test plan §2).
     val backendReady = appStateViewModel.backendStatus == DroidspacesBackendStatus.Available ||
         appStateViewModel.backendStatus == DroidspacesBackendStatus.UpdateAvailable
     val scope = rememberCoroutineScope()
@@ -241,7 +241,7 @@ CONFIG_TMPFS_XATTR=y""",
                     snackbarHostState = snackbarHostState
                 )
 
-                // Check Requirements Button — disabled without root or a usable backend.
+                // Check Requirements Button, disabled without root or a usable backend.
                 CheckRequirementsButton(
                     enabled = isRootAvailable && backendReady,
                     isRunning = isCheckRunning,

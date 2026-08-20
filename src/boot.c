@@ -163,7 +163,7 @@ int internal_boot(struct ds_config *cfg) {
    * This is a critical security check to prevent anonymous or conflicting
    * containers from booting, even if the CLI checks were bypassed. */
   if (!cfg->container_name[0]) {
-    ds_error("CRITICAL: Boot aborted — container name is empty.");
+    ds_error("CRITICAL: Boot aborted: container name is empty.");
     goto boot_fail;
   }
 
@@ -172,9 +172,8 @@ int internal_boot(struct ds_config *cfg) {
     /* If we find ourselves in the pidfile, it's not a conflict, it's just us
      * being tracked early (which is fine). */
     if (existing_pid != getpid()) {
-      ds_error(
-          "CRITICAL: Boot aborted — name '%s' is already in use by PID %d.",
-          cfg->container_name, existing_pid);
+      ds_error("CRITICAL: Boot aborted: name '%s' is already in use by PID %d.",
+               cfg->container_name, existing_pid);
       goto boot_fail;
     }
   }

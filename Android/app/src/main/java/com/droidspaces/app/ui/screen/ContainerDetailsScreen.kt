@@ -447,6 +447,7 @@ private fun TerminalCard(
             Button(
                 onClick = onOpenTerminal,
                 modifier = Modifier.widthIn(min = 140.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
@@ -652,6 +653,7 @@ private fun PremiumInitSystemCard(
                             onClick = {},
                             enabled = false,
                             modifier = Modifier.widthIn(min = 140.dp),
+                            shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -671,6 +673,7 @@ private fun PremiumInitSystemCard(
                             onClick = {},
                             enabled = false,
                             modifier = Modifier.widthIn(min = 140.dp),
+                            shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 disabledContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
                                 disabledContentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -683,6 +686,7 @@ private fun PremiumInitSystemCard(
                         Button(
                             onClick = { onNavigateToServices(currentState.initSystem) },
                             modifier = Modifier.widthIn(min = 140.dp),
+                            shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary

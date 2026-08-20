@@ -757,7 +757,7 @@ private fun RepoManagerDialog(
                     Spacer(Modifier.height(12.dp))
                 }
 
-                // Inline add-repo form — always visible, no animation toggle
+                // Inline add-repo form, always visible, no animation toggle
                 Text(
                     text = context.getString(R.string.repo_add_custom),
                     style = MaterialTheme.typography.titleSmall,

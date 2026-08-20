@@ -44,7 +44,7 @@ sealed class SparseOperation {
  * functions inside `ContainersScreen`. Root shell, asset deploy, command
  * building and content-URI streaming now live here; the composable observes the
  * state below and passes UI concerns (snackbar, list refresh, usage-cache clear)
- * back as callbacks so behavior is identical. See FINDINGS_APP_DUCT_TAPES DT-6.
+ * back as callbacks so behavior is identical.
  */
 class ContainerOperationsViewModel(app: Application) : AndroidViewModel(app) {
 

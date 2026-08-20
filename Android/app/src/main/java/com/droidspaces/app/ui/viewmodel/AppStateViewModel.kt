@@ -169,8 +169,8 @@ class AppStateViewModel(application: Application) : AndroidViewModel(application
 
     /**
      * Run the backend install/update orchestration (moved out of InstallationScreen's
-     * LaunchedEffect — see FINDINGS_APP_DUCT_TAPES DT-6). Idempotent: no-op if an
-     * install is already running or has succeeded. Drives the install* state above.
+     * LaunchedEffect). Idempotent: no-op if an install is already running or has
+     * succeeded. Drives the install* state above.
      */
     suspend fun performInstallation() {
         if (isInstalling || isInstallSuccess) return

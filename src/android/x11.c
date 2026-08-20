@@ -15,7 +15,7 @@
 #include <grp.h>
 #include <sys/wait.h>
 
-/* ---- helpers ---------------------------------------------------------- */
+/* helpers */
 
 /*
  * Resolve Termux UID and verify that termux-x11 is installed.
@@ -38,7 +38,7 @@ static int resolve_termux_uid(void) {
   return uid;
 }
 
-/* ---- xserver child ---------------------------------------------------- */
+/* xserver child */
 
 struct xserver_args {
   int uid;
@@ -147,7 +147,7 @@ static void xserver_child_wrapper(int ready_fd, void *user_data) {
   _exit(1);
 }
 
-/* ---- spawn ------------------------------------------------------------ */
+/* spawn */
 
 /*
  * Fork the xserver child and a log-relay grandchild writing to Logs/x11.log.
@@ -181,7 +181,7 @@ static pid_t spawn_xserver(int uid, const char *display,
   return child;
 }
 
-/* ---- public API ------------------------------------------------------- */
+/* public API */
 
 int ds_x11_daemon_start(struct ds_config *cfg) {
   if (!cfg || !cfg->termux_x11 || !is_android())
@@ -221,7 +221,7 @@ void ds_x11_daemon_stop(struct ds_config *cfg) {
                         "[X11]");
 }
 
-/* ---- socket bridge ---------------------------------------------------- */
+/* socket bridge */
 
 int ds_setup_x11_socket(struct ds_config *cfg) {
   if (!is_android()) {

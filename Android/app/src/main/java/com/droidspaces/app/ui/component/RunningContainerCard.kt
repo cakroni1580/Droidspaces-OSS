@@ -24,7 +24,7 @@ import com.droidspaces.app.util.ContainerOSInfoManager
 import com.droidspaces.app.util.IconUtils
 
 /**
- * Container card for Panel tab — shows container name, OS info, resource usage, and quick actions.
+ * Container card for the Panel tab. Shows container name, OS info, resource usage, and quick actions.
  * Receives fully-populated OSInfo from SystemStatsViewModel (single polling source).
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -131,7 +131,7 @@ fun RunningContainerCard(
             )
 
 
-            // Resource usage row — only shown when we have real data
+            // Resource usage row, only shown when we have real data
             val ramUsedKb = ((osInfo?.ramUsageMb ?: 0L) * 1024L)
             val cpuPercent = osInfo?.cpuUsage ?: -1.0
             if (ramUsedKb > 0 || cpuPercent >= 0.0) {

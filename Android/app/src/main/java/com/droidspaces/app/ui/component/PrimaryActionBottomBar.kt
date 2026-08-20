@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
  * Shared "primary call-to-action" bottom bar: a full-width [Surface] with a top
  * divider and a rounded primary action button (icon + label). Replaces the same
  * Surface -> Column -> HorizontalDivider -> clickable Surface -> Box -> Row block
- * that was copy-pasted across the wizard/detail screens (DT-4).
+ * that was copy-pasted across the wizard/detail screens.
  *
  * The varying bits are parameters so each screen keeps its exact look:
  * [enabled] toggles the disabled colors, [secondaryAction] renders an extra row

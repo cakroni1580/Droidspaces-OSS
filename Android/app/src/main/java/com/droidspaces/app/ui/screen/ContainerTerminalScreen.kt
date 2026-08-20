@@ -68,6 +68,7 @@ fun ContainerTerminalScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val terminalDarkTheme = remember { PreferencesManager.getInstance(context).terminalDarkTheme }
 
     val keyboardController = LocalSoftwareKeyboardController.current
     var binder by remember { mutableStateOf<TerminalSessionService.SessionBinder?>(null) }
@@ -82,7 +83,7 @@ fun ContainerTerminalScreen(
         context.bindService(Intent(context, TerminalSessionService::class.java), conn, Context.BIND_AUTO_CREATE)
         onDispose {
             // Detach the UI client from any backgrounded sessions before unbinding so
-            // the service doesn't retain this Activity/TerminalView (VULN V16). The
+            // the service doesn't retain this Activity/TerminalView. The
             // screen re-attaches its own client on re-entry.
             binder?.detachAllClients()
             context.unbindService(conn)
@@ -279,7 +280,7 @@ fun ContainerTerminalScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = paddingValues.calculateTopPadding())
-                .background(MaterialTheme.colorScheme.surface)
+                .background(if (terminalDarkTheme) Color.Black else MaterialTheme.colorScheme.surface)
         ) {
             if (binder == null || tabs.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -349,7 +350,7 @@ private fun TerminalTabView(
                 factory = { ctx ->
                     TerminalView(ctx, null).apply {
                         TerminalScreenState.terminalView = WeakReference(this)
-                        setTextSize(fontSizePx)      // must run first — initializes mRenderer
+                        setTextSize(fontSizePx)      // must run first, initializes mRenderer
                         setTypeface(terminalTypeface) // JetBrains Mono; null = system default
                         keepScreenOn = true
                         isFocusableInTouchMode = true

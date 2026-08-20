@@ -11,9 +11,7 @@
 #define VPROC_PATH "/run/droidspaces/vproc"
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
-/* ---------------------------------------------------------------------------
- * Internal helpers
- * ---------------------------------------------------------------------------*/
+/* Internal helpers */
 
 /* In-place overwrite: preserves the bind-mount inode (rename(2) breaks it).
  * Hardened with O_NOFOLLOW and filesystem type checks to prevent attacks. */
@@ -82,10 +80,8 @@ static long long read_cg_ll(const char *container_name, const char *file) {
   return (end == buf) ? -1 : v;
 }
 
-/* ---------------------------------------------------------------------------
- * Per-resource content generators
- * Each returns a malloc'd buffer + length. Caller must free().
- * ---------------------------------------------------------------------------*/
+/* Per-resource content generators
+ * Each returns a malloc'd buffer + length. Caller must free(). */
 
 /* /proc/meminfo - virtualized when memory_limit > 0 */
 static char *gen_meminfo(struct ds_config *cfg, size_t *out_len) {
@@ -465,9 +461,7 @@ static char *gen_cpu_sysfs(struct ds_config *cfg, size_t *out_len) {
   return buf;
 }
 
-/* ---------------------------------------------------------------------------
- * Public API
- * ---------------------------------------------------------------------------*/
+/* Public API */
 
 unsigned long ds_get_pid_ns_inode(pid_t pid) {
   char path[64];

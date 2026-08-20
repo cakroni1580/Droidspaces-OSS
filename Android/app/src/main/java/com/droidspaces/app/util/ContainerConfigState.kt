@@ -12,7 +12,7 @@ package com.droidspaces.app.util
  * is just `current != saved`, and config plumbing can never transpose fields.
  *
  * Note: `name`, `hostname`, `rootfsPath`, sparse-image and runtime fields are
- * NOT part of this state — they are owned by the surrounding screens/ViewModel.
+ * NOT part of this state. They are owned by the surrounding screens/ViewModel.
  */
 data class ContainerConfigState(
     val netMode: String = "nat",

@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
  * Shared settings-card shell: a rounded `surfaceContainerHigh` [Surface] with a
  * leading icon, a title, an optional [subtitleContent] block and an optional
  * [trailing] slot. [ToggleCard] and [SettingsRowCard] are thin wrappers over
- * this (DT-9) — the two previously duplicated this whole layout.
+ * this. The two previously duplicated this whole layout.
  */
 @Composable
 fun SettingsCard(

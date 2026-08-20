@@ -13,9 +13,7 @@ static void add_unknown_line(struct ds_config *cfg, const char *line);
  */
 #include <libgen.h>
 
-/* ---------------------------------------------------------------------------
- * Helpers
- * ---------------------------------------------------------------------------*/
+/* Helpers */
 
 static char *trim_whitespace(char *str) {
   while (isspace((unsigned char)*str))
@@ -211,9 +209,7 @@ void free_config_binds(struct ds_config *cfg) {
   cfg->bind_capacity = 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Core Implementation
- * ---------------------------------------------------------------------------*/
+/* Core Implementation */
 
 int ds_config_load(const char *config_path, struct ds_config *cfg) {
   FILE *f = fopen(config_path, "re");

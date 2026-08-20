@@ -409,7 +409,7 @@ systemctl start wifi-watchdog
 ```
 
 > [!NOTE]
-> 此变通方案**需要Host模式**（`--net=host`）。脚本需要直接访问 Android 的 `wlan0` 接口，该接口在 `NAT` 或 `None` 模式下不可见。我们建议专门为此 Watchdog 使用一个小型"一次性"容器。
+> 此变通方案**需要主机模式**（`--net=host`）。脚本需要直接访问 Android 的 `wlan0` 接口，该接口在 NAT 模式或无网络模式下不可见。我们建议专门为此 Watchdog 使用一个小型"一次性"容器。
 
 ---
 

@@ -178,11 +178,10 @@ fun PrivilegedModeDialog(
                         }
                         onConfirm(tags.joinToString(","))
                     },
-                    // allOff means "clear privileged mode" — a safe action, so it is
+                    // allOff means "clear privileged mode", a safe action, so it is
                     // enabled without the confirm phrase and uses the primary color.
                     confirmEnabled = isConfirmed || allOff,
-                    confirmColor = if (allOff) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                    confirmContentColor = if (allOff) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onError
+                    confirmColor = if (allOff) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
             }
         }

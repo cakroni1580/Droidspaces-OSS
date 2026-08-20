@@ -7,9 +7,7 @@
 
 #include "droidspace.h"
 
-/* ---------------------------------------------------------------------------
- * Workspace / Paths
- * ---------------------------------------------------------------------------*/
+/* Workspace / Paths */
 
 const char *get_workspace_dir(void) {
   return is_android() ? DS_WORKSPACE_ANDROID : DS_WORKSPACE_LINUX;
@@ -45,9 +43,7 @@ int ensure_workspace(void) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Container Naming
- * ---------------------------------------------------------------------------*/
+/* Container Naming */
 
 int generate_container_name(const char *rootfs_path, char *name, size_t size) {
   char id[64], version[64];
@@ -112,9 +108,7 @@ static int is_pid_file(const char *name) {
   return (strcmp(name + len - strlen(DS_EXT_PID), DS_EXT_PID) == 0);
 }
 
-/* ---------------------------------------------------------------------------
- * PID File Resolution
- * ---------------------------------------------------------------------------*/
+/* PID File Resolution */
 
 int resolve_pidfile_from_name(const char *name, char *pidfile, size_t size) {
   if (!name || !pidfile || size == 0)
@@ -278,9 +272,7 @@ int auto_resolve_pidfile(struct ds_config *cfg) {
   return -1;
 }
 
-/* ---------------------------------------------------------------------------
- * PID Discovery (UUID Scan)
- * ---------------------------------------------------------------------------*/
+/* PID Discovery (UUID Scan) */
 
 pid_t find_container_init_pid(const char *uuid) {
   if (!uuid || uuid[0] == '\0')
@@ -423,9 +415,7 @@ int sync_pidfile(const char *src_pidfile, const char *name) {
   return write_file(dst, buf);
 }
 
-/* ---------------------------------------------------------------------------
- * Status reporting
- * ---------------------------------------------------------------------------*/
+/* Status reporting */
 
 int show_containers(struct ds_config *cfg) {
   DIR *d = opendir(get_pids_dir());

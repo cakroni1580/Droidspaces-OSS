@@ -22,12 +22,12 @@ keywords: droidspaces, projects, android, server, tailscale, ufw, failban, conta
     - [步骤 5：使用 Fail2Ban 添加暴力破解防护](#step-5-add-brute-force-protection-with-fail2ban)  
 - [2. 运行 Docker 容器（嵌套容器化）](#2-running-docker-containers-nested-containerization)  
     - [前提条件](#prerequisites-1)  
-    - [步骤 1：确保使用 NAT 网络](#step-1-ensure-nat-networking)  
+    - [步骤 1：确保使用 NAT 模式](#step-1-ensure-nat-networking)
     - [步骤 2：兼容层（iptables-legacy）](#step-2-compatibility-layer-iptables-legacy)  
     - [步骤 3：安装 Docker](#step-3-install-docker)  
     - [步骤 4：非 root 用户设置](#step-4-non-root-user-setup)  
     - [步骤 5：验证安装](#step-5-verify-installation)  
-    - [Host 模式或旧内核的"最后手段"（仅限老内核）](#last-resort-for-host-mode-or-legacy-kernels-old-kernels-only)  
+    - [主机模式或旧内核的"最后手段"（仅限老内核）](#last-resort-for-host-mode-or-legacy-kernels-old-kernels-only)
 
 ---
 
@@ -43,7 +43,7 @@ keywords: droidspaces, projects, android, server, tailscale, ufw, failban, conta
 - **LTS 发行版**：强烈建议使用长期支持（LTS）发行版，如 **Ubuntu 24.04 LTS** 或 **Debian 12**，以获得最佳的稳定性和软件包支持。
 - **Root 用户**：本指南中的所有步骤都必须在容器内以 **root** 用户身份运行。
 - **包管理器**：以下命令使用 `apt`，仅在 Debian 和 Ubuntu 系列的发行版中可用。
-- **NAT 模式**：**必填。** 你必须在 NAT 模式（`--net=nat`）下运行容器。在使用 UFW 这类防火墙时使用主机网络模式可能会干扰 Android 宿主端的网络连接，甚至根本无法正常工作。
+- **NAT 模式**：**必填。** 你必须在 NAT 模式（`--net=nat`）下运行容器。在使用 UFW 这类防火墙时使用主机模式可能会干扰 Android 宿主端的网络连接，甚至根本无法正常工作。
 
 ---
 
@@ -203,14 +203,14 @@ Droidspaces 支持在所有受支持的内核版本上于容器内原生运行 D
 - **内核配置**：确保你的内核已启用所需的 Droidspaces 选项。参见[所需的内核配置](./Kernel-Configuration.md#required-kernel-configuration)。
 - **存储模式**：你**必须**使用 **ext4 /data** 或 **rootfs.img 模式**（推荐）。
     - *为什么？* Android 默认的 `f2fs` 文件系统不支持 Docker 的 `overlay2` 存储驱动所需的 overlay 特性。使用 `rootfs.img` 可以确保你运行在原生的 ext4 文件系统上。
-- **NAT 模式**：**必须** Docker 需要 NAT 网络来创建其内部 `docker0` 网桥并为嵌套容器提供互联网访问。
+- **NAT 模式**：**必须** Docker 需要 NAT 模式来创建其内部 `docker0` 网桥并为嵌套容器提供互联网访问。
 
 ---
 
 <a id="step-1-ensure-nat-networking"></a>
-### 步骤 1：确保使用 NAT 网络
+### 步骤 1：确保使用 NAT 模式
 
-在主机网络模式下运行 Droidspaces 会导致 Docker 在尝试创建 `docker0` 接口时失败。请为你的容器选择 NAT 模式。
+在主机模式下运行 Droidspaces 会导致 Docker 在尝试创建 `docker0` 接口时失败。请为你的容器选择 NAT 模式。
 
 你可以通过 Android App 编辑容器配置来轻松切换到 NAT 模式。
 
@@ -264,9 +264,9 @@ docker run --rm hello-world
 > **Docker 故障排除**：如果 Docker 守护进程未能自动启动或 `docker run` 命令失败，请在你的终端中手动运行 `sudo dockerd`。这将输出实时日志，帮助你识别是否存在缺失的内核模块、文件系统冲突或网桥问题。
 
 <a id="last-resort-for-host-mode-or-legacy-kernels-old-kernels-only"></a>
-### Host 模式或旧版内核的"最后手段"（仅限老内核）
+### 主机模式或旧版内核的"最后手段"（仅限老内核）
 
-如果你无论如何都想在**Host模式**下运行 Docker，或者你的内核太旧而不支持 `iptables-legacy` 和 NAT 网络，你可以禁用 Docker 的内部网络管理，作为最后手段。
+如果你无论如何都想在**主机模式**下运行 Docker，或者你的内核太旧而不支持 `iptables-legacy` 和 NAT 模式，你可以禁用 Docker 的内部网络管理，作为最后手段。
 
 运行以下命令来配置守护进程：
 

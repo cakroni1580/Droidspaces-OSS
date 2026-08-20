@@ -19,9 +19,7 @@
 #include <net/if.h>
 #include <sys/socket.h>
 
-/* ---------------------------------------------------------------------------
- * Netlink rule attributes (linux/fib_rules.h - not always in Android sysroot)
- * ---------------------------------------------------------------------------*/
+/* Netlink rule attributes, not always present in the Android sysroot */
 #ifndef FRA_DST
 #define FRA_DST 1        /* destination address */
 #define FRA_SRC 2        /* source address */
@@ -37,15 +35,11 @@
 #define FR_ACT_TO_TBL 1 /* rule action: look up the referenced table */
 #endif
 
-/* ---------------------------------------------------------------------------
- * Internal constants
- * ---------------------------------------------------------------------------*/
+/* Internal constants */
 
 #define NL_BUFSIZE 8192
 
-/* ---------------------------------------------------------------------------
- * Netlink message helpers
- * ---------------------------------------------------------------------------*/
+/* Netlink message helpers */
 
 /* Pointer to byte just past the last written byte in a netlink message */
 #define NLMSG_TAIL(n)                                                          \
@@ -95,9 +89,7 @@ static uint32_t nl_rta_u32(struct rtattr *rta) {
   return v;
 }
 
-/* ---------------------------------------------------------------------------
- * Context lifecycle
- * ---------------------------------------------------------------------------*/
+/* Context lifecycle */
 
 struct ds_nl_ctx {
   int fd;       /* AF_NETLINK / NETLINK_ROUTE socket */
@@ -137,12 +129,10 @@ void ds_nl_close(ds_nl_ctx_t *ctx) {
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Send + blocking receive with full multi-part / ACK loop
+/* Send + blocking receive with full multi-part / ACK loop
  *
  * Returns 0 on success, negative errno on error.
- * NLMSG_ERROR with error==0 is an explicit ACK (success).
- * ---------------------------------------------------------------------------*/
+ * NLMSG_ERROR with error==0 is an explicit ACK (success). */
 
 static int ds_nl_talk(ds_nl_ctx_t *ctx, struct nlmsghdr *req) {
   req->nlmsg_seq = ++ctx->seq;
@@ -197,8 +187,7 @@ static int ds_nl_talk(ds_nl_ctx_t *ctx, struct nlmsghdr *req) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Kernel capability probe for NAT networking
+/* Kernel capability probe for NAT networking
  *
  * Tests whether the running kernel supports:
  *   1. Network namespaces    (CONFIG_NET_NS)
@@ -208,8 +197,7 @@ static int ds_nl_talk(ds_nl_ctx_t *ctx, struct nlmsghdr *req) {
  * Does NOT test iptables nat - that has a separate binary fallback path.
  *
  * Returns 0 if all supported.
- * Returns -1 and writes a human-readable reason into reason[rsz].
- * ---------------------------------------------------------------------------*/
+ * Returns -1 and writes a human-readable reason into reason[rsz]. */
 
 int ds_nl_probe_nat_capability(char *reason, size_t rsz) {
   int ret;
@@ -286,9 +274,7 @@ int ds_nl_probe_nat_capability(char *reason, size_t rsz) {
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Link existence check
- * ---------------------------------------------------------------------------*/
+/* Link existence check */
 
 int ds_nl_link_exists(ds_nl_ctx_t *ctx, const char *ifname) {
   struct {
@@ -310,10 +296,8 @@ int ds_nl_link_exists(ds_nl_ctx_t *ctx, const char *ifname) {
   return (ds_nl_talk(ctx, &req.n) == 0) ? 1 : 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Get interface index by name
- * (uses if_nametoindex - one ioctl, no netlink round-trip needed)
- * ---------------------------------------------------------------------------*/
+/* Get interface index by name
+ * (uses if_nametoindex - one ioctl, no netlink round-trip needed) */
 
 int ds_nl_get_ifindex(ds_nl_ctx_t *ctx, const char *ifname) {
   (void)ctx;
@@ -321,9 +305,7 @@ int ds_nl_get_ifindex(ds_nl_ctx_t *ctx, const char *ifname) {
   return (idx > 0) ? (int)idx : -ENODEV;
 }
 
-/* ---------------------------------------------------------------------------
- * Create bridge
- * ---------------------------------------------------------------------------*/
+/* Create bridge */
 
 int ds_nl_create_bridge(ds_nl_ctx_t *ctx, const char *name) {
   struct {
@@ -349,14 +331,12 @@ int ds_nl_create_bridge(ds_nl_ctx_t *ctx, const char *name) {
   return (ret == 0 || ret == -EEXIST) ? 0 : ret;
 }
 
-/* ---------------------------------------------------------------------------
- * Create veth pair
+/* Create veth pair
  *
  * The VETH_INFO_PEER attribute wraps a full struct ifinfomsg header followed
  * by IFLA_* sub-attributes - exactly as iproute2/ip/link_veth.c does it.
  * We write the ifinfomsg directly at NLMSG_TAIL (it is NOT an rtattr payload)
- * then append IFLA_IFNAME as a normal sub-rtattr.
- * ---------------------------------------------------------------------------*/
+ * then append IFLA_IFNAME as a normal sub-rtattr. */
 
 int ds_nl_create_veth(ds_nl_ctx_t *ctx, const char *host, const char *peer) {
   struct {
@@ -408,9 +388,7 @@ int ds_nl_create_veth(ds_nl_ctx_t *ctx, const char *host, const char *peer) {
   return ds_nl_talk(ctx, &req.n);
 }
 
-/* ---------------------------------------------------------------------------
- * Attach an interface to a bridge (IFLA_MASTER)
- * ---------------------------------------------------------------------------*/
+/* Attach an interface to a bridge (IFLA_MASTER) */
 
 int ds_nl_set_master(ds_nl_ctx_t *ctx, const char *ifname, const char *master) {
   int master_idx = ds_nl_get_ifindex(ctx, master);
@@ -438,9 +416,7 @@ int ds_nl_set_master(ds_nl_ctx_t *ctx, const char *ifname, const char *master) {
   return ds_nl_talk(ctx, &req.n);
 }
 
-/* ---------------------------------------------------------------------------
- * Bring link UP / DOWN
- * ---------------------------------------------------------------------------*/
+/* Bring link UP / DOWN */
 
 /* Set or clear IFF_UP on an interface (shared by link_up / link_down). */
 static int ds_nl_link_set_up(ds_nl_ctx_t *ctx, const char *ifname, int up) {
@@ -471,9 +447,7 @@ int ds_nl_link_down(ds_nl_ctx_t *ctx, const char *ifname) {
   return ds_nl_link_set_up(ctx, ifname, 0);
 }
 
-/* ---------------------------------------------------------------------------
- * Delete a link by name (idempotent - ENODEV/ENOENT treated as success)
- * ---------------------------------------------------------------------------*/
+/* Delete a link by name (idempotent - ENODEV/ENOENT treated as success) */
 
 int ds_nl_del_link(ds_nl_ctx_t *ctx, const char *ifname) {
   int idx = ds_nl_get_ifindex(ctx, ifname);
@@ -495,10 +469,8 @@ int ds_nl_del_link(ds_nl_ctx_t *ctx, const char *ifname) {
   return (ret == 0 || ret == -ENODEV || ret == -ENOENT) ? 0 : ret;
 }
 
-/* ---------------------------------------------------------------------------
- * Rename an interface
- * Note: interface must be DOWN before rename; we bring it down first.
- * ---------------------------------------------------------------------------*/
+/* Rename an interface
+ * Note: interface must be DOWN before rename; we bring it down first. */
 
 int ds_nl_rename(ds_nl_ctx_t *ctx, const char *ifname, const char *newname) {
   ds_nl_link_down(ctx, ifname); /* must be down or EBUSY */
@@ -523,12 +495,10 @@ int ds_nl_rename(ds_nl_ctx_t *ctx, const char *ifname, const char *newname) {
   return ds_nl_talk(ctx, &req.n);
 }
 
-/* ---------------------------------------------------------------------------
- * Set an interface's L2 hardware address (IFLA_ADDRESS).
+/* Set an interface's L2 hardware address (IFLA_ADDRESS).
  * mac points to 6 bytes.  The link should be DOWN to avoid EBUSY on some
  * drivers; veth tolerates it either way, but callers set it before bringing
- * the interface up.
- * ---------------------------------------------------------------------------*/
+ * the interface up. */
 
 int ds_nl_set_mac(ds_nl_ctx_t *ctx, const char *ifname, const uint8_t mac[6]) {
   int idx = ds_nl_get_ifindex(ctx, ifname);
@@ -550,10 +520,8 @@ int ds_nl_set_mac(ds_nl_ctx_t *ctx, const char *ifname, const uint8_t mac[6]) {
   return ds_nl_talk(ctx, &req.n);
 }
 
-/* ---------------------------------------------------------------------------
- * Add an IPv4 address to an interface
- * ip_be and bcast_be are in network byte order.
- * ---------------------------------------------------------------------------*/
+/* Add an IPv4 address to an interface
+ * ip_be and bcast_be are in network byte order. */
 
 int ds_nl_add_addr4(ds_nl_ctx_t *ctx, const char *ifname, uint32_t ip_be,
                     uint8_t prefix) {
@@ -589,11 +557,9 @@ int ds_nl_add_addr4(ds_nl_ctx_t *ctx, const char *ifname, uint32_t ip_be,
   return ds_nl_talk(ctx, &req.n);
 }
 
-/* ---------------------------------------------------------------------------
- * Add an IPv4 route
+/* Add an IPv4 route
  * dst_be=0 + dst_len=0 → default route.
- * gw_be=0               → connected/link-scope route.
- * ---------------------------------------------------------------------------*/
+ * gw_be=0               → connected/link-scope route. */
 
 int ds_nl_add_route4(ds_nl_ctx_t *ctx, uint32_t dst_be, uint8_t dst_len,
                      uint32_t gw_be, int oif_idx) {
@@ -622,9 +588,7 @@ int ds_nl_add_route4(ds_nl_ctx_t *ctx, uint32_t dst_be, uint8_t dst_len,
   return ds_nl_talk(ctx, &req.n);
 }
 
-/* ---------------------------------------------------------------------------
- * Move an interface into a network namespace (by fd)
- * ---------------------------------------------------------------------------*/
+/* Move an interface into a network namespace (by fd) */
 
 int ds_nl_move_to_netns(ds_nl_ctx_t *ctx, const char *ifname, int netns_fd) {
   int idx = ds_nl_get_ifindex(ctx, ifname);
@@ -648,8 +612,7 @@ int ds_nl_move_to_netns(ds_nl_ctx_t *ctx, const char *ifname, int netns_fd) {
   return ds_nl_talk(ctx, &req.n);
 }
 
-/* ---------------------------------------------------------------------------
- * Move an interface into another network namespace AND rename it in the same
+/* Move an interface into another network namespace AND rename it in the same
  * RTM_NEWLINK request (IFLA_NET_NS_FD + IFLA_IFNAME).  The kernel applies both
  * in a single op, so the device appears in the target netns already carrying
  * its final name - there is no transient "raw name then rename" window for a
@@ -661,8 +624,7 @@ int ds_nl_move_to_netns(ds_nl_ctx_t *ctx, const char *ifname, int netns_fd) {
  *
  * Returns 0 on success.  On failure (e.g. newname already exists in the target
  * netns) nothing is guaranteed to have moved; callers should fall back to a
- * plain move + in-netns rename.
- * ---------------------------------------------------------------------------*/
+ * plain move + in-netns rename. */
 int ds_nl_move_to_netns_named(ds_nl_ctx_t *ctx, const char *ifname,
                               int netns_fd, const char *newname) {
   if (!newname || !newname[0])
@@ -693,12 +655,10 @@ int ds_nl_move_to_netns_named(ds_nl_ctx_t *ctx, const char *ifname,
   return ds_nl_talk(ctx, &req.n);
 }
 
-/* ---------------------------------------------------------------------------
- * Flush stale Droidspaces veth interfaces via RTM_GETLINK dump
+/* Flush stale Droidspaces veth interfaces via RTM_GETLINK dump
  *
  * Collects all matching interfaces first, then deletes in a second pass to
- * avoid corrupting the dump mid-iteration.
- * ---------------------------------------------------------------------------*/
+ * avoid corrupting the dump mid-iteration. */
 
 void ds_nl_flush_stale_veths(ds_nl_ctx_t *ctx, const char *prefix) {
   struct {
@@ -759,14 +719,12 @@ flush_collected:
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Enumerate all network interfaces via RTM_GETLINK dump.
+/* Enumerate all network interfaces via RTM_GETLINK dump.
  *
  * Fills `names` with up to `max` interface name strings.
  * Returns the number of interfaces found.
  * Used by the uplink whitelist scan in network.c for pattern matching
- * against interface families like "rmnet*" or "*ccmni*".
- * ---------------------------------------------------------------------------*/
+ * against interface families like "rmnet*" or "*ccmni*". */
 int ds_nl_list_ifaces(ds_nl_ctx_t *ctx, char names[][IFNAMSIZ], int max) {
   struct {
     struct nlmsghdr n;
@@ -815,12 +773,10 @@ list_ifaces_done:
   return count;
 }
 
-/* ---------------------------------------------------------------------------
- * Count how many interfaces with a given prefix currently exist.
+/* Count how many interfaces with a given prefix currently exist.
  * Used by ds_net_cleanup() to decide whether to remove shared rules:
  * shared rules (MASQUERADE, FORWARD, Android policy) must only be removed
- * when the LAST container stops, not when one of many stops.
- * ---------------------------------------------------------------------------*/
+ * when the LAST container stops, not when one of many stops. */
 int ds_nl_count_ifaces_with_prefix(ds_nl_ctx_t *ctx, const char *prefix) {
   struct {
     struct nlmsghdr n;
@@ -870,13 +826,11 @@ count_done:
   return count;
 }
 
-/* ---------------------------------------------------------------------------
- * Count links enslaved to `bridge` whose name starts with `prefix`.
+/* Count links enslaved to `bridge` whose name starts with `prefix`.
  *
  * Used by gateway-mode cleanup to refcount clients on a specific delegated
  * bridge (the global ds-v* count cannot tell ds-br0 from ds-lan clients).
- * Returns 0 if the bridge does not exist.
- * ---------------------------------------------------------------------------*/
+ * Returns 0 if the bridge does not exist. */
 int ds_nl_count_bridge_members_with_prefix(ds_nl_ctx_t *ctx, const char *bridge,
                                            const char *prefix) {
   unsigned int br_idx = if_nametoindex(bridge);
@@ -933,8 +887,7 @@ member_done:
   return count;
 }
 
-/* ---------------------------------------------------------------------------
- * Find the default-route table used for internet connectivity
+/* Find the default-route table used for internet connectivity
  *
  * On Android, the internet default route is in a policy table with id > 100
  * (named "wlan0", "rmnet1", etc.) rather than in the main table (254).
@@ -945,11 +898,9 @@ member_done:
  * Falls back to RT_TABLE_MAIN if no policy table is found.
  *
  * ifname_out and table_out may be NULL.
- * Returns 0 on success, -ENOENT if no default route found.
- * ---------------------------------------------------------------------------*/
+ * Returns 0 on success, -ENOENT if no default route found. */
 
-/* ---------------------------------------------------------------------------
- * Per-interface route table lookup
+/* Per-interface route table lookup
  *
  * Finds the routing table that holds the IPv4 default route for a specific
  * named interface. This is the core primitive used by the uplink monitor:
@@ -960,8 +911,7 @@ member_done:
  *
  * Returns 0 and fills *table_out on success.
  * Returns -ENODEV if the interface doesn't exist.
- * Returns -ENOENT if no default route is found for that interface.
- * ---------------------------------------------------------------------------*/
+ * Returns -ENOENT if no default route is found for that interface. */
 int ds_nl_get_iface_table(ds_nl_ctx_t *ctx, const char *ifname,
                           int *table_out) {
   unsigned int target_idx = if_nametoindex(ifname);
@@ -1030,8 +980,7 @@ iface_table_done:
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Default-route OIF lookup for a specific routing table
+/* Default-route OIF lookup for a specific routing table
  *
  * Dumps IPv4 routes and returns the interface owning the default route in
  * `table`.  When several default routes coexist in the table (multi-homed
@@ -1044,8 +993,7 @@ iface_table_done:
  * IPv4 forwarding needs.
  *
  * Returns 0 and fills ifname_out (IFNAMSIZ) on success.
- * Returns -ENOENT if the table has no IPv4 default route.
- * ---------------------------------------------------------------------------*/
+ * Returns -ENOENT if the table has no IPv4 default route. */
 int ds_nl_get_table_default_oif(ds_nl_ctx_t *ctx, int table, char *ifname_out) {
   struct {
     struct nlmsghdr n;
@@ -1122,8 +1070,7 @@ table_oif_done:
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Android default-network detection via the kernel FIB rule table
+/* Android default-network detection via the kernel FIB rule table
  *
  * Android's netd installs exactly one IPv4 rule of the form:
  *   "<prio>: from all fwmark 0x0/0xffff iif lo lookup <table>"
@@ -1140,8 +1087,7 @@ table_oif_done:
  * precedence) wins, matching kernel rule evaluation order.
  *
  * Returns 0 and fills ifname_out (IFNAMSIZ) / table_out on success.
- * Returns -ENOENT when no such rule exists (non-Android, airplane mode).
- * ---------------------------------------------------------------------------*/
+ * Returns -ENOENT when no such rule exists (non-Android, airplane mode). */
 int ds_nl_get_android_default(ds_nl_ctx_t *ctx, char *ifname_out,
                               int *table_out) {
   struct {
@@ -1257,9 +1203,7 @@ rule_dump_done:
   return ds_nl_get_table_default_oif(ctx, best_table, ifname_out);
 }
 
-/* ---------------------------------------------------------------------------
- * IPv4 policy rule management (RTM_NEWRULE / RTM_DELRULE)
- * ---------------------------------------------------------------------------*/
+/* IPv4 policy rule management (RTM_NEWRULE / RTM_DELRULE) */
 
 static int ds_nl_rule_op(ds_nl_ctx_t *ctx, int cmd, uint32_t src_be,
                          uint8_t src_len, uint32_t dst_be, uint8_t dst_len,

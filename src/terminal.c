@@ -8,9 +8,7 @@
 #include "droidspace.h"
 #include <sys/uio.h>
 
-/* ---------------------------------------------------------------------------
- * PTY Allocation
- * ---------------------------------------------------------------------------*/
+/* PTY Allocation */
 
 /* Open master + slave without relying on /dev/ptmx symlink resolution.
  * TIOCGPTPEER (4.13+) opens slave directly from master fd.
@@ -94,9 +92,7 @@ int ds_terminal_make_controlling(int fd) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Termios / TIOS
- * ---------------------------------------------------------------------------*/
+/* Termios / TIOS */
 
 int ds_setup_tios(int fd, struct termios *old) {
   struct termios new_tios;
@@ -139,9 +135,7 @@ int ds_setup_tios(int fd, struct termios *old) {
   return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Runtime Utilities
- * ---------------------------------------------------------------------------*/
+/* Runtime Utilities */
 
 static volatile sig_atomic_t g_sigwinch_received = 0;
 static void handle_sigwinch(int sig) {
