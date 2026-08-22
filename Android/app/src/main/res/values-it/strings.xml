@@ -24,7 +24,6 @@
     <string name="close">Chiudi</string>
     <string name="refresh">Aggiorna</string>
     <string name="search">Cerca</string>
-    <string name="clear">Cancella</string>
     <!-- Main Tab Screen -->
     <string name="container_singular">Contenitore</string>
     <string name="running">In esecuzione</string>
@@ -227,7 +226,6 @@
     <string name="installing_droidspaces">Installazione di Droidspaces</string>
     <string name="module_installed_success">Modulo Magisk installato con successo</string>
     <string name="backend_installed_success">Backend Droidspaces installato con successo</string>
-    <string name="unknown_error">Si è verificato un errore sconosciuto</string>
     <string name="module_installation_failed">Installazione del modulo fallita</string>
     <string name="binary_installation_failed">Installazione del binario fallita</string>
     <string name="removing_old_module">Rimozione del vecchio modulo...</string>
@@ -304,7 +302,6 @@
     <string name="comma">,</string>
     <string name="gb_size">%1$dGB</string>
     <!-- Sparse Image Config Screen -->
-    <string name="sparse_image_configuration">Configurazione Sparse Image</string>
     <string name="storage_configuration">Configurazione Storage</string>
     <string name="about_sparse_images">Informazioni sulle Sparse Image</string>
     <string name="sparse_images_recommended">Le sparse image sono consigliate quando si usano contenitori su storage cifrato, partizioni /data F2FS, o altri filesystem che potrebbero avere problemi di compatibilità con il montaggio diretto delle directory.</string>
@@ -386,8 +383,6 @@
     <string name="no_matches">Nessuna corrispondenza</string>
     <string name="empty_directory">Directory vuota</string>
     <string name="select_folder">Seleziona Cartella</string>
-    <string name="tcp">TCP</string>
-    <string name="udp">UDP</string>
     <string name="cpu">CPU:</string>
     <string name="ram">RAM:</string>
     <string name="terminal_logs">Log Terminale</string>
@@ -432,11 +427,9 @@
     <string name="cgroup_v1_option">Cgroup V1</string>
     <string name="deadlock_shield_option">Scudo di blocco</string>
     <string name="privileged_option">Privilegiato</string>
-    <string name="error_container_name_too_long">Nome troppo lungo - massimo 17 caratteri (limite del percorso del dispositivo loop del kernel)</string>
     <string name="custom_init_warning">Non modificare questo valore a meno che non si sappia esattamente cosa si sta facendo. L\'impostazione di un binario init errato impedirà l\'avvio del contenitore.</string>
     <string name="repo_dl_error_cannot_resume">Impossibile riprendere il download</string>
     <string name="repo_dl_error_no_space">Memoria insufficiente</string>
-    <string name="repo_error_network">Errore di rete</string>
     <string name="hw_access_disclaimer">A partire da Droidspaces v6.1.0, udevd ha accesso effettivo ai sottosistemi USB, a blocchi, di input, TTY e di rete. Il tuo contenitore può avere il controllo dell\'hardware attualmente in uso da Android.\n\nSe la tastiera, la scheda SD o il dispositivo USB smettono di funzionare su Android dopo l\'avvio di un contenitore, NON si tratta di un bug. Il contenitore ne ha preso il controllo. Hai richiesto l\'accesso completo all\'hardware.\n\nNON segnalare problemi causati da conflitti hardware o kernel panic durante l\'utilizzo di questa modalità.</string>
     <string name="repo_dl_error_file_exists">Il file esiste già</string>
     <string name="custom_init_option">Init personalizzato</string>

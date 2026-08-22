@@ -13,7 +13,6 @@
     <string name="close">关闭</string>
     <string name="refresh">刷新</string>
     <string name="search">搜索</string>
-    <string name="clear">清除</string>
     <string name="container_singular">容器</string>
     <string name="running">运行中</string>
     <string name="kernel_requirements_copied">内核所需配置已复制到剪贴板</string>
@@ -262,7 +261,6 @@
     <string name="no_output_available">没有可用的输出</string>
     <string name="container_path">容器路径：%1$s</string>
     <string name="installation_failed">安装失败</string>
-    <string name="unknown_error">发生未知错误</string>
     <string name="environment_variables">环境变量</string>
     <string name="no_static_services">没有静态服务</string>
     <string name="search_services">搜索服务...</string>
@@ -300,7 +298,6 @@
     <string name="not_configured">未配置</string>
     <string name="failed_to_update_config">更新配置失败</string>
     <string name="error_octet_range">范围：1-254</string>
-    <string name="sparse_image_configuration">稀疏镜像配置</string>
     <string name="no_options_enabled">未启用任何附加选项</string>
     <string name="no_services_found">未找到服务</string>
     <string name="dns_servers_hint">仅允许数字、点和冒号</string>
@@ -380,8 +377,6 @@
     <string name="no_matches">没有匹配项</string>
     <string name="empty_directory">空目录</string>
     <string name="select_folder">选择文件夹</string>
-    <string name="tcp">TCP</string>
-    <string name="udp">UDP</string>
     <string name="cpu">CPU:</string>
     <string name="ram">RAM:</string>
     <string name="terminal_logs">终端日志</string>
@@ -402,7 +397,6 @@
     <string name="starting_export">开始导出...</string>
     <string name="welcome_tagline">Linux 容器。原生运行。零性能损耗。</string>
     <string name="feat_containers_title">真正的 Linux 容器</string>
-    <string name="error_container_name_too_long">名称过长 - 最多17个字符（内核loop设备路径限制）</string>
     <string name="network_mode_host_short">主机</string>
     <string name="network_mode_nat_short">NAT</string>
     <string name="network_mode_none_short">无</string>
@@ -428,7 +422,6 @@
     <string name="repo_retry">重试</string>
     <string name="repo_notification_description">下载 Droidspaces 根文件系统</string>
     <string name="repo_error_no_assets">最新发布版中未找到根文件系统压缩包</string>
-    <string name="repo_error_network">网络错误</string>
     <string name="repo_dl_error_unknown">未知错误</string>
     <string name="repo_dl_error_cannot_resume">无法恢复下载</string>
     <string name="repo_dl_error_device_not_found">未找到存储</string>
@@ -451,7 +444,6 @@
     <string name="repo_custom_name_hint">仓库名称</string>
     <string name="repo_not_found_in_repo">仓库中未找到 %1$s</string>
     <string name="repo_manage_custom">管理仓库</string>
-    <string name="repo_no_custom">没有自定义仓库订阅。</string>
     <string name="repo_custom_add">订阅</string>
     <string name="repo_custom_name_empty">名称不能为空</string>
     <string name="repo_manager_subtitle">订阅自定义 rootfs.json 源。</string>
@@ -501,11 +493,9 @@
     <string name="error_gateway_bridge_taken">桥接已被 \'%1$s\' 使用。请使用不同的局域网名称。</string>
     <string name="error_gateway_iface_taken">接口已被另一个段（\'%1$s\'）使用。请使用其他接口。</string>
     <string name="openwrt_services">OpenWrt 服务</string>
-    <string name="procd_services_placeholder_desc">将在下一个补丁中加入 %1$s 的服务管理功能。</string>
     <string name="unknown_legend">未知</string>
     <string name="reload_service">重新加载服务</string>
     <string name="no_unknown_services">没有未知状态的服务</string>
-    <string name="procd_detected">已检测到 OpenWrt/procd</string>
     <string name="openwrt">OpenWrt</string>
     <string name="disk_usage">磁盘占用</string>
     <string name="disk_usage_used_of_total">已使用 %1$s / %2$s</string>

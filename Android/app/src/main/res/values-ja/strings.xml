@@ -19,7 +19,6 @@
     <string name="close">閉じる</string>
     <string name="refresh">更新</string>
     <string name="search">検索</string>
-    <string name="clear">一掃</string>
     <string name="container_singular">コンテナ</string>
     <string name="running">実行中</string>
     <string name="backend_checking">バックエンド: 確認中…</string>
@@ -157,7 +156,6 @@
     <string name="installing_droidspaces">ドロイドスペースのインストール中</string>
     <string name="module_installed_success">Magisk モジュールが正常にインストールされました</string>
     <string name="backend_installed_success">ドロイドスペースのバックエンドが正常にインストールされました</string>
-    <string name="unknown_error">不明なエラーが発生しました</string>
     <string name="module_installation_failed">モジュールのインストールに失敗しました</string>
     <string name="binary_installation_failed">実行可能ファイルのインストールが失敗しました</string>
     <string name="removing_old_module">古いモジュールを削除しています…</string>
@@ -289,7 +287,6 @@
     <string name="search_services">サービスを検索…</string>
     <string name="action_successful">%1$sの%2$sに成功せり</string>
     <string name="no_local_users_found">ローカル・ユーザーは見つかりませんでした</string>
-    <string name="sparse_image_configuration">スパース・イメージの構成</string>
     <string name="about_sparse_images">スパース・イメージとは</string>
     <string name="sparse_images_recommended">暗号化された保存領域を使う場合、/data パーティションがF2FSである場合、あるいは直接マウントすると互換性の問題があるかもしれないファイルシステムの場合は、スパース・イメージが推奨されます。</string>
     <string name="sparse_images_description">スパース・イメージは、ループ・デバイスとしてマウントされる専用のext4ファイルシステム・イメージファイルを作成する事で、より良い隔離と互換性を提供します。</string>
@@ -366,8 +363,6 @@
     <string name="custom_init_warning">自分が何をしているのか完全に理解しているのでなければ本項目を変更しないでください。init実行可能ファイルを誤って設定するとコンテナが起動しなくなります。</string>
     <string name="no_matches">該当なし</string>
     <string name="empty_directory">空のディレクトリ</string>
-    <string name="tcp">TCP</string>
-    <string name="udp">UDP</string>
     <string name="cpu">中央演算処理装置 (CPU):</string>
     <string name="ram">RAM:</string>
     <string name="terminal_logs">ターミナルの記録</string>
@@ -381,7 +376,6 @@
     <string name="session_running_singular">1個のセッションを実行中 · タップで復元</string>
     <string name="repo_not_found_in_repo">%1$s はリポジトリ内では見つかりませんでした</string>
     <string name="please_wait_hint">要求を処理しています。しばらくお待ちください…</string>
-    <string name="error_container_name_too_long">名前が長すぎます - 最大で17文字 (カーネルにおけるループデバイスのパスの制約)</string>
     <string name="restore">復元</string>
     <string name="notification_title">Droidspaces ターミナル</string>
     <string name="notification_action_exit">終了</string>
@@ -401,7 +395,6 @@
     <string name="repo_cancel">キャンセル</string>
     <string name="repo_install">インストール</string>
     <string name="repo_retry">再試行</string>
-    <string name="repo_error_network">ネットワーク・エラー</string>
     <string name="repo_dl_error_unknown">未知のエラー</string>
     <string name="repo_dl_error_cannot_resume">ダウンロードを再開できません</string>
     <string name="repo_dl_error_device_not_found">保存領域が見つかりません</string>
@@ -422,5 +415,4 @@
     <string name="repo_custom_remove">削除</string>
     <string name="repo_custom_name_empty">名前は空欄にはできません</string>
     <string name="repo_custom_url_empty">URLは空欄にはできません</string>
-    <string name="repo_no_custom">購読しているカスタム・リポジトリは、まだありません。</string>
 </resources>

@@ -48,6 +48,7 @@ import com.droidspaces.app.ui.util.FocusUtils
 import com.droidspaces.app.ui.util.rememberClearFocus
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -121,6 +122,10 @@ fun FilePickerDialog(
         }
     }
 
+    // Typing a path in the search box jumps to that directory. Only set currentPath here
+    // and let the effect above do the listing: fetching here as well raced it, and whichever
+    // of the two finished last decided what you saw. The delay debounces the root shell
+    // probe, since LaunchedEffect cancels the previous run on every keystroke.
     LaunchedEffect(searchQuery) {
         if (searchQuery.startsWith("/") && searchQuery.length > 1) {
             val targetDir = if (searchQuery.endsWith("/")) {
@@ -129,16 +134,12 @@ fun FilePickerDialog(
                 File(searchQuery).parent ?: "/"
             }
             if (targetDir != currentPath && targetDir.isNotEmpty()) {
+                delay(300)
                 val exists = withContext(Dispatchers.IO) {
                     val result = Shell.cmd("[ -d ${ContainerCommandBuilder.quote(targetDir)} ] && echo yes").exec()
                     result.isSuccess && result.out.firstOrNull() == "yes"
                 }
-                if (exists) {
-                    currentPath = targetDir
-                    isLoading = true
-                    items = fetchItems(targetDir, showFiles)
-                    isLoading = false
-                }
+                if (exists) currentPath = targetDir
             }
         }
     }
@@ -352,25 +353,33 @@ private fun FileItemRow(
 }
 
 private suspend fun fetchItems(path: String, showFiles: Boolean): List<FileItem> = withContext(Dispatchers.IO) {
-    val result = Shell.cmd("ls -F ${ContainerCommandBuilder.quote(path)} 2>/dev/null").exec()
+    // `ls -F` cannot answer "is this a directory". It marks a symlink with @ even when the
+    // symlink points at one, so /sdcard was unreachable, and it strips a real trailing
+    // *@=|> from a filename. Ask the shell instead: [ -d ] follows symlinks, so a link to
+    // a directory is reported as one, and the d/ f/ prefix survives any character in the
+    // name. Still one root round-trip. Names containing a newline cannot be represented
+    // line-by-line and are dropped rather than splitting into bogus entries.
+    val script = """
+        cd ${ContainerCommandBuilder.quote(path)} 2>/dev/null || exit 1
+        for f in * .*; do
+            [ "${'$'}f" = "." ] || [ "${'$'}f" = ".." ] && continue
+            [ -e "${'$'}f" ] || [ -L "${'$'}f" ] || continue
+            if [ -d "${'$'}f" ]; then echo "d/${'$'}f"; else echo "f/${'$'}f"; fi
+        done
+    """.trimIndent()
+
+    val result = Shell.cmd(script).exec()
     if (!result.isSuccess) return@withContext emptyList()
 
     result.out.mapNotNull { line ->
-        if (line.isEmpty()) return@mapNotNull null
-        val rawName = line.trim()
-        val isDirectory = rawName.endsWith("/")
-        val cleanName = if (isDirectory) {
-            rawName.dropLast(1)
-        } else {
-            val last = rawName.last()
-            if (last == '*' || last == '@' || last == '=' || last == '|' || last == '>') {
-                rawName.dropLast(1)
-            } else {
-                rawName
-            }
+        val isDirectory = when {
+            line.startsWith("d/") -> true
+            line.startsWith("f/") -> false
+            else -> return@mapNotNull null
         }
-        if (cleanName.isEmpty()) return@mapNotNull null
+        val name = line.substring(2)
+        if (name.isEmpty()) return@mapNotNull null
         if (!showFiles && !isDirectory) return@mapNotNull null
-        FileItem(cleanName, isDirectory)
-    }.sortedWith(compareBy({ !it.isDirectory }, { it.name }))
+        FileItem(name, isDirectory)
+    }.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
 }

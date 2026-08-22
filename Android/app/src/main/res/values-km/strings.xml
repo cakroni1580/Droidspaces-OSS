@@ -20,7 +20,6 @@
     <string name="close">បិទ</string>
     <string name="refresh">ផ្ទុកឡើងវិញ</string>
     <string name="search">ស្វែងរក</string>
-    <string name="clear">សម្អាត</string>
     <string name="container_singular">កុងតឺន័រ</string>
     <string name="running">កំពុងដំណើរការ</string>
     <string name="backend_checking">Backend: កំពុងពិនិត្យ...</string>
@@ -257,7 +256,6 @@
     <string name="installing_droidspaces">កំពុងដំឡើង Droidspaces</string>
     <string name="module_installed_success">ម៉ូឌុល Magisk ត្រូវបានដំឡើងដោយជោគជ័យ</string>
     <string name="backend_installed_success">បានដំឡើងផ្នែកខាងក្រោយ Droidspaces ដោយជោគជ័យ</string>
-    <string name="unknown_error">កំហុសមិនស្គាល់បានកើតឡើង</string>
     <string name="module_installation_failed">ការដំឡើងម៉ូឌុលបានបរាជ័យ</string>
     <string name="binary_installation_failed">ការដំឡើងប្រព័ន្ធគោលពីរបានបរាជ័យ</string>
     <string name="removing_old_module">ការដកម៉ូឌុលចាស់ចេញ...</string>
@@ -274,9 +272,7 @@
     <string name="no_matches">គ្មាន​ការ​ផ្គូផ្គង​ទេ</string>
     <string name="empty_directory">ថតឯកសារទទេ</string>
     <string name="select_folder">ជ្រើសរើសថតឯកសារ</string>
-    <string name="tcp">TCP</string>
     <string name="extracting_module_files">កំពុងស្រង់ឯកសារម៉ូឌុល...</string>
-    <string name="udp">UDP</string>
     <string name="cpu">CPU:</string>
     <string name="ram">RAM:</string>
     <string name="terminal_logs">កំណត់ហេតុស្ថានីយ</string>
@@ -343,7 +339,6 @@
     <string name="copy_login">ចម្លងការចូល</string>
     <string name="comma">,</string>
     <string name="gb_size">%1$dជីកាបៃ</string>
-    <string name="sparse_image_configuration">ការកំណត់រចនាសម្ព័ន្ធរូបភាពរាយប៉ាយ</string>
     <string name="storage_configuration">ការកំណត់រចនាសម្ព័ន្ធឧបករណ៍ផ្ទុក</string>
     <string name="about_sparse_images">អំពីរូបភាពស្ប៉ាស</string>
     <string name="sparse_images_recommended">ការប្រើប្រាស់ Sparse images ត្រូវបានណែនាំ នៅពេលដែលអ្នកប្រើប្រាស់ Containers នៅលើទំហំផ្ទុកទិន្នន័យដែលបានកូដនីយកម្ម (Encrypted storage), ភាគថាស (Partitions) នៃ F2FS /data ឬប្រព័ន្ធឯកសារ (Filesystems) ផ្សេងទៀត ដែលអាចមានបញ្ហាភាពស៊ីគ្នាចំពោះការភ្ជាប់ថតឯកសារដោយផ្ទាល់ (Direct directory mounting)។</string>
@@ -362,7 +357,6 @@
     <string name="copy_logs">ចម្លងអត្ថបទកំណត់ហេតុ</string>
     <string name="error_container_name_empty">ឈ្មោះកុងតឺន័រមិនអាចទទេបានទេ</string>
     <string name="error_container_name_invalid">ឈ្មោះកុងតឺន័រអាចមានត្រឹមតែ អក្សរ, លេខ, សញ្ញាដក (-), សញ្ញាគូសក្រោម (_), សញ្ញាចុច (.) និងចន្លោះមិនឃើញ (ដកឃ្លា) តែប៉ុណ្ណោះ</string>
-    <string name="error_container_name_too_long">ឈ្មោះវែងពេក - អតិបរមា 17 តួអក្សរ (ដែនកំណត់ផ្លូវឧបករណ៍ kernel loop)</string>
     <string name="error_hostname_invalid">ឈ្មោះម៉ាស៊ីន (Hostname) អាចមានត្រឹមតែ អក្សរ, លេខ និងសញ្ញាដក (-) តែប៉ុណ្ណោះ</string>
     <string name="check_requirements">ពិនិត្យតម្រូវការ</string>
     <string name="requirements_check_title">ការពិនិត្យលក្ខខណ្ឌតម្រូវ</string>
@@ -428,7 +422,6 @@
     <string name="repo_retry">ព្យាយាមម្តងទៀត</string>
     <string name="repo_notification_description">ទាញយក Droidspaces rootfs</string>
     <string name="repo_error_no_assets">រកមិនឃើញ rootfs tarballs នៅក្នុងការចេញផ្សាយចុងក្រោយបំផុតទេ</string>
-    <string name="repo_error_network">កំហុសបណ្តាញ ឬ មានកំហុសប្រព័ន្ធបណ្តាញ</string>
     <string name="repo_dl_error_unknown">កំហុសមិនស្គាល់ ឬ មានកំហុសមិនស្គាល់អត្តសញ្ញាណ</string>
     <string name="repo_dl_error_cannot_resume">មិនអាចបន្តការទាញយកបានទេ</string>
     <string name="repo_dl_error_device_not_found">រកមិនឃើញទំហំផ្ទុកទិន្នន័យទេ</string>
@@ -453,7 +446,6 @@
     <string name="repo_custom_name_empty">ឈ្មោះមិនអាចទទេបានទេ</string>
     <string name="repo_custom_url_empty">URL មិនអាចទទេបានទេ</string>
     <string name="repo_custom_url_invalid">URL ត្រូវតែចាប់ផ្តើមដោយ https://</string>
-    <string name="repo_no_custom">មិនទាន់មានការជាវ Repository ផ្ទាល់ខ្លួននៅឡើយទេ។</string>
     <string name="termux_requirements">តម្រូវការប្រព័ន្ធសម្រាប់ Termux</string>
     <string name="virgl_option">VirGL</string>
     <string name="pulseaudio_option">PulseAudio</string>
@@ -506,8 +498,6 @@
     <string name="error_gateway_iface_taken">ចំណុចប្រទាក់ត្រូវបានប្រើប្រាស់រួចហើយដោយបណ្តាញផ្សេង (\'%1$s\')។ សូមប្រើចំណុចប្រទាក់ផ្សេង។</string>
     <string name="openwrt_services">សេវាកម្មOpenWrt</string>
     <string name="openwrt">OpenWrt</string>
-    <string name="procd_detected">បានរកឃើញ OpenWrt/procd</string>
-    <string name="procd_services_placeholder_desc">ការគ្រប់គ្រងសេវាកម្មសម្រាប់ %1$s នឹងត្រូវបន្ថែមនៅក្នុងកំណែបច្ចុប្បន្នភាពបន្ទាប់។</string>
     <string name="unknown_legend">មិនស្គាល់</string>
     <string name="reload_service">ផ្ទុកសេវាកម្មឡើងវិញ (Reload service)</string>
     <string name="no_unknown_services">គ្មានសេវាកម្មដែលមានស្ថានភាពមិនស្គាល់ទេ</string>

@@ -19,7 +19,6 @@
     <string name="close">Tutup</string>
     <string name="refresh">Segarkan</string>
     <string name="search">Mencari</string>
-    <string name="clear">Bersihkan</string>
     <string name="container_singular">Kontainer</string>
     <string name="running">berjalan</string>
     <string name="backend_checking">Backend: Mengecek...</string>
@@ -205,7 +204,6 @@
     <string name="installing_droidspaces">Memasang Droidspaces</string>
     <string name="module_installed_success">Module magisk telah sukses di pasang</string>
     <string name="backend_installed_success">Backend droidspaces berhasil di pasang</string>
-    <string name="unknown_error">Terjadi kesalahan yang tidak diketahui</string>
     <string name="module_installation_failed">Pemasangan module gagal</string>
     <string name="binary_installation_failed">Pemasangan binary gagal</string>
     <string name="removing_old_module">Menghapus module lama...</string>
@@ -265,7 +263,6 @@
     <string name="no_local_users_found">Tidak ditemukan pengguna lokal</string>
     <string name="select_user">Pilih Pengguna</string>
     <string name="copy_login">Salin data login</string>
-    <string name="sparse_image_configuration">Konfigurasi Sparse Image</string>
     <string name="storage_configuration">Konfigurasi Penyimpanan</string>
     <string name="about_sparse_images">Tentang Sparse Images</string>
     <string name="sparse_images_recommended">Disarankan untuk menggunakan sparse images saat menggunakan kontainer pada penyimpanan yang terenkripsi, partisi /data F2FS, atau sistem berkas lain yang mungkin mengalami masalah kompatibilitas dengan pemasangan direktori secara langsung.</string>
@@ -370,8 +367,6 @@
     <string name="no_matches">Tidak ada hasil</string>
     <string name="empty_directory">Direktori kosong</string>
     <string name="select_folder">Pilih Folder</string>
-    <string name="tcp">TCP</string>
-    <string name="udp">UDP</string>
     <string name="cpu">CPU:</string>
     <string name="ram">RAM:</string>
     <string name="terminal_logs">Log Terminal</string>
@@ -396,7 +391,6 @@
     <string name="export_container_failed">Gagal mengekspor container %1$s</string>
     <string name="starting_export">Memulai ekspor...</string>
     <string name="help_card_url" translatable="false">https://github.com/ravindu644/Droidspaces-OSS/blob/main/Documentation/Installation-Android.md</string>
-    <string name="error_container_name_too_long">Nama terlalu panjang - maksimal 17 karakter (batas panjang path perangkat loop kernel)</string>
     <string name="network_mode_nat_short">NAT</string>
     <string name="network_mode_none_short">Tidak ada</string>
     <string name="custom_init_label">Biner Init Kustom</string>
@@ -424,7 +418,6 @@
     <string name="repo_retry">Coba Lagi</string>
     <string name="repo_notification_description">Unduhan rootfs Droidspaces</string>
     <string name="repo_error_no_assets">Tidak ditemukan rootfs tarball pada rilis terbaru</string>
-    <string name="repo_error_network">Kesalahan jaringan</string>
     <string name="repo_dl_error_unknown">Kesalahan tidak diketahui</string>
     <string name="repo_dl_error_cannot_resume">Tidak dapat melanjutkan unduhan</string>
     <string name="repo_dl_error_device_not_found">Penyimpanan tidak ditemukan</string>
@@ -449,7 +442,6 @@
     <string name="repo_custom_name_empty">Nama tidak boleh kosong</string>
     <string name="repo_custom_url_empty">URL tidak boleh kosong</string>
     <string name="repo_custom_url_invalid">URL harus diawali dengan https://</string>
-    <string name="repo_no_custom">Belum ada repositori kustom yang dilanggan.</string>
     <string name="termux_requirements">Persyaratan Termux</string>
     <string name="virgl_option">VirGL</string>
     <string name="pulseaudio_option">PulseAudio</string>
@@ -495,8 +487,6 @@
     <string name="read_only">Hanya baca</string>
     <string name="openwrt_services">Layanan OpenWrt</string>
     <string name="openwrt">OpenWrt</string>
-    <string name="procd_detected">OpenWrt/procd terdeteksi</string>
-    <string name="procd_services_placeholder_desc">Manajemen layanan untuk %1$s akan ditambahkan pada patch berikutnya.</string>
     <string name="unknown_legend">Tidak diketahui</string>
     <string name="reload_service">Muat ulang layanan</string>
     <string name="no_unknown_services">Tidak ada layanan dengan status tidak diketahui</string>

@@ -30,6 +30,13 @@ class ContainerInstallationViewModel : ViewModel() {
     var sparseImageSizeGB: Int by mutableStateOf(8)
         private set
 
+    /**
+     * Destination volume for the rootfs, or null for the default location under
+     * CONTAINERS_BASE_PATH. Only the bulk data moves; config and .env stay internal.
+     */
+    var storageDir: String? by mutableStateOf(null)
+        private set
+
     /** All editable networking/security/advanced config, hoisted as one value. */
     var configState: ContainerConfigState by mutableStateOf(ContainerConfigState())
         private set
@@ -43,9 +50,10 @@ class ContainerInstallationViewModel : ViewModel() {
         this.hostname = hostname
     }
 
-    fun setSparseImageConfig(useSparseImage: Boolean, sizeGB: Int) {
+    fun setSparseImageConfig(useSparseImage: Boolean, sizeGB: Int, storageDir: String? = null) {
         this.useSparseImage = useSparseImage
         this.sparseImageSizeGB = sizeGB
+        this.storageDir = storageDir
     }
 
     fun setConfig(config: ContainerConfigState) {
@@ -60,9 +68,9 @@ class ContainerInstallationViewModel : ViewModel() {
             name = containerName,
             hostname = hostname.ifEmpty { ValidationUtils.sanitizeHostname(containerName) },
             rootfsPath = if (useSparseImage) {
-                ContainerManager.getSparseImagePath(containerName)
+                ContainerManager.getSparseImagePath(containerName, storageDir)
             } else {
-                ContainerManager.getRootfsPath(containerName)
+                ContainerManager.getRootfsPath(containerName, storageDir)
             },
             status = ContainerStatus.STOPPED, // Default status for new container
             useSparseImage = useSparseImage,
@@ -76,6 +84,7 @@ class ContainerInstallationViewModel : ViewModel() {
         hostname = ""
         useSparseImage = true
         sparseImageSizeGB = 8
+        storageDir = null
         configState = ContainerConfigState()
     }
 }

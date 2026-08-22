@@ -19,7 +19,6 @@
     <string name="close">වසා දමන්න</string>
     <string name="refresh">අලුත් කරන්න</string>
     <string name="search">සොයන්න</string>
-    <string name="clear">මකන්න</string>
     <string name="container_singular">කන්ටේනර්</string>
     <string name="running">ධාවනය වේ</string>
     <string name="backend_checking">Backend: පරීක්ෂා කරමින්...</string>
@@ -200,7 +199,6 @@
     <string name="installing_droidspaces">Droidspaces ස්ථාපනය වෙමින් පවතී</string>
     <string name="module_installed_success">Magisk මොඩියුලය සාර්ථකව ස්ථාපනය කරන ලදී</string>
     <string name="backend_installed_success">Droidspaces backend එක සාර්ථකව ස්ථාපනය කරන ලදී</string>
-    <string name="unknown_error">නොදන්නා දෝෂයක් සිදු විය</string>
     <string name="module_installation_failed">මොඩියුල ස්ථාපනය අසාර්ථක විය</string>
     <string name="binary_installation_failed">Backend එක ස්ථාපනය අසාර්ථක විය</string>
     <string name="removing_old_module">පැරණි මොඩියුලය ඉවත් කරමින්...</string>
@@ -267,7 +265,6 @@
     <string name="copy_login">ඇතුල්වීම පිටපත් කරන්න</string>
     <string name="comma">,</string>
     <string name="gb_size">%1$dGB</string>
-    <string name="sparse_image_configuration">Sparse Image සැකසුම</string>
     <string name="storage_configuration">ආචයන සැකසුම</string>
     <string name="about_sparse_images">Sparse Images පිළිබඳව</string>
     <string name="sparse_images_recommended">ඔයාගේ Storage එක encrypted නම් හෝ, ඒකේ ගොනු පද්ධතිය F2FS නම්, කන්ටේනර භාවිතා කිරීමේදී විවිඳ ගැටලු මතුවෙන්න පුළුවන්. එවැනි ගැටළු සියල්ලම මඟ හරවා ගන්න පුළුවන් sparse image එකක් ඇතුලේ ඔයාගේ කන්ටේනරය ස්ථාපනය කිරීමෙන්.</string>

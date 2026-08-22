@@ -22,7 +22,6 @@
     <string name="close">Fermer</string>
     <string name="refresh">Rafraîchir</string>
     <string name="search">Rechercher</string>
-    <string name="clear">Effacer</string>
     <!-- Main Tab Screen -->
     <string name="container_singular">Conteneur</string>
     <string name="running">En cours</string>
@@ -148,7 +147,6 @@
     <string name="installing_droidspaces">Installation de Droidspaces</string>
     <string name="module_installed_success">Module Magisk installé avec succès</string>
     <string name="backend_installed_success">Le backend a été installé avec succès</string>
-    <string name="unknown_error">Une erreur inconnue est survenue</string>
     <string name="module_installation_failed">Échec de l\'installation du module</string>
     <string name="binary_installation_failed">Échec de l\'installation du binaire</string>
     <string name="removing_old_module">Suppression de l\'ancien module...</string>
@@ -225,7 +223,6 @@
     <string name="comma">,</string>
     <string name="gb_size">%1$dGB</string>
     <!-- Sparse Image Config Screen -->
-    <string name="sparse_image_configuration">Configuration de l\'image sparse</string>
     <string name="storage_configuration">Configuration du stockage</string>
     <string name="about_sparse_images">À propos des images sparse</string>
     <string name="sparse_images_recommended">Les images sparse sont recommandées lors de l\'utilisation de conteneurs sur un stockage chiffré, des partitions F2FS /data, ou d\'autres systèmes de fichiers pouvant poser des problèmes de compatibilité avec le montage de répertoire direct.</string>

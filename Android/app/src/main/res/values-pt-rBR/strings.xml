@@ -22,7 +22,6 @@
     <string name="close">Fechar</string>
     <string name="refresh">Atualizar</string>
     <string name="search">Pesquisar</string>
-    <string name="clear">Limpar</string>
     <!-- Main Tab Screen -->
     <string name="container_singular">Container</string>
     <string name="running">Em execução</string>
@@ -148,7 +147,6 @@
     <string name="installing_droidspaces">Instalando Droidspaces</string>
     <string name="module_installed_success">Módulo Magisk instalado com sucesso</string>
     <string name="backend_installed_success">Backend instalado com sucesso</string>
-    <string name="unknown_error">Ocorreu um erro desconhecido</string>
     <string name="module_installation_failed">Falha na instalação do módulo</string>
     <string name="binary_installation_failed">Falha na instalação dos binários</string>
     <string name="removing_old_module">Removendo módulo antigo...</string>
@@ -225,7 +223,6 @@
     <string name="comma">,</string>
     <string name="gb_size">%1$d GB</string>
     <!-- Sparse Image Config Screen -->
-    <string name="sparse_image_configuration">Configuração de Imagem Esparsa</string>
     <string name="storage_configuration">Configuração de Armazenamento</string>
     <string name="about_sparse_images">Sobre Imagens Esparsas</string>
     <string name="sparse_images_recommended">Imagens esparsas são recomendadas ao usar containers em armazenamento criptografado, partições F2FS /data ou outros sistemas de arquivos que podem ter problemas de compatibilidade com montagem direta de diretórios.</string>

@@ -11,6 +11,9 @@ import java.io.FileOutputStream
 import java.io.InputStream
 
 object ContainerInstaller {
+    /* Every path below reaches a root shell, and the rootfs one is now user-chosen. */
+    private fun quote(value: String) = ContainerCommandBuilder.quote(value)
+
     private const val CONTAINERS_BASE_PATH = Constants.CONTAINERS_BASE_PATH
     private const val BUSYBOX_PATH = Constants.BUSYBOX_BINARY_PATH
 
@@ -28,11 +31,12 @@ object ContainerInstaller {
         // Use sanitized name for directory (spaces -> dashes)
         val sanitizedName = ContainerManager.sanitizeContainerName(config.name)
         val containerPath = ContainerManager.getContainerDirectory(config.name)
-        val rootfsPath = if (config.useSparseImage) {
-            ContainerManager.getSparseImagePath(config.name)
-        } else {
-            ContainerManager.getRootfsPath(config.name)
-        }
+        // Honour the path the caller resolved. Re-deriving it from the name here is what
+        // used to pin every container to CONTAINERS_BASE_PATH regardless of the
+        // destination chosen in the wizard.
+        val rootfsPath = config.rootfsPath
+        val rootfsParent = rootfsPath.substringBeforeLast('/')
+        val isExternal = rootfsParent != containerPath
         val configFilePath = "$containerPath/${Constants.CONTAINER_CONFIG_FILE}"
         var createdPaths = mutableListOf<String>()
 
@@ -43,26 +47,47 @@ object ContainerInstaller {
                 return@withContext Result.failure(Exception(it))
             }
 
-            // Step 1: Check storage space
-            logger.i("Checking available storage space...")
-            val freeGB = StorageChecker.getFreeSpaceGB()
-            if (freeGB != null) {
-                logger.i("/data partition has ${freeGB}GB free space")
-                val requiredGB = if (config.useSparseImage) {
-                    (config.sparseImageSizeGB ?: 8) + Constants.MIN_STORAGE_GB
-                } else {
-                    Constants.MIN_STORAGE_GB
+            // Step 1: Re-check the destination. The wizard already refused an unusable
+            // one, but that decision can be stale by now and this is the only gate a
+            // non-wizard caller passes through, so it fails closed.
+            val target = StorageChecker.probe(rootfsParent)
+            when {
+                target.support == StorageSupport.UNUSABLE -> {
+                    val why = target.reason ?: "'${target.fsType}' cannot hold a container."
+                    logger.e(why)
+                    return@withContext Result.failure(Exception(why))
                 }
-                if (freeGB < requiredGB) {
-                    logger.w("Warning: Less than ${requiredGB}GB available. Installation may fail.")
+                target.support == StorageSupport.IMAGE_ONLY && !config.useSparseImage -> {
+                    val why = target.reason
+                        ?: "'${target.fsType}' cannot hold a rootfs directory. Use a sparse image."
+                    logger.e(why)
+                    return@withContext Result.failure(Exception(why))
+                }
+            }
+            logger.i("Destination $rootfsParent is ${target.fsType}")
+
+            // Step 2: Check storage space on the volume actually being written to
+            logger.i("Checking available storage space...")
+            val freeGB = target.freeGB
+            if (freeGB != null) {
+                logger.i("$rootfsParent has ${freeGB}GB free space")
+                if (freeGB < Constants.MIN_STORAGE_GB) {
+                    val why = "Not enough space at $rootfsParent: at least " +
+                        "${Constants.MIN_STORAGE_GB}GB free is required."
+                    logger.e(why)
+                    return@withContext Result.failure(Exception(why))
                 }
             } else {
+                // Unknown is not the same as insufficient. Blocking here would make the
+                // app unusable on a device where stat and df both fail, so warn instead
+                // and let the extraction report the real error if space runs out.
                 logger.w("Warning: Unable to determine free space. Proceeding anyway...")
             }
 
-            // Step 2: Create container directory
+            // Step 3: Create container directory. This holds the config, .env and pidfile
+            // and stays internal even when the rootfs lives on another volume.
             logger.i("Creating container directory: $containerPath")
-            val mkdirResult = Shell.cmd("mkdir -p \"$containerPath\" 2>&1").exec()
+            val mkdirResult = Shell.cmd("mkdir -p ${quote(containerPath)} 2>&1").exec()
             if (!mkdirResult.isSuccess) {
                 val errorOutput = (mkdirResult.out + mkdirResult.err).joinToString("\n").trim()
                 val errorMsg = if (errorOutput.isNotEmpty()) errorOutput else "Unknown error (exit code: ${mkdirResult.code})"
@@ -70,7 +95,18 @@ object ContainerInstaller {
             }
             createdPaths.add(containerPath)
 
-            // Step 3: Copy tarball to temp location
+            if (isExternal) {
+                logger.i("Creating storage directory: $rootfsParent")
+                val mkdirExt = Shell.cmd("mkdir -p ${quote(rootfsParent)} 2>&1").exec()
+                if (!mkdirExt.isSuccess) {
+                    val errorOutput = (mkdirExt.out + mkdirExt.err).joinToString("\n").trim()
+                    val errorMsg = if (errorOutput.isNotEmpty()) errorOutput else "Unknown error (exit code: ${mkdirExt.code})"
+                    throw Exception("Failed to create storage directory: $errorMsg")
+                }
+                createdPaths.add(rootfsParent)
+            }
+
+            // Step 4: Copy tarball to temp location
             logger.i("Copying tarball to temporary location...")
             val tarballExtension = getTarballExtension(context, tarballUri)
             val tempTarball = File("${context.cacheDir}/container_${sanitizedName}.tar$tarballExtension")
@@ -82,11 +118,11 @@ object ContainerInstaller {
 
             logger.i("Tarball copied: ${tempTarball.absolutePath}")
 
-            // Step 3.5: Verify the tarball is actually a Linux rootfs before we
+            // Step 4.5: Verify the tarball is actually a Linux rootfs before we
             // extract anything, so users can't install arbitrary archives.
             validateRootfsTarball(context, tempTarball, logger)
 
-            // Step 4: Extract tarball (either to directory or sparse image)
+            // Step 5: Extract tarball (either to directory or sparse image)
             if (config.useSparseImage) {
                 SparseImageInstaller.extract(
                     context = context,
@@ -98,7 +134,7 @@ object ContainerInstaller {
                 )
             } else {
                 // Create rootfs subdirectory
-                val mkdirRootfsResult = Shell.cmd("mkdir -p \"$rootfsPath\" 2>&1").exec()
+                val mkdirRootfsResult = Shell.cmd("mkdir -p ${quote(rootfsPath)} 2>&1").exec()
                 if (!mkdirRootfsResult.isSuccess) {
                     val errorOutput = (mkdirRootfsResult.out + mkdirRootfsResult.err).joinToString("\n").trim()
                     val errorMsg = if (errorOutput.isNotEmpty()) errorOutput else "Unknown error (exit code: ${mkdirRootfsResult.code})"
@@ -108,9 +144,9 @@ object ContainerInstaller {
                 logger.i("Extracting tarball to $rootfsPath...")
                 val isXz = tempTarball.name.lowercase().endsWith(".xz")
                 val extractCmd = if (isXz) {
-                    "cd \"$rootfsPath\" && $BUSYBOX_PATH xzcat \"${tempTarball.absolutePath}\" | $BUSYBOX_PATH tar -xpf - 2>&1"
+                    "cd ${quote(rootfsPath)} && $BUSYBOX_PATH xzcat ${quote(tempTarball.absolutePath)} | $BUSYBOX_PATH tar -xpf - 2>&1"
                 } else {
-                    "cd \"$rootfsPath\" && $BUSYBOX_PATH tar -xzpf \"${tempTarball.absolutePath}\" 2>&1"
+                    "cd ${quote(rootfsPath)} && $BUSYBOX_PATH tar -xzpf ${quote(tempTarball.absolutePath)} 2>&1"
                 }
 
                 val extractResult = Shell.cmd(extractCmd).exec()
@@ -126,7 +162,7 @@ object ContainerInstaller {
                 applyPostExtractionFixes(context, rootfsPath, logger)
             }
 
-            // Step 5: Write container config
+            // Step 6: Write container config
             logger.i("Writing container configuration...")
             val configContent = config.toConfigContent()
 
@@ -137,7 +173,7 @@ object ContainerInstaller {
 
             // Copy temp config to final location using shell (root required)
             // Quote paths to handle any special characters
-            val copyResult = Shell.cmd("cp \"${tempConfigFile.absolutePath}\" \"$configFilePath\" 2>&1").exec()
+            val copyResult = Shell.cmd("cp ${quote(tempConfigFile.absolutePath)} ${quote(configFilePath)} 2>&1").exec()
             if (!copyResult.isSuccess) {
                 // Check both stdout and stderr for error messages
                 val errorOutput = (copyResult.out + copyResult.err).joinToString("\n").trim()
@@ -149,7 +185,7 @@ object ContainerInstaller {
             }
 
             // Set proper permissions
-            val chmodResult = Shell.cmd("chmod 644 \"$configFilePath\" 2>&1").exec()
+            val chmodResult = Shell.cmd("chmod 644 ${quote(configFilePath)} 2>&1").exec()
             if (!chmodResult.isSuccess) {
                 logger.w("Warning: Failed to set config file permissions")
             }
@@ -160,7 +196,7 @@ object ContainerInstaller {
             logger.i("Container configuration saved")
             createdPaths.add(configFilePath)
 
-            // Step 5.1: Write .env file if content exists
+            // Step 6.1: Write .env file if content exists
             if (!config.envFileContent.isNullOrBlank()) {
                 logger.i("Writing environment variables (.env)...")
                 val envFilePath = "$containerPath/.env"
@@ -169,12 +205,12 @@ object ContainerInstaller {
                 try {
                     tempEnvFile.writeText(config.envFileContent + "\n")
 
-                    val envCopyResult = Shell.cmd("cp \"${tempEnvFile.absolutePath}\" \"$envFilePath\" 2>&1").exec()
+                    val envCopyResult = Shell.cmd("cp ${quote(tempEnvFile.absolutePath)} ${quote(envFilePath)} 2>&1").exec()
                     if (!envCopyResult.isSuccess) {
                         val errorMsg = envCopyResult.err.joinToString("\n")
                         logger.w("Warning: Failed to copy .env file: $errorMsg")
                     } else {
-                        Shell.cmd("chmod 644 \"$envFilePath\"").exec()
+                        Shell.cmd("chmod 644 ${quote(envFilePath)}").exec()
                         logger.i("Environment variables saved")
                         createdPaths.add(envFilePath)
                     }
@@ -185,15 +221,15 @@ object ContainerInstaller {
                 }
             }
 
-            // Step 6: Verify installation
+            // Step 7: Verify installation
             logger.i("Verifying installation...")
             if (config.useSparseImage) {
-                val imgExists = Shell.cmd("test -f \"$rootfsPath\" && echo 'exists' || echo 'not_found'").exec()
+                val imgExists = Shell.cmd("test -f ${quote(rootfsPath)} && echo 'exists' || echo 'not_found'").exec()
                 if (!imgExists.isSuccess || !imgExists.out.any { it.contains("exists") }) {
                     throw Exception("Container sparse image not found after extraction")
                 }
             } else {
-            val rootfsExists = Shell.cmd("test -d \"$rootfsPath\" && echo 'exists' || echo 'not_found'").exec()
+            val rootfsExists = Shell.cmd("test -d ${quote(rootfsPath)} && echo 'exists' || echo 'not_found'").exec()
             if (!rootfsExists.isSuccess || !rootfsExists.out.any { it.contains("exists") }) {
                 throw Exception("Container rootfs directory not found after extraction")
                 }
@@ -282,7 +318,7 @@ object ContainerInstaller {
 
         try {
             // Make script executable
-            val chmodResult = Shell.cmd("chmod 755 \"${scriptFile.absolutePath}\" 2>&1").exec()
+            val chmodResult = Shell.cmd("chmod 755 ${quote(scriptFile.absolutePath)} 2>&1").exec()
             if (!chmodResult.isSuccess) {
                 // Fail CLOSED: never run a validator we could not make executable.
                 logger.e("Failed to make rootfs validator executable")
@@ -290,7 +326,7 @@ object ContainerInstaller {
             }
 
             val result = Shell.cmd(
-                "BUSYBOX_PATH=$BUSYBOX_PATH \"${scriptFile.absolutePath}\" \"${tarball.absolutePath}\" 2>&1"
+                "BUSYBOX_PATH=$BUSYBOX_PATH ${quote(scriptFile.absolutePath)} ${quote(tarball.absolutePath)} 2>&1"
             ).exec()
 
             if (!result.isSuccess) {
@@ -334,7 +370,7 @@ object ContainerInstaller {
         }
 
         // Make script executable
-        val chmodResult = Shell.cmd("chmod 755 \"${postFixScriptFile.absolutePath}\" 2>&1").exec()
+        val chmodResult = Shell.cmd("chmod 755 ${quote(postFixScriptFile.absolutePath)} 2>&1").exec()
         if (!chmodResult.isSuccess) {
             logger.w("Warning: Failed to make post-fix script executable")
             postFixScriptFile.delete()
@@ -343,7 +379,7 @@ object ContainerInstaller {
 
         try {
             // Execute the script
-            val result = Shell.cmd("BUSYBOX_PATH=$BUSYBOX_PATH \"${postFixScriptFile.absolutePath}\" \"$rootfsPath\" 2>&1").exec()
+            val result = Shell.cmd("BUSYBOX_PATH=$BUSYBOX_PATH ${quote(postFixScriptFile.absolutePath)} ${quote(rootfsPath)} 2>&1").exec()
 
             // Log all output from the script
             result.out.forEach { line ->

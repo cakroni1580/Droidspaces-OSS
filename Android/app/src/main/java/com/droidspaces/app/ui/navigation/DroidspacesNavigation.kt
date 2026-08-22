@@ -394,8 +394,9 @@ fun DroidspacesNavigation(
             SparseImageConfigScreen(
                 initialUseSparseImage = viewModel.useSparseImage,
                 initialSizeGB = viewModel.sparseImageSizeGB,
-                onNext = { useSparseImage, sizeGB ->
-                    viewModel.setSparseImageConfig(useSparseImage, sizeGB)
+                initialStorageDir = viewModel.storageDir,
+                onNext = { useSparseImage, sizeGB, storageDir ->
+                    viewModel.setSparseImageConfig(useSparseImage, sizeGB, storageDir)
                     navController.navigate(Screen.InstallationSummary.route)
                 },
                 onBack = {

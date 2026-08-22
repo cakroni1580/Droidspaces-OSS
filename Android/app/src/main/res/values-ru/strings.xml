@@ -22,7 +22,6 @@
     <string name="close">Закрыть</string>
     <string name="refresh">Обновить</string>
     <string name="search">Поиск</string>
-    <string name="clear">Очистить</string>
     <!-- Main Tab Screen -->
     <string name="container_singular">Контейнер</string>
     <string name="running">Запущено</string>
@@ -148,7 +147,6 @@
     <string name="installing_droidspaces">Установка Droidspaces</string>
     <string name="module_installed_success">Модуль Magisk успешно установлен</string>
     <string name="backend_installed_success">Бэкенд успешно установлен</string>
-    <string name="unknown_error">Произошла неизвестная ошибка</string>
     <string name="module_installation_failed">Не удалось установить модуль</string>
     <string name="binary_installation_failed">Не удалось установить бинарные файлы</string>
     <string name="removing_old_module">Удаление старого модуля...</string>
@@ -225,7 +223,6 @@
     <string name="comma">,</string>
     <string name="gb_size">%1$d ГБ</string>
     <!-- Sparse Image Config Screen -->
-    <string name="sparse_image_configuration">Конфигурация sparse images</string>
     <string name="storage_configuration">Конфигурация хранилища</string>
     <string name="about_sparse_images">О sparse images</string>
     <string name="sparse_images_recommended">Sparse images рекомендуются при использовании контейнеров на зашифрованном хранилище, разделах F2FS /data или других файловых системах, которые могут иметь проблемы совместимости с прямым монтированием директорий.</string>

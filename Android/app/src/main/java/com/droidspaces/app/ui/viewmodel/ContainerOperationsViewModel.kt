@@ -134,12 +134,14 @@ class ContainerOperationsViewModel(app: Application) : AndroidViewModel(app) {
             appContext.assets.open("export_container.sh").use { input ->
                 deployed.outputStream().use { out: OutputStream -> input.copyTo(out) }
             }
-            Shell.cmd("chmod 755 \"${deployed.absolutePath}\"").exec()
+            Shell.cmd("chmod 755 ${ContainerCommandBuilder.quote(deployed.absolutePath)}").exec()
 
             tempArchive = File("${appContext.cacheDir}/${container.name}_export_tmp.tar.gz")
             tempArchive.delete()
 
-            val cmd = "\"${deployed.absolutePath}\" \"${container.name}\" \"${tempArchive.absolutePath}\""
+            val cmd = "${ContainerCommandBuilder.quote(deployed.absolutePath)} " +
+                "${ContainerCommandBuilder.quote(container.name)} " +
+                ContainerCommandBuilder.quote(tempArchive.absolutePath)
             val success = ContainerOperationExecutor.executeCommand(
                 command = cmd,
                 operation = "export",
@@ -331,18 +333,38 @@ class ContainerOperationsViewModel(app: Application) : AndroidViewModel(app) {
             appContext.assets.open("sparsemgr.sh").use { input ->
                 deployedFile.outputStream().use { output: OutputStream -> input.copyTo(output) }
             }
-            Shell.cmd("chmod 755 \"${deployedFile.absolutePath}\"").exec()
+            Shell.cmd("chmod 755 ${ContainerCommandBuilder.quote(deployedFile.absolutePath)}").exec()
 
-            val baseDir = ContainerManager.getContainerDirectory(container.name)
+            // container.config is the only record of where the rootfs actually is; a
+            // container installed to a custom location cannot be derived from its name.
+            val rootfsPath = ContainerManager.readRootfsPath(container.name)
+            if (rootfsPath == null) {
+                logger.e("Could not read rootfs_path from ${container.name}'s container.config")
+                return
+            }
+            val rootfsParent = rootfsPath.substringBeforeLast('/')
+            val qScript = ContainerCommandBuilder.quote(deployedFile.absolutePath)
+
             val cmd = when (operation) {
                 is SparseOperation.Migrate -> {
+                    // sparsemgr derives <dir>/rootfs and <dir>/rootfs.img from -d, so it
+                    // wants the rootfs's own parent, not the container directory. Refuse
+                    // anything not laid out that way rather than pointing it at a path
+                    // that does not exist.
+                    if (rootfsPath.substringAfterLast('/') != "rootfs") {
+                        logger.e("Rootfs at $rootfsPath is not a directory-mode rootfs; cannot migrate.")
+                        return
+                    }
                     logger.i(string(R.string.starting_migration))
-                    "\"${deployedFile.absolutePath}\" -d \"$baseDir\" migrate $sizeGb"
+                    "$qScript -d ${ContainerCommandBuilder.quote(rootfsParent)} migrate $sizeGb"
                 }
                 is SparseOperation.Resize -> {
+                    if (rootfsPath.substringAfterLast('/') != "rootfs.img") {
+                        logger.e("Rootfs at $rootfsPath is not a sparse image; cannot resize.")
+                        return
+                    }
                     logger.i(string(R.string.starting_resizing))
-                    val imgPath = ContainerManager.getSparseImagePath(container.name)
-                    "\"${deployedFile.absolutePath}\" -i \"$imgPath\" resize $sizeGb --yes"
+                    "$qScript -i ${ContainerCommandBuilder.quote(rootfsPath)} resize $sizeGb --yes"
                 }
             }
 
@@ -360,7 +382,8 @@ class ContainerOperationsViewModel(app: Application) : AndroidViewModel(app) {
                     container.copy(
                         useSparseImage = true,
                         sparseImageSizeGB = sizeGb,
-                        rootfsPath = if (container.rootfsPath.endsWith(".img")) container.rootfsPath else "${container.rootfsPath}.img"
+                        // sparsemgr writes the image beside the rootfs it replaced.
+                        rootfsPath = "$rootfsParent/rootfs.img"
                     )
                 } else {
                     container.copy(sparseImageSizeGB = sizeGb)

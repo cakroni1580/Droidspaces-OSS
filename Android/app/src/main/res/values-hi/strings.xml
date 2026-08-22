@@ -22,7 +22,6 @@
     <string name="close">बंद करें</string>
     <string name="refresh">रीफ्रेश</string>
     <string name="search">खोजें</string>
-    <string name="clear">साफ करें</string>
     <!-- Main Tab Screen -->
     <string name="container_singular">कंटेनर</string>
     <string name="running">चल रहा है</string>
@@ -148,7 +147,6 @@
     <string name="installing_droidspaces">Droidspaces इंस्टॉल किया जा रहा है</string>
     <string name="module_installed_success">Magisk मॉड्यूल सफलतापूर्वक इंस्टॉल हुआ</string>
     <string name="backend_installed_success">Backend सफलतापूर्वक स्थापित हो गया</string>
-    <string name="unknown_error">अज्ञात त्रुटि हुई</string>
     <string name="module_installation_failed">मॉड्यूल इंस्टॉलेशन विफल</string>
     <string name="binary_installation_failed">बाइनरी इंस्टॉलेशन विफल</string>
     <string name="removing_old_module">पुराना मॉड्यूल हटाया जा रहा है...</string>
@@ -225,7 +223,6 @@
     <string name="comma">,</string>
     <string name="gb_size">%1$dGB</string>
     <!-- Sparse Image Config Screen -->
-    <string name="sparse_image_configuration">Sparse इमेज कॉन्फ़िगरेशन</string>
     <string name="storage_configuration">स्टोरेज कॉन्फ़िगरेशन</string>
     <string name="about_sparse_images">Sparse इमेज के बारे में</string>
     <string name="sparse_images_recommended">एन्क्रिप्टेड स्टोरेज, F2FS /data पार्टिशन या अन्य फ़ाइल सिस्टम के साथ कंटेनर उपयोग करते समय Sparse इमेज की सिफारिश की जाती है।</string>

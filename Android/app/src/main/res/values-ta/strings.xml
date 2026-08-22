@@ -63,7 +63,6 @@
     <string name="open_terminal">முனையத்தைத் திறக்கவும்</string>
     <string name="requirements_for_droidspaces">Droidspaces க்கான தேவைகள்</string>
     <string name="privileged_nomask_desc">/proc மற்றும் /sys க்கு எழுதும் அணுகலை அனுமதிக்க சிறை முகமூடிகளை முடக்கவும். குறிப்பு: வன்பொருள் அணுகலும் இயக்கப்பட்டாலன்றி, /sys படிக்க மட்டுமே இருக்கும்.</string>
-    <string name="repo_error_network">பிணையம் பிழை</string>
     <string name="hw_option">HW</string>
     <string name="hw_access_disclaimer">Droidspaces v6.1.0 இலிருந்து தொடங்கி, udevd ஆனது USB, block, input, TTY மற்றும் பிணைய துணை அமைப்புகளுக்கான உண்மையான அணுகலைக் கொண்டுள்ளது. உங்கள் கன்டெய்னர் ஆண்ட்ராய்டு தற்போது பயன்படுத்தும் வன்பொருளை சொந்தமாக வைத்திருக்க முடியும். \n\nஉங்கள் விசைப்பலகை, SD அட்டை அல்லது USB சாதனம் ஒரு கண்டெய்னரை அறிமுகப்படுத்திய பிறகு ஆண்ட்ராய்டு இல் வேலை செய்வதை நிறுத்தினால் - அது ஒரு பிழை அல்ல. கொள்கலன் அதை எடுத்தது. முழு வன்பொருள் அணுகலைக் கேட்டுள்ளீர்கள். \n\nஇந்த பயன்முறையைப் பயன்படுத்தும் போது வன்பொருள் முரண்பாடுகள் அல்லது கர்னல் பீதியால் ஏற்படும் சிக்கல்களைப் புகாரளிக்க வேண்டாம்.</string>
     <string name="privileged_full_desc">அனைத்து சலுகை பெற்ற கொடிகளையும் ஒரே நேரத்தில் இயக்கவும்.</string>
@@ -111,7 +110,6 @@
     <string name="privileged_mode_description">உள்ளமைக்கப்பட்ட மெய்நிகராக்கம் அல்லது மேம்பட்ட வன்பொருள் அணுகலுக்கான சிறுமணி பாதுகாப்பு தளர்வை உள்ளமைக்கவும்.</string>
     <string name="gpu_access_description">GPU முனைகளை தனிமைப்படுத்தப்பட்ட / dev இல் பிரதிபலிக்கவும் (முழு வன்பொருள் பாச்த்ரூ இல்லை)</string>
     <string name="feat_privileged_title">முழு சலுகை பெற்ற கொள்கலன்கள்</string>
-    <string name="clear">தெளிவு</string>
     <string name="gateway_iface_hint">eth1</string>
     <string name="repo_notification_description">Droidspaces rootfs பதிவிறக்கம்</string>
     <string name="unknown">தெரியவில்லை</string>
@@ -158,7 +156,6 @@
     <string name="install_container">கொள்கலனை நிறுவவும்</string>
     <string name="install_container_description">கீழே உள்ள பொத்தானைப் பயன்படுத்தி கொள்கலனை நிறுவவும்</string>
     <string name="enabled_legend">இயக்கப்பட்டது</string>
-    <string name="tcp">TCP</string>
     <string name="available_users">கிடைக்கும் பயனர்கள்</string>
     <string name="root_granted">ரூட் அணுகல் வழங்கப்பட்டது</string>
     <string name="port_forwarding">துறைமுகம் பகிர்தல்</string>
@@ -203,7 +200,6 @@
     <string name="disk_usage_calculating">கணக்கிடுகிறது…</string>
     <string name="gateway_configure_intro">கேட்வேயின் மெய்நிகர் LAN இல் இந்தக் கொள்கலன் எவ்வாறு செருகப்படுகிறது என்பதை இவை கட்டுப்படுத்துகின்றன. இயல்புநிலைகள் ஒரு நுழைவாயிலுக்குப் பின்னால் ஒரு லேனுக்கு வேலை செய்கின்றன - பல லேன் பிரிவுகள் அல்லது ஒன்றுக்கு மேற்பட்ட கேட்வேகளை இயக்கும் போது மட்டுமே அவற்றை மாற்றவும்.</string>
     <string name="gateway_configure_title">நுழைவாயிலை உள்ளமைக்கவும்</string>
-    <string name="procd_detected">OpenWrt/procd கண்டறியப்பட்டது</string>
     <string name="start">தொடங்கு</string>
     <string name="maximum_size_512gb">அதிகபட்ச அளவு 512 சிபி</string>
     <string name="container_name_label">கொள்கலன் பெயர் *</string>
@@ -268,7 +264,6 @@
     <string name="installation_failed">நிறுவல் தோல்வியடைந்தது</string>
     <string name="network_mode_nat">NAT (இயல்புநிலை)</string>
     <string name="repo_manage_custom">களஞ்சியங்களை நிர்வகிக்கவும்</string>
-    <string name="unknown_error">அறியப்படாத பிழை ஏற்பட்டது</string>
     <string name="logs_title">பதிவுகள்: %1$s</string>
     <string name="feat_autoboot_desc">திரை பூட்டப்பட்டிருந்தாலும், தரவு குறியாக்கம் செய்யப்பட்டிருந்தாலும், பூட்டில் கொள்கலன்களைத் தானாகத் தொடங்கவும்.</string>
     <string name="gateway_settings_description">இந்த கொள்கலனை திசைவியாக செயல்படும் மற்றொரு கொள்கலன் வழியாக இயக்கவும் (எ.கா. OpenWRT). அந்த நுழைவாயில் முதலில் இயங்க வேண்டும்.</string>
@@ -283,7 +278,6 @@
     <string name="operation_failed">ஆபரேசன் தோல்வி!</string>
     <string name="network_mode_host">விருந்தோம்பி</string>
     <string name="protocol">நெறிமுறை</string>
-    <string name="repo_no_custom">தனிப்பயன் களஞ்சியங்கள் எதுவும் இதுவரை குழுசேரவில்லை.</string>
     <string name="add_port_forward">துறைமுகம் முன்னோக்கி சேர்க்கவும்</string>
     <string name="custom_init_hint">இயல்புநிலை init (/sbin/init) பயன்படுத்த காலியாக விடவும்</string>
     <string name="restart">மறுதொடக்கம்</string>
@@ -318,7 +312,6 @@
     <string name="privileged_mode">சலுகை பெற்ற பயன்முறை</string>
     <string name="repo_dl_error_too_many_redirects">பல வழிமாற்றுகள்</string>
     <string name="dns_servers_placeholder">எ.கா. 1.1.1.1,8.8.8.8 (விரும்பினால்)</string>
-    <string name="udp">UDP</string>
     <string name="backend_not_available_description">Droidspaces பின்தளம் நிறுவப்படவில்லை அல்லது சிதைக்கப்படவில்லை. முதலில் அதை நிறுவவும்.</string>
     <string name="status_running">ஓடுகிறது</string>
     <string name="uptime_label">%1$s: %2$s</string>
@@ -404,7 +397,6 @@
     <string name="privileged_confirm_instruction">உறுதிப்படுத்த, \"எந்த பிழைகளையும் நான் புகாரளிக்க மாட்டேன்\" என்று பெரிய எழுத்துக்களில் தட்டச்சு செய்க:</string>
     <string name="edit_container_configuration">கொள்கலன் உள்ளமைவைத் திருத்து</string>
     <string name="home_title">வீடு</string>
-    <string name="procd_services_placeholder_desc">%1$sக்கான பணி நிர்வாகம் அடுத்த பேட்சில் சேர்க்கப்படும்.</string>
     <string name="telegram_channel">டெலிகிராம் சேனல்</string>
     <string name="resize_dialog_message">\"%1$s\"க்கான ச்பேச் படத்தின் அளவை மாற்றுகிறது. சுருங்குவதை விட அளவை அதிகரிப்பது பாதுகாப்பானது. உங்கள் தரவை காப்புப் பிரதி எடுக்கவும்.</string>
     <string name="no_running_services">இயங்கும் சேவைகள் இல்லை</string>
@@ -449,10 +441,8 @@
     <string name="feat_autoboot_title">பவர் அப் ஆன் ஆட்டோ பூட்</string>
     <string name="continue_button">தொடரவும்</string>
     <string name="android_storage_description">ஆண்ட்ராய்டு சேமிப்பகத்தை ஏற்றவும்</string>
-    <string name="sparse_image_configuration">ச்பேர்ச் பட கட்டமைப்பு</string>
     <string name="install">நிறுவவும்</string>
     <string name="default_size_gb_hint">8</string>
-    <string name="error_container_name_too_long">பெயர் மிக நீளமானது - அதிகபட்சம் 17 எழுத்துகள் (கர்னல் லூப் சாதன பாதை வரம்பு)</string>
     <string name="ip_address_label">%1$s: %2$s</string>
     <string name="starting_resizing">அளவை மாற்றும் செயல்பாட்டைத் தொடங்குகிறது...</string>
     <string name="developers">டெவலப்பர்(கள்)</string>

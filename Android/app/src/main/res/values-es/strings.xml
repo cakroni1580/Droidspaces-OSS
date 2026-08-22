@@ -19,7 +19,6 @@
     <string name="close">Cerrar</string>
     <string name="refresh">Recargar</string>
     <string name="search">Buscar</string>
-    <string name="clear">Limpiar</string>
     <string name="container_singular">Contenedor</string>
     <string name="running">Activo</string>
     <string name="backend_checking">Backend: Verificando...</string>
@@ -135,7 +134,6 @@
     <string name="installing_droidspaces">Instalando Droidspaces</string>
     <string name="module_installed_success">Módulo Magisk instalado con éxito</string>
     <string name="backend_installed_success">El backend se ha instalado correctamente</string>
-    <string name="unknown_error">Ocurrió un error desconocido</string>
     <string name="module_installation_failed">Fallo en la instalación del módulo</string>
     <string name="binary_installation_failed">Fallo en la instalación de binarios</string>
     <string name="removing_old_module">Eliminando módulo antiguo…</string>
@@ -202,7 +200,6 @@
     <string name="copy_login">Copiar login</string>
     <string name="comma">,</string>
     <string name="gb_size">%1$d GB</string>
-    <string name="sparse_image_configuration">Configuración de Imagen Sparse</string>
     <string name="storage_configuration">Configuración de almacenamiento</string>
     <string name="about_sparse_images">Sobre las imágenes Sparse</string>
     <string name="sparse_images_recommended">Se recomiendan imágenes Sparse en almacenamiento cifrado, particiones F2FS u otros sistemas de archivos con problemas de compatibilidad.</string>

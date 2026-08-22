@@ -19,7 +19,6 @@
     <string name="close">Isara</string>
     <string name="refresh">I-refresh</string>
     <string name="search">Anapen</string>
-    <string name="clear">Buraen</string>
     <string name="container_singular">Container</string>
     <string name="running">Aandar</string>
     <string name="backend_checking">Backend: Tsek-tseken...</string>
@@ -135,7 +134,6 @@
     <string name="installing_droidspaces">I-i-install so Droidspaces</string>
     <string name="module_installed_success">Maong ya a-install so Magisk module</string>
     <string name="backend_installed_success">Maong ya a-install so backend</string>
-    <string name="unknown_error">Walay ag-amta ya error</string>
     <string name="module_installation_failed">Ag a-install so module</string>
     <string name="binary_installation_failed">Ag a-install so binary</string>
     <string name="removing_old_module">Ekalen so daan ya module...</string>
@@ -202,7 +200,6 @@
     <string name="copy_login">Kopyaen so login</string>
     <string name="comma">,</string>
     <string name="gb_size">%1$dGB</string>
-    <string name="sparse_image_configuration">Configuration na Sparse Image</string>
     <string name="storage_configuration">Configuration na Storage</string>
     <string name="about_sparse_images">Nipaakar ed Saray Sparse Image</string>
     <string name="sparse_images_recommended">Nirekomenda iray sparse image no mangusar na container ed encrypted storage, F2FS /data partitions, o arum ni ray filesystem ya nayarin walay isyu ed compatibility ed direct directory mounting.</string>

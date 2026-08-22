@@ -63,7 +63,8 @@ fun InstallationSummaryScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 24.dp),
+                .padding(horizontal = 24.dp)
+                .padding(top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -100,11 +101,13 @@ fun InstallationSummaryScreen(
                         SummaryItem(stringResource(R.string.static_ip_address), config.staticNatIp, Icons.Default.NetworkCheck)
                     }
                     if (config.useSparseImage && config.sparseImageSizeGB != null) {
-                        SummaryItem(stringResource(R.string.storage_configuration), "${stringResource(R.string.sparse_image_configuration)} (${config.sparseImageSizeGB}GB)", Icons.Default.Storage)
+                        SummaryItem(stringResource(R.string.storage_configuration), "${stringResource(R.string.sparse_image_section)} (${config.sparseImageSizeGB}GB)", Icons.Default.Storage)
                     } else {
                         SummaryItem(stringResource(R.string.storage_configuration), stringResource(R.string.directory_label), Icons.Default.Folder)
                     }
-                    SummaryItem(stringResource(R.string.installation_path_label), "${Constants.CONTAINERS_BASE_PATH}/${com.droidspaces.app.util.ContainerManager.sanitizeContainerName(config.name)}", Icons.Default.Folder)
+                    // Derived from the resolved rootfs, not from the name, so a container
+                    // installed on another volume is not reported as living under /data.
+                    SummaryItem(stringResource(R.string.installation_path_label), config.rootfsPath.substringBeforeLast('/'), Icons.Default.Folder)
 
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 8.dp),

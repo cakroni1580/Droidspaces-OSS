@@ -19,7 +19,6 @@
     <string name="close">Închide</string>
     <string name="refresh">Reîmprospătează</string>
     <string name="search">Caută</string>
-    <string name="clear">Curăță</string>
     <string name="container_singular">Container</string>
     <string name="running">Rulează</string>
     <string name="backend_checking">Backend: Se verifică...</string>
@@ -185,7 +184,6 @@
     <string name="installing_droidspaces">Se instalează Droidspaces</string>
     <string name="module_installed_success">Modula Magisk a fost instalată cu succes</string>
     <string name="backend_installed_success">Backend-ul Droidspaces a fost instalat cu succes</string>
-    <string name="unknown_error">O eroare necunoscută a apărut</string>
     <string name="module_installation_failed">Instalarea modulului a eșuat</string>
     <string name="binary_installation_failed">Instalarea binary-ului a eșuat</string>
     <string name="removing_old_module">Se dezinstalează modula veche...</string>
@@ -247,7 +245,6 @@
     <string name="no_local_users_found">Niciun utilizator local nu a fost găsit</string>
     <string name="select_user">Alege utilizatorul</string>
     <string name="copy_login">Copiază login-ul</string>
-    <string name="sparse_image_configuration">Configurarea imaginilor sparse</string>
     <string name="storage_configuration">Configurarea stocării</string>
     <string name="about_sparse_images">Despre imaginile sparse</string>
     <string name="sparse_images_recommended">Imaginile sparse sunt recomandate pentru utilizarea containerelor pe stocare criptată, partiții /data formatate cu F2FS, sau alte sisteme de fișiere care pot avea probleme de compatibilitate cu montarea de directoriu directă.</string>
@@ -361,7 +358,6 @@
     <string name="sessions_running_plural">%1$d sesiuni în execuție · apasă pentru a restaura</string>
     <string name="session_running_singular">O sesiune în execuție · apasă pentru a restaura</string>
     <string name="please_wait_hint">Vă rugăm să așteptați cât timp vă procesăm cererea...</string>
-    <string name="error_container_name_too_long">Numele este prea lung - maxim 17 caractere sunt permise (limita kernel-ului pentru path-ul către dispozitivul loop)</string>
     <string name="restore">Restaurează</string>
     <string name="export_container">Exportă container-ul ca tarball</string>
     <string name="export_container_failed">Nu s-a putut exporta container-ul %1$s</string>

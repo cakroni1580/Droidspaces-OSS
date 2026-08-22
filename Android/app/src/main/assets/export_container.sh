@@ -26,9 +26,16 @@ cleanup() {
     if [ "$CLEANUP_DONE" -eq 1 ]; then return; fi
     CLEANUP_DONE=1
 
-    if [ -n "$TEMP_MOUNT" ] && mountpoint -q "$TEMP_MOUNT" 2>/dev/null; then
+    # BusyBox first throughout, matching the mount below: whatever attached the
+    # loop device should be what detaches it. $BUSYBOX is empty until it is
+    # resolved further down, and the guards fall through to the system tools then.
+    if [ -n "$TEMP_MOUNT" ] && { { [ -n "$BUSYBOX" ] && "$BUSYBOX" mountpoint -q "$TEMP_MOUNT" 2>/dev/null; } \
+        || mountpoint -q "$TEMP_MOUNT" 2>/dev/null; }; then
         log "Unmounting temporary mount point..."
-        umount -f "$TEMP_MOUNT" 2>/dev/null || umount -l "$TEMP_MOUNT" 2>/dev/null || true
+        { [ -n "$BUSYBOX" ] && "$BUSYBOX" umount -f "$TEMP_MOUNT" 2>/dev/null; } \
+            || { [ -n "$BUSYBOX" ] && "$BUSYBOX" umount -l "$TEMP_MOUNT" 2>/dev/null; } \
+            || umount -f "$TEMP_MOUNT" 2>/dev/null \
+            || umount -l "$TEMP_MOUNT" 2>/dev/null || true
     fi
 
     if [ -n "$TEMP_MOUNT" ] && [ -d "$TEMP_MOUNT" ]; then
@@ -150,7 +157,10 @@ if [ "$MODE" = "sparse" ]; then
     # Fix SELinux context before mounting to avoid permission issues
     chcon u:object_r:vold_data_file:s0 "$ROOTFS_IMG" 2>/dev/null || true
 
-    if ! mount -t ext4 -o loop,ro "$ROOTFS_IMG" "$TEMP_MOUNT" 2>/dev/null; then
+    # BusyBox first, for the same reason as sparsemgr: toybox's losetup refuses a
+    # backing path over 63 characters instead of truncating the name it stores.
+    if ! { [ -n "$BUSYBOX" ] && "$BUSYBOX" mount -t ext4 -o loop,ro "$ROOTFS_IMG" "$TEMP_MOUNT" 2>/dev/null; } \
+       && ! mount -t ext4 -o loop,ro "$ROOTFS_IMG" "$TEMP_MOUNT" 2>/dev/null; then
         error "Failed to mount sparse image at $TEMP_MOUNT"
         exit 1
     fi

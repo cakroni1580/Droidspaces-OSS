@@ -35,7 +35,6 @@
     <string name="close">বন্ধ করুন</string>
     <string name="refresh">Refresh</string>
     <string name="search">অনুসন্ধান করুন</string>
-    <string name="clear">মুছে ফেলুন</string>
     <string name="container_singular">মূল Tab Screen</string>
     <string name="running">চলমান</string>
     <string name="backend_update_available">Backend: Update পাওয়া গেছে</string>

@@ -60,7 +60,6 @@
     <string name="symmetric_label">（對稱）</string>
     <string name="static_ip_description">為此容器設定一個 172.28.x.x 子網路內的靜態 IPv4 位址。留空以在首次啟動時自動分配。</string>
     <string name="gpu_access_description">將 GPU 節點鏡像到隔離的 /dev 目錄（不進行完整的硬體直通）</string>
-    <string name="clear">清除</string>
     <string name="unknown">未知</string>
     <string name="error_start_must_be_less_than_end">起始值必須小於結束值</string>
     <string name="error_ports_must_be_numbers">連接埠必須是數字</string>
@@ -150,7 +149,6 @@
     <string name="container_path">容器路徑：%1$s</string>
     <string name="installation_failed">安裝失敗</string>
     <string name="network_mode_nat">NAT（預設）</string>
-    <string name="unknown_error">發生未知錯誤</string>
     <string name="environment_variables">環境變數</string>
     <string name="no_static_services">沒有靜態服務</string>
     <string name="contributors">貢獻者</string>
@@ -255,7 +253,6 @@
     <string name="error_octet_range">範圍：1-254</string>
     <string name="continue_button">繼續</string>
     <string name="android_storage_description">掛載 Android 存儲空間</string>
-    <string name="sparse_image_configuration">稀疏映像檔配置</string>
     <string name="developers">開發者（們）</string>
     <string name="android_storage">Android 儲存空間</string>
     <string name="comma">,</string>
@@ -305,8 +302,6 @@
     <string name="no_matches">沒有匹配項</string>
     <string name="empty_directory">空目錄</string>
     <string name="select_folder">選擇資料夾</string>
-    <string name="tcp">TCP</string>
-    <string name="udp">UDP</string>
     <string name="terminal_logs">終端日誌</string>
     <string name="installation_logs">安裝日誌</string>
     <string name="terminal_label">終端</string>
@@ -396,7 +391,6 @@
     <string name="cgroup_v1_option">Cgroup V1</string>
     <string name="deadlock_shield_option">死鎖防護</string>
     <string name="privileged_option">特權模式</string>
-    <string name="error_container_name_too_long">名稱過長 - 最多17個字符（核心loop裝置路徑限制）</string>
     <string name="network_mode_host_short">主機</string>
     <string name="network_mode_nat_short">NAT</string>
     <string name="network_mode_none_short">無</string>
@@ -423,7 +417,6 @@
     <string name="repo_retry">重試</string>
     <string name="repo_notification_description">下載Droidspaces rootfs</string>
     <string name="repo_error_no_assets">最新版本中未找到 rootfs tarball 文件</string>
-    <string name="repo_error_network">網路錯誤</string>
     <string name="repo_dl_error_unknown">未知錯誤</string>
     <string name="repo_dl_error_cannot_resume">無法繼續下載</string>
     <string name="repo_dl_error_device_not_found">未找到存儲空間</string>
@@ -450,7 +443,6 @@
     <string name="repo_custom_name_empty">名稱不可為空</string>
     <string name="repo_custom_url_empty">URL不可為空</string>
     <string name="repo_custom_url_invalid">網址必須以 https:// 開頭</string>
-    <string name="repo_no_custom">目前還沒有訂閱任何自訂儲存庫。</string>
     <string name="read_only">唯讀</string>
     <string name="virgl_option">VirGL</string>
     <string name="pulseaudio_option">PulseAudio</string>
@@ -488,8 +480,6 @@
     <string name="error_gateway_iface_taken">介面已被其他區段 (\'%1$s\') 使用。請使用其他介面。</string>
     <string name="openwrt_services">OpenWrt 服務</string>
     <string name="openwrt">OpenWrt</string>
-    <string name="procd_detected">偵測到 OpenWrt/procd</string>
-    <string name="procd_services_placeholder_desc">下一個補丁將新增對 %1$s 的服務管理。</string>
     <string name="unknown_legend">未知</string>
     <string name="reload_service">重載服務</string>
     <string name="no_unknown_services">沒有狀態未知的服務</string>

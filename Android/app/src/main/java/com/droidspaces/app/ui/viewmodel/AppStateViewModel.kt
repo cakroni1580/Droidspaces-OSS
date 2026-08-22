@@ -169,18 +169,33 @@ class AppStateViewModel(application: Application) : AndroidViewModel(application
 
     /**
      * Run the backend install/update orchestration (moved out of InstallationScreen's
-     * LaunchedEffect). Idempotent: no-op if an install is already running or has
-     * succeeded. Drives the install* state above.
+     * LaunchedEffect). Drives the install* state above.
+     *
+     * Guards against a concurrent run only, not a repeat one. This ViewModel is shared
+     * across the nav graph, so its state outlives the installation screen; short-circuiting
+     * on a previous success made "Reinstall Backend" a no-op every time after the first,
+     * showing the earlier run's completed screen without copying anything. The screen is
+     * popped when it is left, so arriving here always means someone asked for an install.
+     *
+     * Every field is cleared up front rather than left to be overwritten, so a retry after
+     * a failure does not render the previous error alongside the new result.
      */
     suspend fun performInstallation() {
-        if (isInstalling || isInstallSuccess) return
+        if (isInstalling) return
+        isInstalling = true
+
+        installCurrentStep = null
+        installCurrentModuleStep = null
+        isInstallingModule = false
+        isInstallSuccess = false
+        installErrorMessage = null
+        installRebootRecommended = false
+
         val context = getApplication<Application>()
 
         val backendStatus = withContext(Dispatchers.IO) {
             DroidspacesChecker.checkBackendStatus()
         }
-
-        isInstalling = true
 
         val whichBackendMode = withContext(Dispatchers.IO) {
             SystemInfoManager.getBackendMode(context)
@@ -188,8 +203,6 @@ class AppStateViewModel(application: Application) : AndroidViewModel(application
         val wasDaemon = whichBackendMode == "DAEMON"
 
         val isAtomicUpdate = backendStatus is DroidspacesBackendStatus.UpdateAvailable
-
-        isInstallingModule = false
 
         // Capture symlink state before any module directory removal
         val wasSymlinkEnabled = withContext(Dispatchers.IO) {

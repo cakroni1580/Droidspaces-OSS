@@ -34,20 +34,26 @@ error() { echo "[ERROR]  $1"; }
 
 # truncate -s <size> <file>
 _truncate() {
-    if truncate -s "$1" "$2" 2>/dev/null; then
+    # BusyBox first for the same reason as _mount: one implementation that behaves
+    # the same on every device. Both are a plain ftruncate and produce a
+    # byte-identical sparse file, so there is nothing to lose by preferring ours.
+    if [ -n "$BB" ] && "$BB" truncate -s "$1" "$2" 2>/dev/null; then
         return 0
-    elif [ -n "$BB" ] && "$BB" truncate -s "$1" "$2" 2>/dev/null; then
+    elif truncate -s "$1" "$2" 2>/dev/null; then
         return 0
     fi
     error "truncate: neither system nor busybox truncate succeeded"
     return 1
 }
 
-# mount wrapper - passes all args through, tries system then busybox
+# mount wrapper - passes all args through, tries busybox then system
 _mount() {
-    if mount "$@" 2>/dev/null; then
+    # BusyBox first: Android's mount is toybox, whose losetup aborts rather than
+    # truncating when a backing path exceeds 63 characters, so it cannot loop-mount
+    # an image stored on a deep custom path.
+    if [ -n "$BB" ] && "$BB" mount "$@" 2>/dev/null; then
         return 0
-    elif [ -n "$BB" ] && "$BB" mount "$@" 2>/dev/null; then
+    elif mount "$@" 2>/dev/null; then
         return 0
     fi
     error "mount: failed with args: $*"
@@ -56,9 +62,10 @@ _mount() {
 
 # umount wrapper
 _umount() {
-    if umount "$@" 2>/dev/null; then
+    # Same order as _mount, so whatever attached the loop device also detaches it.
+    if [ -n "$BB" ] && "$BB" umount "$@" 2>/dev/null; then
         return 0
-    elif [ -n "$BB" ] && "$BB" umount "$@" 2>/dev/null; then
+    elif umount "$@" 2>/dev/null; then
         return 0
     fi
     return 1
@@ -67,9 +74,9 @@ _umount() {
 # mountpoint check (returns 0 if mounted)
 _is_mounted() {
     local path="$1"
-    if mountpoint -q "$path" 2>/dev/null; then
+    if [ -n "$BB" ] && "$BB" mountpoint -q "$path" 2>/dev/null; then
         return 0
-    elif [ -n "$BB" ] && "$BB" mountpoint -q "$path" 2>/dev/null; then
+    elif mountpoint -q "$path" 2>/dev/null; then
         return 0
     fi
     # Fallback: parse /proc/mounts
@@ -133,12 +140,12 @@ _mkfs_ext4() {
     elif command -v mke2fs >/dev/null 2>&1; then
         mke2fs -t ext4 -F -L "rootfs" "$img" >/dev/null
         return $?
-    elif [ -n "$BB" ]; then
-        # Some busybox builds include mkfs.ext2/ext3/ext4
-        "$BB" mkfs.ext4 -F -L "rootfs" "$img" >/dev/null 2>/dev/null && return 0
-        "$BB" mke2fs -t ext4 -F -L "rootfs" "$img" >/dev/null 2>/dev/null && return 0
     fi
-    error "No ext4 formatting tool found (tried mkfs.ext4, mke2fs, busybox variants)"
+    # Deliberately no busybox fallback: its mke2fs rejects -t and builds bare ext2,
+    # with no has_journal, no extent and no ext_attr, so a rootfs formatted by it
+    # cannot hold SELinux labels or file capabilities. The ext4 driver would mount
+    # it anyway, turning a clear failure into a subtly broken container.
+    error "No ext4 formatting tool found (tried mkfs.ext4, mke2fs)"
     return 1
 }
 
@@ -171,7 +178,8 @@ check_migrate_requirements() {
     local has_mkfs=0
     command -v mkfs.ext4 >/dev/null 2>&1 && has_mkfs=1
     command -v mke2fs    >/dev/null 2>&1 && has_mkfs=1
-    [ -n "$BB" ] && "$BB" mkfs.ext4 --help >/dev/null 2>&1 && has_mkfs=1
+    # No busybox probe here: _mkfs_ext4 deliberately does not fall back to it, so
+    # counting it would report ok on a device where formatting then fails.
     if [ "$has_mkfs" -eq 0 ]; then
         error "mkfs.ext4 / mke2fs not found"
         fail=1
@@ -654,13 +662,6 @@ if [ "$COMMAND" = "migrate" ]; then
     ROOTFS_DIR="$BASE_DIR/rootfs"
     ROOTFS_IMG="$BASE_DIR/rootfs.img"
     ROOTFS_SPARSE="$BASE_DIR/rootfs.sparse"   # temp mount point during migration
-    # Validate path length for losetup (kernel limit: 64 bytes)
-    if [ "${#ROOTFS_IMG}" -gt 64 ]; then
-        error "Container path is too long for losetup (${#ROOTFS_IMG}/64 bytes): $ROOTFS_IMG"
-        error "Uninstall the container and re-install it with a shorter name."
-        warn  "To prevent container's data loss, it's recommended to backup the container using \"Export container as tarball\" feature before uninstalling!"
-        exit 1
-    fi
 fi
 
 # Dispatch

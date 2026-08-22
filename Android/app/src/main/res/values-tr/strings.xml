@@ -19,7 +19,6 @@
     <string name="close">Kapat</string>
     <string name="backend_not_installed">Backend: Kurulmamış</string>
     <string name="backend_installed">Backend: Kuruldu</string>
-    <string name="clear">Temiz</string>
     <string name="backend_checking">Backend: Kontrol ediliyor...</string>
     <string name="container_singular">Ana Menü</string>
     <string name="back">Geri</string>
@@ -211,7 +210,6 @@
     <string name="installing_droidspaces">Droidspaces Kuruluyor</string>
     <string name="module_installed_success">Magisk modülü başarıyla yüklendi</string>
     <string name="backend_installed_success">Droidspaces backendi başarıyla kuruldu</string>
-    <string name="unknown_error">Bilinmeyen bir hata oluştu</string>
     <string name="module_installation_failed">Modül kurulumu başarısız oldu</string>
     <string name="binary_installation_failed">Binary yüklemesi başarısız oldu</string>
     <string name="removing_old_module">Eski modül kaldırılıyor...</string>
@@ -278,7 +276,6 @@
     <string name="copy_login">Giriş bilgilerini kopyala</string>
     <string name="comma">,</string>
     <string name="gb_size">%1$dGB</string>
-    <string name="sparse_image_configuration">Sparse Image Yapılandırması</string>
     <string name="storage_configuration">Depolama Yapılandırması</string>
     <string name="about_sparse_images">Sparse Image Hakkında</string>
     <string name="sparse_images_recommended">Şifrelenmiş depolama alanlarında, F2FS /data bölümlerinde veya doğrudan dizin bağlama ile uyumluluk sorunları yaşayabilecek diğer dosya sistemlerinde konteyner kullanırken, sparse image kullanılması önerilir.</string>

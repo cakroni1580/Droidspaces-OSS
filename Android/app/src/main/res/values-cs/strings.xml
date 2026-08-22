@@ -36,7 +36,6 @@
     <string name="close">Zavřít</string>
     <string name="refresh">Obnovit</string>
     <string name="search">Hledat</string>
-    <string name="clear">Vymazat</string>
     <string name="container_singular">Kontejner</string>
     <string name="running">Spuštěno</string>
     <string name="backend_checking">Backend: probíhá kontrola...</string>
@@ -306,7 +305,6 @@
     <string name="installing_droidspaces">Instaluje se Droidspaces</string>
     <string name="module_installed_success">Modul Magisk byl úspěšně nainstalován</string>
     <string name="backend_installed_success">Backend Droidspaces byl úspěšně nainstalován</string>
-    <string name="unknown_error">Došlo k neznámé chybě</string>
     <string name="module_installation_failed">Instalace modulu se nezdařila</string>
     <string name="binary_installation_failed">Instalace binárního souboru se nezdařila</string>
     <string name="removing_old_module">Odstraňuje se starý modul...</string>
@@ -324,8 +322,6 @@
     <string name="no_matches">Žádné shody</string>
     <string name="empty_directory">Prázdný adresář</string>
     <string name="select_folder">Vybrat složku</string>
-    <string name="tcp">TCP</string>
-    <string name="udp">UDP</string>
     <string name="cpu">CPU:</string>
     <string name="ram">RAM:</string>
     <string name="terminal_logs">Protokoly terminálu</string>
@@ -344,8 +340,6 @@
     <string name="systemd_services">Služby systemd</string>
     <string name="openwrt_services">Služby OpenWrt</string>
     <string name="openwrt">OpenWrt</string>
-    <string name="procd_detected">Byl zjištěn OpenWrt/procd</string>
-    <string name="procd_services_placeholder_desc">Správa služeb pro %1$s bude přidána v příští opravě.</string>
     <string name="openrc_services">Služby OpenRC</string>
     <string name="openrc">OpenRC</string>
     <string name="init_system">Inicializační systém</string>
@@ -400,7 +394,6 @@
     <string name="copy_login">Kopírovat přihlašovací příkaz</string>
     <string name="comma">,</string>
     <string name="gb_size">%1$d GB</string>
-    <string name="sparse_image_configuration">Nastavení řídkého obrazu</string>
     <string name="storage_configuration">Nastavení úložiště</string>
     <string name="about_sparse_images">O řídkých obrazech</string>
     <string name="sparse_images_recommended">Řídké obrazy jsou doporučeny při používání kontejnerů v šifrovaném úložišti, na oddílech /data se systémem F2FS nebo v jiných souborových systémech, které mohou mít potíže s přímým připojením adresáře.</string>
@@ -419,7 +412,6 @@
     <string name="copy_logs">Kopírovat protokoly</string>
     <string name="error_container_name_empty">Název kontejneru nesmí být prázdný</string>
     <string name="error_container_name_invalid">Název kontejneru smí obsahovat pouze písmena, číslice, spojovníky (-), podtržítka (_), tečky (.) a mezery</string>
-    <string name="error_container_name_too_long">Název je příliš dlouhý – nejvýše 17 znaků (omezení cesty smyčkového zařízení jádra)</string>
     <string name="error_hostname_invalid">Název hostitele smí obsahovat pouze písmena, číslice a spojovníky (-)</string>
     <string name="check_requirements">Zkontrolovat požadavky</string>
     <string name="requirements_check_title">Kontrola požadavků</string>
@@ -482,7 +474,6 @@
     <string name="repo_retry">Zkusit znovu</string>
     <string name="repo_notification_description">Stahování rootfs pro Droidspaces</string>
     <string name="repo_error_no_assets">V nejnovějším vydání nebyly nalezeny žádné archivy tar rootfs</string>
-    <string name="repo_error_network">Chyba sítě</string>
     <string name="repo_dl_error_unknown">Neznámá chyba</string>
     <string name="repo_dl_error_cannot_resume">Ve stahování nelze pokračovat</string>
     <string name="repo_dl_error_device_not_found">Úložiště nebylo nalezeno</string>
@@ -507,7 +498,6 @@
     <string name="repo_custom_name_empty">Název nesmí být prázdný</string>
     <string name="repo_custom_url_empty">Adresa URL nesmí být prázdná</string>
     <string name="repo_custom_url_invalid">Adresa URL musí začínat https://</string>
-    <string name="repo_no_custom">Zatím neodebíráte žádné vlastní repozitáře.</string>
     <string name="debugging_section">Ladění</string>
     <string name="inspect_unit">Prohlédnout jednotku</string>
     <string name="edit_override">Upravit přepis konfigurace</string>

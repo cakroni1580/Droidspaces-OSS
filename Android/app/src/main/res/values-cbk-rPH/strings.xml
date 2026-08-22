@@ -19,7 +19,6 @@
     <string name="close">Cerra</string>
     <string name="refresh">Hace Refresh</string>
     <string name="search">Busca</string>
-    <string name="clear">Bura</string>
     <string name="container_singular">Container</string>
     <string name="running">Ta anda</string>
     <string name="backend_checking">Backend: Ta chequea...</string>
@@ -135,7 +134,6 @@
     <string name="installing_droidspaces">Ta instala el Droidspaces</string>
     <string name="module_installed_success">Ya instala el Magisk module con exito</string>
     <string name="backend_installed_success">Ya instala con exito el backend</string>
-    <string name="unknown_error">Ocuri un error hende sabe</string>
     <string name="module_installation_failed">Fallo el instalacion del module</string>
     <string name="binary_installation_failed">Fallo el instalacion del binary</string>
     <string name="removing_old_module">Ta quita el viejo module...</string>
@@ -202,7 +200,6 @@
     <string name="copy_login">Copia login</string>
     <string name="comma">,</string>
     <string name="gb_size">%1$dGB</string>
-    <string name="sparse_image_configuration">Configuracion del Sparse Image</string>
     <string name="storage_configuration">Configuracion del Storage</string>
     <string name="about_sparse_images">Acerca de Sparse Images</string>
     <string name="sparse_images_recommended">Maga sparse image recomendao si ta usa maga container na encrypted storage, F2FS /data partitions, o otro maga filesystem que posible tiene problema de compatibilidad na direct directory mounting.</string>

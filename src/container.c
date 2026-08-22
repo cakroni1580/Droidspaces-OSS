@@ -28,6 +28,29 @@ static int get_lock_path(const char *name, char *buf, size_t size) {
   return (r > 0 && (size_t)r < size) ? 0 : -1;
 }
 
+/* A valid lock is exactly "pid boot-id" where the boot ID matches the
+ * running kernel and the PID is alive. Anything else is stale, including
+ * the pid-only format from older versions: a bare PID cannot be told apart
+ * from post-reboot PID reuse, which is how a stranded lock bricked a
+ * container in PR #286. Returns the live holder PID, or 0 if stale.
+ * Same-boot PID reuse (a full pid_max wrap while a lock is held) is not
+ * covered; add a starttime compare if that ever shows up in the wild. */
+static pid_t lock_holder_if_alive(char *buf) {
+  char *sp = strchr(buf, ' ');
+  if (!sp)
+    return 0;
+  *sp = '\0';
+
+  char boot_id[64];
+  if (read_file("/proc/sys/kernel/random/boot_id", boot_id, sizeof(boot_id)) <=
+          0 ||
+      strcmp(sp + 1, boot_id) != 0)
+    return 0;
+
+  pid_t pid = (pid_t)atoi(buf);
+  return (pid > 0 && kill(pid, 0) == 0) ? pid : 0;
+}
+
 /* Create external command lock - ONLY called by CLI parent.
  * Returns: 0 on success, -1 if lock already held by a live process. */
 static int acquire_external_lock(const char *name) {
@@ -38,27 +61,29 @@ static int acquire_external_lock(const char *name) {
   /* Check if lock already exists */
   if (access(lock_path, F_OK) == 0) {
     /* Lock exists - verify if holder is still alive */
-    char buf[32];
+    char buf[64];
     if (read_file(lock_path, buf, sizeof(buf)) > 0) {
-      pid_t holder = (pid_t)atoi(buf);
-      if (holder > 0 && holder != getpid() && kill(holder, 0) == 0) {
+      pid_t holder = lock_holder_if_alive(buf);
+      if (holder > 0 && holder != getpid()) {
         /* Lock holder is alive and NOT us - cannot acquire */
         ds_warn("Cannot acquire lock: held by process %d", holder);
         return -1;
       }
-      /* Stale lock detected */
-      if (holder > 0 && holder != getpid()) {
-        ds_log("Removing stale lock (holder PID %d is dead)", holder);
-      }
+      if (holder == 0)
+        ds_log("[DEBUG] Removing stale or malformed lock (recorded PID %d)",
+               atoi(buf));
     }
     /* Remove stale lock */
     unlink(lock_path);
   }
 
-  /* Write our PID to lock file */
-  char pid_str[32];
-  snprintf(pid_str, sizeof(pid_str), "%d", getpid());
-  return write_file_atomic(lock_path, pid_str);
+  /* Stamp the lock with our PID and the boot ID. Older versions atoi() the
+   * file, which stops at the space, so they still read the leading PID. */
+  char lock_str[96];
+  char boot_id[64] = "";
+  read_file("/proc/sys/kernel/random/boot_id", boot_id, sizeof(boot_id));
+  snprintf(lock_str, sizeof(lock_str), "%d %s", getpid(), boot_id);
+  return write_file_atomic(lock_path, lock_str);
 }
 
 /* Release external command lock - ONLY called by CLI parent.
@@ -69,7 +94,7 @@ static void release_external_lock(const char *name) {
     return;
 
   /* Verify we own the lock before removing */
-  char buf[32];
+  char buf[64];
   if (read_file(lock_path, buf, sizeof(buf)) > 0) {
     pid_t holder = (pid_t)atoi(buf);
     if (holder == getpid()) {
@@ -122,15 +147,14 @@ int is_external_lock_active(const char *name) {
     return 0; /* No lock */
 
   /* Lock exists - verify holder is alive */
-  char buf[32];
+  char buf[64];
   if (read_file(lock_path, buf, sizeof(buf)) > 0) {
-    pid_t holder = (pid_t)atoi(buf);
-    if (holder > 0 && kill(holder, 0) == 0)
+    if (lock_holder_if_alive(buf) > 0)
       return 1; /* Valid lock */
 
     /* Stale lock detected */
-    write_monitor_debug_log(name, "Removing stale lock (holder PID %d is dead)",
-                            holder);
+    write_monitor_debug_log(
+        name, "Removing stale or malformed lock (recorded PID %d)", atoi(buf));
   }
 
   /* Remove stale lock */
