@@ -511,7 +511,7 @@ int ds_apply_cli_overrides(int argc, char **argv, struct ds_config *cfg,
       safe_strncpy(cfg->gateway_bridge, optarg, sizeof(cfg->gateway_bridge));
       break;
     case 280:
-      cfg.wayland = 1;
+      cfg->wayland = 1;
       break;
     case 'I':
       cfg->disable_ipv6 = 1;
