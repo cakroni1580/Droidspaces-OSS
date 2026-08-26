@@ -38,7 +38,7 @@ fun SettingsCard(
     subtitleContent: (@Composable ColumnScope.() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    val alpha = if (enabled) 1f else 0.5f
+    val alpha = if (enabled) 1f else 0.38f
     Surface(
         modifier = modifier.fillMaxWidth(),
         onClick = onClick,

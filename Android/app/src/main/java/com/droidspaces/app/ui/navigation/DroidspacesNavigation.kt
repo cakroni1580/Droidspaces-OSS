@@ -26,6 +26,7 @@ import com.droidspaces.app.ui.screen.RootCheckScreen
 import com.droidspaces.app.ui.screen.SettingsScreen
 import com.droidspaces.app.ui.screen.RequirementsScreen
 import com.droidspaces.app.ui.screen.AutoBootPriorityScreen
+import com.droidspaces.app.ui.screen.TerminalAppearanceScreen
 import com.droidspaces.app.ui.screen.WelcomeScreen
 import com.droidspaces.app.ui.screen.ContainerNameScreen
 import com.droidspaces.app.ui.screen.SparseImageConfigScreen
@@ -76,6 +77,7 @@ sealed class Screen(val route: String) {
     data object Settings : Screen("settings")
     data object Requirements : Screen("requirements")
     data object AutoBootPriority : Screen("auto_boot_priority")
+    data object TerminalAppearance : Screen("terminal_appearance")
 
     // Container installation wizard screens
     data object ContainerName : Screen("container_name/{tarballUri}") {
@@ -547,6 +549,23 @@ fun DroidspacesNavigation(
                 },
                 onNavigateToAutoBootPriority = {
                     navController.navigate(Screen.AutoBootPriority.route)
+                },
+                onNavigateToTerminalAppearance = {
+                    navController.navigate(Screen.TerminalAppearance.route)
+                }
+            )
+        }
+
+        composable(
+            route = Screen.TerminalAppearance.route,
+            enterTransition = defaultEnterTransition,
+            exitTransition = defaultExitTransition,
+            popEnterTransition = defaultEnterTransition,
+            popExitTransition = defaultExitTransition
+        ) {
+            TerminalAppearanceScreen(
+                onBack = {
+                    navController.popBackStack()
                 }
             )
         }

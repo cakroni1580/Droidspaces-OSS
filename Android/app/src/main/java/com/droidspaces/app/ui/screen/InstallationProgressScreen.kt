@@ -102,7 +102,9 @@ fun InstallationProgressScreen(
                             InstallationState.INSTALLING -> context.getString(R.string.installing_container)
                             InstallationState.SUCCESS -> context.getString(R.string.installation_complete)
                             InstallationState.ERROR -> context.getString(R.string.installation_failed)
-                        }
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
                 },
                 navigationIcon = {
@@ -151,6 +153,7 @@ fun InstallationProgressScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary
                             )
@@ -170,7 +173,8 @@ fun InstallationProgressScreen(
                                 onClick = onError,
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(56.dp)
+                                    .height(56.dp),
+                                shape = RoundedCornerShape(16.dp)
                             ) {
                                 Text(context.getString(R.string.close), style = MaterialTheme.typography.labelLarge)
                             }
@@ -185,7 +189,8 @@ fun InstallationProgressScreen(
                                 },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(56.dp)
+                                    .height(56.dp),
+                                shape = RoundedCornerShape(16.dp)
                             ) {
                                 Icon(Icons.Default.ContentCopy, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))

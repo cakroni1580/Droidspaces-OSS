@@ -74,7 +74,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import com.droidspaces.app.ui.component.DsDialog
 import com.droidspaces.app.R
 import com.droidspaces.app.ui.util.rememberClearFocus
 import com.droidspaces.app.util.BindMount
@@ -135,56 +135,47 @@ fun ContainerConfigForm(
     if (showDestDialog) {
         var destPath by remember { mutableStateOf("") }
         var roEnabled by remember { mutableStateOf(false) }
-        Dialog(
-            onDismissRequest = { showDestDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .imePadding(),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                tonalElevation = 0.dp
-            ) {
-                Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text(context.getString(R.string.enter_container_path), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(
-                        value = destPath,
-                        onValueChange = { destPath = it },
-                        label = { Text(context.getString(R.string.container_path_placeholder)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = modernFieldShape,
-                        colors = modernFieldColors
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(context.getString(R.string.read_only), style = MaterialTheme.typography.bodyMedium)
-                        Switch(checked = roEnabled, onCheckedChange = { roEnabled = it })
-                    }
-                    DialogFooterRow(
-                        dismissLabel = context.getString(R.string.cancel),
-                        confirmLabel = context.getString(R.string.ok),
-                        onDismiss = { clearFocus(); showDestDialog = false },
-                        onConfirm = {
-                            clearFocus()
-                            if (destPath.isNotBlank()) {
-                                onStateChange(state.copy(bindMounts = state.bindMounts + BindMount(tempSrcPath, destPath, roEnabled)))
-                                showDestDialog = false
-                            }
-                        },
-                        confirmEnabled = destPath.startsWith("/")
-                    )
-                }
+        DsDialog(
+            onDismiss = { showDestDialog = false },
+            modifier = Modifier.imePadding(),
+            footer = {
+                DialogFooterRow(
+                    dismissLabel = context.getString(R.string.cancel),
+                    confirmLabel = context.getString(R.string.ok),
+                    onDismiss = { clearFocus(); showDestDialog = false },
+                    onConfirm = {
+                        clearFocus()
+                        if (destPath.isNotBlank()) {
+                            onStateChange(state.copy(bindMounts = state.bindMounts + BindMount(tempSrcPath, destPath, roEnabled)))
+                            showDestDialog = false
+                        }
+                    },
+                    confirmEnabled = destPath.startsWith("/")
+                )
             }
+        ) {
+            Text(context.getString(R.string.enter_container_path), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = destPath,
+                onValueChange = { destPath = it },
+                label = { Text(context.getString(R.string.container_path_placeholder)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = modernFieldShape,
+                colors = modernFieldColors
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(context.getString(R.string.read_only), style = MaterialTheme.typography.bodyMedium)
+                Switch(checked = roEnabled, onCheckedChange = { roEnabled = it })
+            }
+        
         }
-    }
+        }
+
 
     if (showPrivilegedDialog) {
         PrivilegedModeDialog(
@@ -227,11 +218,9 @@ fun ContainerConfigForm(
     ) {
         leadingContent()
 
-        Text(
+        SectionHeader(
             text = context.getString(R.string.cat_networking),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = 16.dp)
         )
 
         DsDropdown(
@@ -265,11 +254,7 @@ fun ContainerConfigForm(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    text = context.getString(R.string.nat_settings),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                SectionHeader(text = context.getString(R.string.nat_settings))
 
                 Text(
                     text = context.getString(R.string.static_ip_address),
@@ -427,10 +412,8 @@ fun ContainerConfigForm(
             enabled = !ipv6IsForced
         )
 
-        Text(
+        SectionHeader(
             text = context.getString(R.string.cat_integration),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 16.dp)
         )
 
@@ -488,7 +471,7 @@ fun ContainerConfigForm(
             onCheckedChange = { clearFocus(); onStateChange(state.copy(enablePulseaudio = it)) },
             enabled = true
         )
-
+        
         ToggleCard(
             icon = Icons.Default.Devices,
             title = context.getString(R.string.enable_wayland),
@@ -498,10 +481,8 @@ fun ContainerConfigForm(
             enabled = true
         )
 
-        Text(
+        SectionHeader(
             text = context.getString(R.string.cat_security),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 16.dp)
         )
 
@@ -575,10 +556,8 @@ fun ContainerConfigForm(
             onCheckedChange = { clearFocus(); onStateChange(state.copy(runAtBoot = it)) }
         )
 
-        Text(
+        SectionHeader(
             text = context.getString(R.string.cat_advanced),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 16.dp)
         )
 
@@ -689,7 +668,7 @@ fun ContainerConfigForm(
                         Text(text = context.getString(R.string.host_path, mount.src), style = MaterialTheme.typography.bodyMedium, overflow = TextOverflow.Ellipsis, maxLines = 1)
                         Text(text = context.getString(R.string.container_path, mount.dest), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, overflow = TextOverflow.Ellipsis, maxLines = 1)
                         if (mount.ro) {
-                            Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.padding(top = 4.dp)) {
+                            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.padding(top = 4.dp)) {
                                 Text(text = context.getString(R.string.read_only), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                             }
                         }

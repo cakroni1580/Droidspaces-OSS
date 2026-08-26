@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.BorderStroke
@@ -27,7 +28,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -36,9 +36,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import android.content.Intent
 import android.net.Uri
+import com.droidspaces.app.ui.component.DsDialog
 import com.droidspaces.app.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.droidspaces.app.ui.component.DialogCloseButton
+import com.droidspaces.app.ui.component.DialogFooterRow
+import com.droidspaces.app.ui.component.SectionHeader
 import com.droidspaces.app.ui.component.AccentColorPicker
 import com.droidspaces.app.ui.component.BugReportDialog
 import com.droidspaces.app.ui.component.SettingsRowCard
@@ -70,7 +74,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onNavigateToInstallation: () -> Unit = {},
     onNavigateToRequirements: () -> Unit = {},
-    onNavigateToAutoBootPriority: () -> Unit = {}
+    onNavigateToAutoBootPriority: () -> Unit = {},
+    onNavigateToTerminalAppearance: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -89,10 +94,6 @@ fun SettingsScreen(
     val darkTheme = themeState.darkTheme
     val amoledMode = themeState.amoledMode
     val useDynamicColor = themeState.useDynamicColor
-
-    // Terminal-only dark mode - local state mirrors the preference so the switch
-    // updates immediately without waiting for a SharedPreferences listener.
-    var terminalDarkTheme by remember { mutableStateOf(prefsManager.terminalDarkTheme) }
 
     // About dialog state
     var showAboutDialog by remember { mutableStateOf(false) }
@@ -129,7 +130,7 @@ fun SettingsScreen(
                     Text(
                         text = context.getString(R.string.settings),
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black
+                        fontWeight = FontWeight.Bold
                     )
                 },
                 navigationIcon = {
@@ -155,12 +156,9 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             // Backend Reinstallation Section
-            Text(
+            SectionHeader(
                 text = context.getString(R.string.backend_section),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 24.dp, bottom = 8.dp, top = 8.dp),
-                color = MaterialTheme.colorScheme.primary
+                modifier = Modifier.padding(start = 24.dp, bottom = 8.dp, top = 8.dp)
             )
 
             Surface(
@@ -313,12 +311,9 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Theme Section
-            Text(
+            SectionHeader(
                 text = context.getString(R.string.appearance_section),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 24.dp, bottom = 8.dp, top = 8.dp),
-                color = MaterialTheme.colorScheme.primary
+                modifier = Modifier.padding(start = 24.dp, bottom = 8.dp, top = 8.dp)
             )
 
             Surface(
@@ -390,19 +385,6 @@ fun SettingsScreen(
                 )
             }
 
-            // Terminal Dark Mode - independent of the app-wide theme
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-            SwitchItem(
-                icon = Icons.Default.Terminal,
-                title = context.getString(R.string.terminal_dark_theme),
-                summary = context.getString(R.string.terminal_dark_theme_description),
-                checked = terminalDarkTheme,
-                onCheckedChange = { checked ->
-                    prefsManager.terminalDarkTheme = checked
-                    terminalDarkTheme = checked
-                }
-            )
-
             // AMOLED Mode (shown when followSystemTheme is true OR manual darkTheme is true)
             if (followSystemTheme || darkTheme) {
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -446,18 +428,43 @@ fun SettingsScreen(
                     }
                 )
             }
+
+            // Terminal customization lives on its own page (dark mode, font size, ...)
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            ListItem(colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Default.Terminal,
+                        contentDescription = null
+                    )
+                },
+                headlineContent = {
+                    Text(
+                        text = context.getString(R.string.terminal),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                supportingContent = {
+                    Text(context.getString(R.string.terminal_appearance_summary))
+                },
+                trailingContent = {
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null
+                    )
+                },
+                modifier = Modifier.clickable { onNavigateToTerminalAppearance() }
+            )
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
             // Debugging Section
-            Text(
+            SectionHeader(
                 text = context.getString(R.string.debugging_section),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 24.dp, bottom = 8.dp, top = 8.dp),
-                color = MaterialTheme.colorScheme.primary
+                modifier = Modifier.padding(start = 24.dp, bottom = 8.dp, top = 8.dp)
             )
 
             Surface(
@@ -517,12 +524,9 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // About Section
-            Text(
+            SectionHeader(
                 text = context.getString(R.string.about_section),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 24.dp, bottom = 8.dp, top = 8.dp),
-                color = MaterialTheme.colorScheme.primary
+                modifier = Modifier.padding(start = 24.dp, bottom = 8.dp, top = 8.dp)
             )
 
             Surface(
@@ -586,211 +590,185 @@ fun SettingsScreen(
 @Composable
 private fun AboutDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val scrollState = rememberScrollState()
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false
-        )
+    // Deviates from the full-width dismiss rule: About is an info page, not a
+    // decision, so it closes from the header like the terminal log viewer,
+    // pinned above the scrolling body. scrollableContent = false because the
+    // header must not scroll away with it.
+    DsDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier.fillMaxHeight(0.85f),
+        scrollableContent = false
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.85f)
-                .padding(horizontal = 24.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 24.dp, start = 24.dp, end = 24.dp, bottom = 8.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Title
                 Text(
                     text = context.getString(R.string.app_name),
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    fontWeight = FontWeight.Bold
                 )
+                DialogCloseButton(onClick = onDismiss)
+            }
 
-                // Scrollable content
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(scrollState),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                Text(
-                    text = context.getString(R.string.about_description),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = context.getString(R.string.developers),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-                ) {
-                    Column {
-                        // Developer 1
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/ravindu644"))
-                                    context.startActivity(intent)
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = context.getString(R.string.developer_ravindu644),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = context.getString(R.string.developer_ravindu644_role),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+            Text(
+                text = context.getString(R.string.about_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            SectionHeader(text = context.getString(R.string.developers))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            ) {
+                Column {
+                    // Developer 1
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/ravindu644"))
+                                context.startActivity(intent)
                             }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                contentDescription = context.getString(R.string.github),
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-                        // Telegram channel
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/Droidspaces"))
-                                    context.startActivity(intent)
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_telegram),
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = context.getString(R.string.developer_ravindu644),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = context.getString(R.string.telegram_channel),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                contentDescription = context.getString(R.string.telegram_channel),
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                text = context.getString(R.string.developer_ravindu644_role),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-                        // Source Code row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/ravindu644/Droidspaces-OSS"))
-                                    context.startActivity(intent)
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Code,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = context.getString(R.string.source_code),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                contentDescription = context.getString(R.string.source_code),
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = context.getString(R.string.github),
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
                     }
-                }
 
-                // Contributors
-                Text(
-                    text = context.getString(R.string.contributors),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                val contributors = remember { ContributorManager.load(context) }
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-                ) {
-                    Column {
-                        contributors.forEachIndexed { index, contributor ->
-                            ContributorItem(
-                                contributor = contributor,
-                                onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(contributor.githubUrl))
-                                    context.startActivity(intent)
-                                }
-                            )
-                            if (index < contributors.size - 1) {
-                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                    // Telegram channel
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/Droidspaces"))
+                                context.startActivity(intent)
                             }
-                        }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_telegram),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = context.getString(R.string.telegram_channel),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = context.getString(R.string.telegram_channel),
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
                     }
-                }
-                }
 
-                // OK Button
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End)
-                ) {
-                    Text(context.getString(R.string.ok))
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                    // Source Code row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/ravindu644/Droidspaces-OSS"))
+                                context.startActivity(intent)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Code,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = context.getString(R.string.source_code),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = context.getString(R.string.source_code),
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
                 }
             }
-        }
+
+            // Contributors
+            SectionHeader(text = context.getString(R.string.contributors))
+            val contributors = remember { ContributorManager.load(context) }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            ) {
+                Column {
+                    contributors.forEachIndexed { index, contributor ->
+                        ContributorItem(
+                            contributor = contributor,
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(contributor.githubUrl))
+                                context.startActivity(intent)
+                            }
+                        )
+                        if (index < contributors.size - 1) {
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        }
+                    }
+                }
+            }
+            }
+
     }
-}
+    }
+
 
 @Composable
 private fun ContributorItem(contributor: Contributor, onClick: () -> Unit) {
@@ -810,7 +788,7 @@ private fun ContributorItem(contributor: Contributor, onClick: () -> Unit) {
             Image(
                 bitmap = bitmap,
                 contentDescription = null,
-                modifier = Modifier.size(28.dp).clip(RoundedCornerShape(14.dp))
+                modifier = Modifier.size(28.dp).clip(CircleShape)
             )
         } else {
             Icon(Icons.Default.Person, contentDescription = null,
@@ -910,113 +888,70 @@ private fun LanguagePickerDialog(
         mutableIntStateOf(allOptions.indexOfFirst { (code, _) -> code == currentLanguage }.takeIf { it >= 0 } ?: 0)
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    DsDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier.heightIn(max = 560.dp),
+        footer = {
+            DialogFooterRow(
+                dismissLabel = context.getString(R.string.cancel),
+                confirmLabel = context.getString(R.string.ok),
+                onDismiss = onDismiss,
+                onConfirm = {
+                    if (selectedIndex >= 0 && selectedIndex < allOptions.size) {
+                        onLanguageSelected(allOptions[selectedIndex].first)
+                    }
+                    onDismiss()
+                }
+            )
+        }
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .wrapContentHeight()
-                .padding(vertical = 24.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-            tonalElevation = 0.dp
-        ) {
-            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    text = context.getString(R.string.language),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
+        Text(
+            text = context.getString(R.string.language),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
 
-                Column(
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            allOptions.forEachIndexed { index, (_, displayName) ->
+                val isSelected = selectedIndex == index
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { selectedIndex = index },
+                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent,
+                    shape = RoundedCornerShape(16.dp),
+                    tonalElevation = 0.dp
                 ) {
-                    allOptions.forEachIndexed { index, (_, displayName) ->
-                        val isSelected = selectedIndex == index
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { selectedIndex = index },
-                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent,
-                            shape = RoundedCornerShape(12.dp),
-                            tonalElevation = 0.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = isSelected,
-                                    onClick = { selectedIndex = index },
-                                    colors = RadioButtonDefaults.colors(
-                                        selectedColor = MaterialTheme.colorScheme.primary,
-                                        unselectedColor = MaterialTheme.colorScheme.outline
-                                    )
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = displayName,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val btnShape = RoundedCornerShape(14.dp)
-                    // Cancel - follow standard dialog cancel style
-                    Surface(
-                        modifier = Modifier.weight(1f).height(48.dp).clip(btnShape).clickable(onClick = onDismiss),
-                        shape = btnShape,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                        tonalElevation = 0.dp
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                context.getString(R.string.cancel),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { selectedIndex = index },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = MaterialTheme.colorScheme.primary,
+                                unselectedColor = MaterialTheme.colorScheme.outline
                             )
-                        }
-                    }
-                    // OK - follow solid primary style from SparseSizeDialog
-                    Surface(
-                        modifier = Modifier.weight(1f).height(48.dp).clip(btnShape).clickable {
-                            if (selectedIndex >= 0 && selectedIndex < allOptions.size) {
-                                onLanguageSelected(allOptions[selectedIndex].first)
-                            }
-                            onDismiss()
-                        },
-                        shape = btnShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        tonalElevation = 0.dp
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                context.getString(R.string.ok),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = displayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
             }
         }
+    
     }
-}
+    }
+
 
 

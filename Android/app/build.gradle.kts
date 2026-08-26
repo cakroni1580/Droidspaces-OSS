@@ -308,7 +308,10 @@ tasks.configureEach {
 
 dependencies {
     // Compose BOM
-    implementation(platform("androidx.compose:compose-bom:2024.02.00"))
+    // 2024.02.00 shipped compose 1.6.1, whose M3 Slider drops out of drag after the
+    // first move events (JetBrains/compose-multiplatform#4366); 2024.06.00 is the
+    // last patch of the same 1.6.x line and carries the fix.
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")

@@ -83,6 +83,22 @@
     <string name="dark_theme_description">Enable dark theme</string>
     <string name="terminal_dark_theme">Terminal Dark Mode</string>
     <string name="terminal_dark_theme_description">Use dark colors for the terminal page only</string>
+    <string name="terminal_appearance_summary">Dark mode, font size and custom fonts</string>
+    <string name="terminal_font_size">Font size</string>
+    <string name="terminal_font_size_description">Initial text size for new terminal sessions. Pinch to zoom adjusts each session separately.</string>
+    <string name="terminal_font">Font</string>
+    <string name="terminal_font_family">Font family</string>
+    <string name="terminal_section_theme">Theme</string>
+    <string name="terminal_section_misc">Misc</string>
+    <string name="terminal_font_description">Applies to new terminal sessions. Import any monospace .ttf or .otf file.</string>
+    <string name="terminal_font_default">JetBrains Mono (Default)</string>
+    <string name="terminal_font_import">Import a custom font</string>
+    <string name="terminal_font_import_error">Not a valid font file: %1$s</string>
+    <string name="terminal_font_delete">Remove font</string>
+    <string name="terminal_confirm_close">Confirm Before Closing</string>
+    <string name="terminal_confirm_close_description">Ask for confirmation when closing a terminal tab</string>
+    <string name="terminal_close_tab_title">Close session?</string>
+    <string name="terminal_close_tab_message">The shell running in this tab will end.</string>
     <string name="amoled_mode">AMOLED Mode</string>
     <string name="amoled_mode_description">Pure black background for OLED displays</string>
     <string name="dynamic_color">Apply System\'s Default Color Palette</string>
@@ -133,7 +149,6 @@
 
     <!-- Container Card -->
     <string name="status_running">RUNNING</string>
-    <string name="status_restarting">RESTARTING</string>
     <string name="status_stopped">STOPPED</string>
     <string name="pid_label">PID: %1$d</string>
     <string name="hostname_label">Hostname: %1$s</string>
@@ -564,8 +579,8 @@
     <!-- Notification Permission -->
     <string name="notification_permission_title">Notification Permission</string>
     <string name="notification_permission_rationale">Droidspaces needs to show a persistent notification to keep your terminal sessions running in the background. Without this, Android (especially on Samsung devices) might kill the terminal service unexpectedly.</string>
-    <string name="grant_permission">Grant Permission</string>
-    <string name="i_understand">I Understand</string>
+    <string name="allow">Allow</string>
+    <string name="not_now">Not now</string>
 
     <!-- Terminal Session Notification -->
     <string name="notification_title">Droidspaces Terminal</string>

@@ -572,6 +572,7 @@ void ds_config_free(struct ds_config *cfg);
 int ds_split_flags(const char *str, char ***out_argv, int *out_argc);
 void ds_free_split_flags(char **argv, int argc);
 char *ds_config_auto_path(const char *rootfs_path);
+void ds_config_reset_defaults(struct ds_config *cfg);
 void apply_reset_config(struct ds_config *cfg, int cli_net_mode_set,
                         enum ds_net_mode cli_net_mode);
 void parse_privileged(const char *value, struct ds_config *cfg);
@@ -895,8 +896,14 @@ int run_in_rootfs(struct ds_config *cfg, int argc, char **argv,
                   const char *as_user);
 int show_info(struct ds_config *cfg, int trust_cfg_pid);
 int show_container_usage(struct ds_config *cfg);
-int restart_rootfs(struct ds_config *cfg);
-int restart_rootfs_with_timeout(struct ds_config *cfg, int timeout_seconds);
+/* argc/argv: the process's original arguments, so restart can re-apply CLI
+ * overrides after its post-stop config reload. NULL argv skips that step. */
+int restart_rootfs(struct ds_config *cfg, int argc, char **argv);
+int restart_rootfs_with_timeout(struct ds_config *cfg, int timeout_seconds,
+                                int argc, char **argv);
+/* The CLI override pass, lives in main.c. Idempotent over the same argv. */
+int ds_apply_cli_overrides(int argc, char **argv, struct ds_config *cfg,
+                           int strict);
 
 /* documentation.c */
 

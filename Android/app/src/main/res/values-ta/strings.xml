@@ -163,7 +163,6 @@
     <string name="openrc_services">OpenRC சேவைகள்</string>
     <string name="virgl_option">விர்சிஎல்</string>
     <string name="update_available_message">பின்தளத்தில் புதுப்பிப்பு உள்ளது, புதுப்பிக்க இங்கே சொடுக்கு செய்யவும்</string>
-    <string name="grant_permission">இசைவு வழங்கவும்</string>
     <string name="installing_module_step">தொகுதியை நிறுவுகிறது...</string>
     <string name="reboot_recommended">SELinux விதிகளைப் பயன்படுத்த மறுதொடக்கம் பரிந்துரைக்கப்படுகிறது மற்றும் துவக்கத்தில் டீமானைத் தொடங்கவும்.</string>
     <string name="gateway_bridge">புரவலன் பாலம்</string>
@@ -179,7 +178,6 @@
     <string name="source_code">மூலக் குறியீடு</string>
     <string name="notification_permission_rationale">Droidspaces ஆனது உங்கள் முனைய அமர்வுகளை பின்னணியில் இயங்க வைப்பதற்கு ஒரு நிலையான அறிவிப்பைக் காட்ட வேண்டும். இது இல்லாமல், ஆண்ட்ராய்டு (குறிப்பாக சாம்சங் சாதனங்களில்) எதிர்பாராத விதமாக டெர்மினல் சேவையை அழிக்கக்கூடும்.</string>
     <string name="uninstall_container_title">கொள்கலனை நிறுவல் நீக்கவா?</string>
-    <string name="status_restarting">மறுதொடக்கம்</string>
     <string name="invalid_number">தவறான எண்</string>
     <string name="filter_absolute_path_hint">முழுமையான பாதையை வடிகட்டவும் அல்லது தட்டச்சு செய்யவும்…</string>
     <string name="error_gateway_name_chars">எழுத்துக்கள், இலக்கங்கள், _ அல்லது - ஆகியவற்றை மட்டும் பயன்படுத்தவும்</string>
@@ -211,7 +209,6 @@
     <string name="privileged_shared_desc">ஓச்டுக்கு MS_SHARED மவுண்ட் பிரசாரத்தை இயக்கவும்.</string>
     <string name="version">பதிப்பு</string>
     <string name="repo_install">நிறுவவும்</string>
-    <string name="i_understand">எனக்கு புரிகிறது</string>
     <string name="migrate_to_sparse_image">அரிதான படத்திற்கு நகர்த்தவும்</string>
     <string name="read_only">படிக்க மட்டும்</string>
     <string name="volatile_mode_description">ரேம் மட்டும் பயன்முறை (நிறுத்தத்திற்குப் பிறகு மாற்றங்கள் மறைந்துவிடும்)</string>

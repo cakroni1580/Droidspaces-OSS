@@ -24,7 +24,7 @@ fun ToggleCard(
     icon: ImageVector? = null,
     painter: Painter? = null
 ) {
-    val alpha = if (enabled) 1f else 0.5f
+    val alpha = if (enabled) 1f else 0.38f
     SettingsCard(
         title = title,
         onClick = { if (enabled) onCheckedChange(!checked) },

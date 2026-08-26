@@ -84,7 +84,6 @@
     <string name="edit_container_configuration">කන්ටේනර් සැකසුම් වෙනස් කරන්න</string>
     <string name="uninstall_container_menu">කන්ටේනරය අස්ථාපනය කරන්න</string>
     <string name="status_running">ධාවනය වේ</string>
-    <string name="status_restarting">ප්‍රතිපණගැන්වේ</string>
     <string name="status_stopped">නවත්වා ඇත</string>
     <string name="pid_label">PID: %1$d</string>
     <string name="hostname_label">සත්කාරක නාමය: %1$s</string>
@@ -298,8 +297,6 @@
     <string name="select_user_to_enter">කන්ටේනරයට ඇතුළු වීමට පරිශීලකයා තෝරන්න:</string>
     <string name="notification_permission_title">Notifications සඳහා අවසරය</string>
     <string name="notification_permission_rationale">Droidspaces ටර්මිනලය පසුබිමේ ක්‍රියා කරවීම සඳහා මෙම උපාංගයෙන් notification අවසරය අත්‍යාවශ්‍ය වේ. නැතහොත්, ඇන්ඩ්‍රොයිඩ් මගින් ඔබ විවෘත කළ ටර්මිනල වසා දැමීමට ඉඩ ඇත.</string>
-    <string name="grant_permission">අවසරය ලබා දෙන්න</string>
-    <string name="i_understand">මට තේරෙනවා</string>
     <string name="migrate_to_sparse_image">Sparse image ක්‍රමයට මාරු වෙන්න</string>
     <string name="resize_sparse_image">Sparse image එකේ ප්‍රමාණය වෙනස් කරන්න</string>
     <string name="migrate_dialog_title">Sparse image ක්‍රමයට මාරු වෙන්න</string>

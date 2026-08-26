@@ -92,7 +92,6 @@
     <string name="tap_to_fix_system">ចុចដើម្បីជួសជុលការកំណត់រចនាសម្ព័ន្ធប្រព័ន្ធ</string>
     <string name="feat_init_desc">គាំទ្រប្រព័ន្ធ Init ពេញលេញ (Full init system support)។ ការគ្រប់គ្រងសេវាកម្មពិតប្រាកដ មិនមែនជាបរិស្ថានធ្វើត្រាប់តាម (Simulated environment) នោះទេ។</string>
     <string name="feat_containers_desc">ប្រើប្រាស់បច្ចេកវិទ្យា Kernel Namespace ដូចគ្នាទៅនឹង LXC, Podman និង Docker។ គ្មានការធ្វើត្រាប់តាម (No emulation) និងមិនមែនត្រឹមតែជា chroot នោះទេ។</string>
-    <string name="status_restarting">កំពុងចាប់ផ្ដើមឡើងវិញ</string>
     <string name="status_stopped">បានឈប់</string>
     <string name="pid_label">លេខសម្គាល់ដំណើរការ (PID): %1$d</string>
     <string name="feat_privileged_desc">កាត់បន្ថយរបាំងការពារសន្តិសុខ ដោយប្រើប្រាស់របៀបសិទ្ធិខ្ពស់ (Privileged Mode) ដែលរៀបចំឡើងសម្រាប់អ្នកប្រើប្រាស់កម្រិតខ្ពស់។</string>
@@ -373,8 +372,6 @@
     <string name="select_user_to_enter">ជ្រើសរើសគណនីអ្នកប្រើប្រាស់ដើម្បីចូលទៅក្នុងកុងតឺន័រ៖</string>
     <string name="notification_permission_title">ការអនុញ្ញាតការជូនដំណឹង</string>
     <string name="notification_permission_rationale">Droidspaces ចាំបាច់ត្រូវបង្ហាញការជូនដំណឹងជាប្រចាំ ដើម្បីរក្សាដំណើរការវគ្គ Terminal របស់អ្នកឱ្យរត់នៅផ្ទៃខាងក្រោយ។ បើគ្មានការអនុញ្ញាតនេះទេ ប្រព័ន្ធ Android (ជាពិសេសនៅលើឧបករណ៍ Samsung) អាចនឹងបិទសេវាកម្ម Terminal ដោយមិនបានរំពឹងទុក។</string>
-    <string name="grant_permission">ផ្តល់ការអនុញ្ញាត</string>
-    <string name="i_understand">ខ្ញុំយល់ព្រម</string>
     <string name="notification_title">Droidspaces Terminal</string>
     <string name="notification_action_exit">ចាកចេញ</string>
     <string name="notification_wakelock_on">ទប់ស្កាត់ការរលត់អេក្រង់ (Wake lock)៖ បើក</string>

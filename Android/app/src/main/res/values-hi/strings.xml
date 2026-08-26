@@ -86,7 +86,6 @@
     <string name="uninstall_container_menu">कंटेनर अनइंस्टॉल करें</string>
     <!-- Container Card -->
     <string name="status_running">चल रहा है</string>
-    <string name="status_restarting">पुनः प्रारंभ हो रहा है</string>
     <string name="status_stopped">रुका हुआ</string>
     <string name="pid_label">PID: %1$d</string>
     <string name="hostname_label">होस्टनेम: %1$s</string>

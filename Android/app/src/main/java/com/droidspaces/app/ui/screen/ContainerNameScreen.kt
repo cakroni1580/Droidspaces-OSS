@@ -92,7 +92,7 @@ fun ContainerNameScreen(
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text(context.getString(R.string.container_setup)) },
+                title = { Text(context.getString(R.string.container_setup), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
                         Icon(Icons.Default.Close, contentDescription = context.getString(R.string.close))

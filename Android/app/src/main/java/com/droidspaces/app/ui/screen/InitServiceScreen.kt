@@ -44,7 +44,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.droidspaces.app.ui.component.CardContentPadding
+import com.droidspaces.app.ui.component.CardHeaderHeight
+import com.droidspaces.app.ui.theme.JetBrainsMono
 import com.droidspaces.app.R
+import com.droidspaces.app.ui.component.DsSnackbarHost
+import com.droidspaces.app.ui.component.dsMenuBorder
+import com.droidspaces.app.ui.component.DsMenuTheme
+import com.droidspaces.app.ui.component.StatusPill
 import com.droidspaces.app.ui.util.*
 import com.droidspaces.app.util.AnimationUtils
 import kotlinx.coroutines.Job
@@ -108,11 +115,6 @@ data class InitServiceFilterChip(
     val dotColor: Color?,
     val emptyRes: Int,
     val predicate: (InitServiceRow) -> Boolean,
-)
-
-private val JetBrainsMono = FontFamily(
-    Font(R.font.jetbrains_mono_regular, FontWeight.Normal),
-    Font(R.font.jetbrains_mono_bold, FontWeight.Bold)
 )
 
 private sealed class InitScreenState {
@@ -210,14 +212,14 @@ fun InitServiceScreen(
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
             topBar = {
-                CenterAlignedTopAppBar(
+                TopAppBar(
                     title = { Text(context.getString(titleRes), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
                     navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, context.getString(R.string.back)) } },
                     actions = { IconButton(onClick = { fetchServices() }, enabled = screenState !is InitScreenState.Loading && actionState is InitActionState.Idle) { Icon(Icons.Default.Refresh, context.getString(R.string.refresh)) } },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                 )
             },
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = { DsSnackbarHost(snackbarHostState) },
             containerColor = Color.Transparent
         ) { padding ->
             ClearFocusOnClickOutside(modifier = Modifier.padding(padding).fillMaxSize()) {
@@ -378,8 +380,13 @@ private fun InitServiceFilterChipsRow(
     }
 }
 
+/**
+ * The status hues. These are a deliberate traffic light rather than theme roles:
+ * six of these states can sit in the legend row at once, and primary/tertiary
+ * move with dynamic colour and the palette picker, so roles would collide.
+ */
 @Composable
-private fun statusColorFor(status: InitServiceUiStatus): Color = when (status) {
+fun statusColorFor(status: InitServiceUiStatus): Color = when (status) {
     InitServiceUiStatus.ENABLED_RUNNING -> Color(0xFF4CAF50)
     InitServiceUiStatus.ENABLED_STOPPED -> Color(0xFFFFCA28)
     InitServiceUiStatus.DISABLED_STOPPED -> Color(0xFFEF5350)
@@ -416,41 +423,24 @@ private fun InitServiceCard(
     ) {
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp).height(32.dp),
+                modifier = Modifier.fillMaxWidth().padding(CardContentPadding).height(CardHeaderHeight),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = row.name,
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontFamily = JetBrainsMono,
-                        fontSize = if (row.name.length > 25) 13.sp else 16.sp
+                        fontFamily = JetBrainsMono
                     ),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Surface(
-                    color = statusColor.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, statusColor.copy(alpha = 0.2f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Surface(modifier = Modifier.size(6.dp), shape = CircleShape, color = statusColor) {}
-                        Text(
-                            text = context.getString(statusLabelRes(row.status)).uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 0.5.sp,
-                            color = statusColor
-                        )
-                    }
-                }
+                StatusPill(
+                    label = context.getString(statusLabelRes(row.status)).uppercase(),
+                    color = statusColor
+                )
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -467,7 +457,9 @@ private fun InitServiceCard(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = RoundedCornerShape(20.dp),
+                    // The wrapper sits tighter than the 16.dp buttons inside it on purpose.
+                    // Matching the two radii flattens the nested look, do not "fix" it.
+                    shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
                 ) {
                     Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -525,21 +517,11 @@ private fun InitServiceCard(
                                     Surface(onClick = { showMenu = true }, modifier = Modifier.size(48.dp), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))) {
                                         Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                                     }
-                                    // Dark-mode dropdown theming: force an opaque surface + rounded corners.
-                                    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-                                    val dropdownColor = if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer
-                                    MaterialTheme(
-                                        colorScheme = MaterialTheme.colorScheme.copy(
-                                            surface = dropdownColor,
-                                            surfaceContainer = dropdownColor,
-                                            surfaceTint = Color.Transparent
-                                        ),
-                                        shapes = MaterialTheme.shapes.copy(extraSmall = RoundedCornerShape(20.dp))
-                                    ) {
+                                    DsMenuTheme {
                                         DropdownMenu(
                                             expanded = showMenu,
                                             onDismissRequest = { showMenu = false },
-                                            modifier = Modifier.border(width = 1.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), shape = RoundedCornerShape(20.dp))
+                                            modifier = Modifier.dsMenuBorder()
                                         ) {
                                             row.menu.forEach { item ->
                                                 DropdownMenuItem(

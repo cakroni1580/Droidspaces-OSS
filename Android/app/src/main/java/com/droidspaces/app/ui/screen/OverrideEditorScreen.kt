@@ -15,6 +15,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import com.droidspaces.app.ui.component.DsSnackbarHost
+import com.droidspaces.app.ui.theme.JetBrainsMono
 import com.droidspaces.app.R
 import com.droidspaces.app.ui.util.FullScreenLoading
 import com.droidspaces.app.ui.util.ProgressDialog
@@ -22,8 +24,6 @@ import com.droidspaces.app.ui.util.showError
 import com.droidspaces.app.ui.util.showSuccess
 import com.droidspaces.app.util.ContainerSystemdManager
 import kotlinx.coroutines.launch
-
-private val OverrideEditorMono = FontFamily(Font(R.font.jetbrains_mono_regular, FontWeight.Normal))
 
 private const val OVERRIDE_TEMPLATE = "[Service]\n"
 
@@ -90,8 +90,9 @@ fun OverrideEditorScreen(
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
             topBar = {
-                CenterAlignedTopAppBar(
+                TopAppBar(
                     title = {
+                        // Title carries a unit name, so it stays small enough to survive one line.
                         Text(
                             context.getString(R.string.edit_override_title, unitName),
                             style = MaterialTheme.typography.titleSmall,
@@ -117,7 +118,7 @@ fun OverrideEditorScreen(
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
                 )
             },
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = { DsSnackbarHost(snackbarHostState) },
             containerColor = Color.Transparent
         ) { padding ->
             Box(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
@@ -128,7 +129,7 @@ fun OverrideEditorScreen(
                         value = text,
                         onValueChange = { text = it },
                         modifier = Modifier.fillMaxSize(),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = OverrideEditorMono),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = JetBrainsMono),
                         shape = RoundedCornerShape(16.dp),
                         placeholder = { Text(context.getString(R.string.override_placeholder)) }
                     )

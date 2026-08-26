@@ -97,7 +97,6 @@
     <string name="network_mode">網路模式</string>
     <string name="source_code">原始碼</string>
     <string name="uninstall_container_title">是否卸載容器？</string>
-    <string name="status_restarting">正在重啟</string>
     <string name="invalid_number">無效的數字</string>
     <string name="root_available_message">現在您可以使用Droidspaces了</string>
     <string name="uninstall_container_message">這將永久刪除容器“%1$s ”及其所有資料。此操作無法撤銷。\n\n如果容器正在運行，則會先將其停止。</string>
@@ -334,8 +333,6 @@
     <string name="select_user_to_enter">選擇要進入容器的使用者：</string>
     <string name="notification_permission_title">通知權限</string>
     <string name="notification_permission_rationale">Droidspaces 需要顯示常駐通知，以保持您的終端會話在背景運行。否則，Android 系統（尤其是三星設備）可能會意外終止終端服務。</string>
-    <string name="grant_permission">授予權限</string>
-    <string name="i_understand">我了解</string>
     <string name="migrate_to_sparse_image">遷移至稀疏映像檔</string>
     <string name="resize_sparse_image">調整稀疏映像檔的大小</string>
     <string name="export_container">以 tarball 格式匯出容器</string>
@@ -533,4 +530,19 @@
     <string name="terminal_dark_theme_description">僅在終端頁面使用深色。</string>
     <string name="fetching_distros">從rootfs倉庫獲取發行版本...</string>
     <string name="resize_same_as_current">已使用 %1$d GB。輸入不同的大小以調整大小。</string>
+    <string name="next_summary">下一步：摘要</string>
+    <string name="storage_title">儲存空間</string>
+    <string name="storage_location">儲存空間位置</string>
+    <string name="storage_location_default">內部 (預設)</string>
+    <string name="storage_location_default_description">將 rootfs 保持在 %1$s 下</string>
+    <string name="storage_location_custom">選擇一個資料夾</string>
+    <string name="storage_location_custom_description">將 rootfs存放在SD卡，USB設備或其資料夾</string>
+    <string name="storage_location_pick">選擇儲存空間資料夾</string>
+    <string name="storage_location_change_hint">點選以選擇一個不同的資料夾</string>
+    <string name="storage_location_checking">正在檢查此路徑...</string>
+    <string name="storage_location_free">%1$s, %2$d GB 可用</string>
+    <string name="storage_location_fs_only">%1$s</string>
+    <string name="storage_location_image_forced">此處需要稀疏映像檔</string>
+    <string name="sparse_image_section">稀疏映像檔</string>
+    <string name="storage_location_needs_space">這裡至少需要 %1$d GB 的可用空間。</string>
 </resources>

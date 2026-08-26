@@ -18,7 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import com.droidspaces.app.ui.component.DsDialog
 import com.droidspaces.app.R
 import com.droidspaces.app.util.ContainerInfo
 import com.droidspaces.app.util.GatewayErrors
@@ -150,71 +150,56 @@ private fun GatewayConfigureDialog(
     )
     val advancedValid = errs.iface == null && errs.net == null && errs.bridge == null
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .imePadding(),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-            tonalElevation = 0.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    context.getString(R.string.gateway_configure_title),
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleLarge
-                )
-
-                // 1. Interface in Gateway (most important).
-                ExplainedField(
-                    title = context.getString(R.string.gateway_iface),
-                    explanation = context.getString(R.string.gateway_iface_explain),
-                    value = iface,
-                    onChange = { iface = it },
-                    hint = context.getString(R.string.gateway_iface_hint),
-                    error = errs.iface
-                )
-                // 2. LAN Name.
-                ExplainedField(
-                    title = context.getString(R.string.gateway_net),
-                    explanation = context.getString(R.string.gateway_net_explain),
-                    value = net,
-                    onChange = { net = it },
-                    hint = context.getString(R.string.gateway_net_hint),
-                    error = errs.net
-                )
-                // 3. Host Bridge.
-                ExplainedField(
-                    title = context.getString(R.string.gateway_bridge),
-                    explanation = context.getString(R.string.gateway_bridge_explain),
-                    value = bridge,
-                    onChange = { bridge = it },
-                    hint = context.getString(R.string.gateway_bridge_hint),
-                    error = errs.bridge
-                )
-
-                DialogFooterRow(
-                    dismissLabel = context.getString(R.string.cancel),
-                    confirmLabel = context.getString(R.string.ok),
-                    onDismiss = onDismiss,
-                    onConfirm = { onConfirm(net, iface, bridge) },
-                    confirmEnabled = advancedValid
-                )
-            }
+    DsDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier.imePadding(),
+        footer = {
+            DialogFooterRow(
+                dismissLabel = context.getString(R.string.cancel),
+                confirmLabel = context.getString(R.string.ok),
+                onDismiss = onDismiss,
+                onConfirm = { onConfirm(net, iface, bridge) },
+                confirmEnabled = advancedValid
+            )
         }
+    ) {
+        Text(
+            context.getString(R.string.gateway_configure_title),
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleLarge
+        )
+
+        // 1. Interface in Gateway (most important).
+        ExplainedField(
+            title = context.getString(R.string.gateway_iface),
+            explanation = context.getString(R.string.gateway_iface_explain),
+            value = iface,
+            onChange = { iface = it },
+            hint = context.getString(R.string.gateway_iface_hint),
+            error = errs.iface
+        )
+        // 2. LAN Name.
+        ExplainedField(
+            title = context.getString(R.string.gateway_net),
+            explanation = context.getString(R.string.gateway_net_explain),
+            value = net,
+            onChange = { net = it },
+            hint = context.getString(R.string.gateway_net_hint),
+            error = errs.net
+        )
+        // 3. Host Bridge.
+        ExplainedField(
+            title = context.getString(R.string.gateway_bridge),
+            explanation = context.getString(R.string.gateway_bridge_explain),
+            value = bridge,
+            onChange = { bridge = it },
+            hint = context.getString(R.string.gateway_bridge_hint),
+            error = errs.bridge
+        )
+    
     }
-}
+    }
+
 
 @Composable
 private fun ExplainedField(

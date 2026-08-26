@@ -76,7 +76,7 @@ fun ConfirmPhraseField(
             placeholder = { Text(context.getString(R.string.i_understand_caps)) },
             singleLine = true,
             isError = isError,
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = DsTextFieldDefaults.surfaceColors()
         )
     }

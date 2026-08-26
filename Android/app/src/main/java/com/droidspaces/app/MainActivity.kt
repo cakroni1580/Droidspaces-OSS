@@ -10,6 +10,18 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.droidspaces.app.ui.component.DialogFooterRow
+import com.droidspaces.app.ui.component.DsDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,31 +87,38 @@ class MainActivity : AppCompatActivity() {
     @Composable
     private fun NotificationRationaleDialog() {
         if (showNotificationRationale) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showNotificationRationale = false },
-                title = { Text(getString(R.string.notification_permission_title)) },
-                text = { Text(getString(R.string.notification_permission_rationale)) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        showNotificationRationale = false
-                        if (shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS)) {
-                            requestNotificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            DsDialog(
+                onDismiss = { showNotificationRationale = false },
+                footer = {
+                    DialogFooterRow(
+                        dismissLabel = getString(R.string.not_now),
+                        confirmLabel = getString(R.string.allow),
+                        onDismiss = { showNotificationRationale = false },
+                        onConfirm = {
+                            showNotificationRationale = false
+                            if (shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS)) {
+                                requestNotificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                    putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                                }
+                                startActivity(intent)
                             }
-                            startActivity(intent)
                         }
-                    }) {
-                        Text(getString(R.string.grant_permission))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showNotificationRationale = false }) {
-                        Text(getString(R.string.i_understand))
-                    }
+                    )
                 }
-            )
+            ) {
+                Text(
+                    text = getString(R.string.notification_permission_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = getString(R.string.notification_permission_rationale),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 

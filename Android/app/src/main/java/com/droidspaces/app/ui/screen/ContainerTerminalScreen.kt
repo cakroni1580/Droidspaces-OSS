@@ -28,21 +28,25 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.droidspaces.app.ui.component.DsDialog
 import com.droidspaces.app.service.TerminalSessionService
+import com.droidspaces.app.ui.component.DialogFooterRow
 import com.droidspaces.app.ui.terminal.TerminalBackEnd
 import com.droidspaces.app.ui.terminal.TerminalScreenState
 import com.droidspaces.app.ui.terminal.virtualkeys.VirtualKeysConstants
 import com.droidspaces.app.ui.terminal.virtualkeys.VirtualKeysInfo
 import com.droidspaces.app.ui.terminal.virtualkeys.VirtualKeysListener
 import com.droidspaces.app.ui.terminal.virtualkeys.VirtualKeysView
+import android.graphics.Typeface
 import com.droidspaces.app.util.AnimationUtils
 import com.droidspaces.app.util.ContainerOSInfoManager
+import com.droidspaces.app.util.FontInfo
 import com.droidspaces.app.util.PreferencesManager
+import java.io.File
 import com.droidspaces.app.ui.util.LoadingIndicator
 import com.droidspaces.app.ui.util.LoadingSize
 import com.termux.terminal.TerminalSession
@@ -69,6 +73,8 @@ fun ContainerTerminalScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     val terminalDarkTheme = remember { PreferencesManager.getInstance(context).terminalDarkTheme }
+    // Read once at entry like the theme above; re-enter to apply
+    val confirmTabClose = remember { PreferencesManager.getInstance(context).terminalConfirmClose }
 
     val keyboardController = LocalSoftwareKeyboardController.current
     var binder by remember { mutableStateOf<TerminalSessionService.SessionBinder?>(null) }
@@ -99,6 +105,8 @@ fun ContainerTerminalScreen(
     val tabs = remember { mutableStateListOf<TerminalTab>() }
     var activeTabId by remember { mutableStateOf("") }
     var showUserPicker by remember { mutableStateOf(false) }
+    // Tab whose X was tapped while Confirm Before Closing is on
+    var tabPendingClose by remember { mutableStateOf<TerminalTab?>(null) }
 
     // Resolve hostname reactively; picker is shown only after binder+hostname are both ready
     var hostname by remember(containerName) {
@@ -179,6 +187,34 @@ fun ContainerTerminalScreen(
     // Physical back leaves sessions alive in the service.
     BackHandler { exitScreen() }
 
+    tabPendingClose?.let { tab ->
+        DsDialog(
+            onDismiss = { tabPendingClose = null },
+            footer = {
+                DialogFooterRow(
+                    dismissLabel = context.getString(R.string.cancel),
+                    confirmLabel = context.getString(R.string.ok),
+                    onDismiss = { tabPendingClose = null },
+                    onConfirm = {
+                        closeTab(tab)
+                        tabPendingClose = null
+                    },
+                )
+            }
+        ) {
+            Text(
+                text = context.getString(R.string.terminal_close_tab_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = context.getString(R.string.terminal_close_tab_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+
     if (showUserPicker) {
         UserPickerDialog(
             users = availableUsers,
@@ -200,8 +236,8 @@ fun ContainerTerminalScreen(
                     title = {
                         Text(
                             containerName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -255,7 +291,9 @@ fun ContainerTerminalScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         IconButton(
-                                            onClick = { closeTab(tab) },
+                                            // Only the X asks for confirmation; a shell that already
+                                            // exited closes through onSessionFinished unasked
+                                            onClick = { if (confirmTabClose) tabPendingClose = tab else closeTab(tab) },
                                             modifier = Modifier.size(16.dp)
                                         ) {
                                             Icon(
@@ -315,18 +353,24 @@ private fun TerminalTabView(
     onSessionFinished: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val density = LocalDensity.current
-    val defaultFontSizePx = remember { with(density) { 10.dp.roundToPx() } }
-    val fontSizePx = TerminalSessionService.globalSessionList[tab.id]?.fontSizePx ?: defaultFontSizePx
-    // Loaded once per composition - null = bundled font missing, fallback to system default
     val context = androidx.compose.ui.platform.LocalContext.current
-    val terminalTypeface = remember { ResourcesCompat.getFont(context, R.font.jetbrains_mono) }
+    val prefsManager = remember { PreferencesManager.getInstance(context) }
+    val fontSizePx = TerminalSessionService.globalSessionList[tab.id]?.fontSizePx ?: prefsManager.terminalFontSizePx
+    // Read once at entry, re-enter to apply, same contract as terminalDarkTheme below.
+    // A missing or corrupt custom font falls back to bundled JetBrains Mono, and a
+    // null bundled font falls back to the system default.
+    val terminalTypeface = remember {
+        prefsManager.terminalFontFile
+            .takeIf { it.isNotEmpty() }
+            ?.let { File(FontInfo.fontsDir(context), it) }
+            ?.takeIf { it.isFile }
+            ?.let { runCatching { Typeface.createFromFile(it) }.getOrNull() }
+            ?: ResourcesCompat.getFont(context, R.font.jetbrains_mono)
+    }
 
     // Terminal-only dark mode: renders the terminal page dark even when the rest
     // of the app follows the light theme. Read once at entry; re-enter to apply.
-    val terminalDarkTheme = remember {
-        PreferencesManager.getInstance(context).terminalDarkTheme
-    }
+    val terminalDarkTheme = remember { prefsManager.terminalDarkTheme }
     // Termux TerminalColors indices: 256 = default foreground, 257 = background,
     // 258 = cursor. Dark mode uses the classic termux white-on-black scheme:
     // pure white foreground on pure black background.
@@ -336,6 +380,8 @@ private fun TerminalTabView(
     // pre-PR behavior: the Activity background shows through and the Termux
     // default background color is left untouched.
     val terminalBackground = if (terminalDarkTheme) Color.Black.toArgb() else 0
+    // Stays a literal: the keys sit against the terminal's own black, so they have to
+    // read dark even when the app itself is in the light theme.
     val virtualKeysBackground = if (terminalDarkTheme) Color(0xFF1A1A1E) else MaterialTheme.colorScheme.surfaceContainerHighest
 
     AnimatedVisibility(
@@ -447,127 +493,88 @@ private fun UserPickerDialog(
 ) {
     val context = LocalContext.current
     var selected by remember { mutableStateOf(users.firstOrNull() ?: "root") }
-    val dialogShape = RoundedCornerShape(28.dp)
 
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    DsDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier.heightIn(max = 460.dp),
+        footer = {
+            DialogFooterRow(
+                dismissLabel = context.getString(android.R.string.cancel),
+                confirmLabel = context.getString(R.string.open),
+                onDismiss = onDismiss,
+                onConfirm = { onConfirm(selected) }
+            )
+        }
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .wrapContentHeight(),
-            shape = dialogShape,
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-            tonalElevation = 0.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = context.getString(R.string.open_terminal),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Text(
-                    text = context.getString(R.string.select_user_to_enter),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
                 )
+                Text(
+                    text = context.getString(R.string.open_terminal),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 300.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    users.forEach { user ->
-                        val isSelected = user == selected
-                        Surface(
-                            onClick = { selected = user },
-                            shape = RoundedCornerShape(16.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) 
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp, 
-                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
-                            ),
-                            tonalElevation = 0.dp
+            Text(
+                text = context.getString(R.string.select_user_to_enter),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                users.forEach { user ->
+                    val isSelected = user == selected
+                    Surface(
+                        onClick = { selected = user },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) 
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, 
+                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                        ),
+                        tonalElevation = 0.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = user,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onSurface
+                            Text(
+                                text = user,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurface
+                            )
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { selected = user },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = MaterialTheme.colorScheme.primary,
+                                    unselectedColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
                                 )
-                                RadioButton(
-                                    selected = isSelected,
-                                    onClick = { selected = user },
-                                    colors = RadioButtonDefaults.colors(
-                                        selectedColor = MaterialTheme.colorScheme.primary,
-                                        unselectedColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
-                                    )
-                                )
-                            }
+                            )
                         }
                     }
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(
-                        onClick = onDismiss,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = context.getString(android.R.string.cancel),
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = { onConfirm(selected) },
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp)
-                    ) {
-                        Text(
-                            text = context.getString(R.string.open),
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
             }
-        }
     }
-}
+    }
+
 
 private val VIRTUAL_KEYS_LAYOUT = """
 [

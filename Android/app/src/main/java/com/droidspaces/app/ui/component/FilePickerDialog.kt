@@ -28,6 +28,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import com.droidspaces.app.ui.component.DsDialog
 import com.droidspaces.app.util.ContainerCommandBuilder
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
@@ -42,7 +43,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.droidspaces.app.ui.util.ClearFocusOnClickOutside
 import com.droidspaces.app.ui.util.FocusUtils
 import com.droidspaces.app.ui.util.rememberClearFocus
@@ -144,170 +144,158 @@ fun FilePickerDialog(
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        val clearFocus = rememberClearFocus()
+    val clearFocus = rememberClearFocus()
 
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.75f),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-            tonalElevation = 0.dp
+    DsDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier.fillMaxHeight(0.75f),
+        scrollableContent = false,
+        footer = {
+            DialogFooterRow(
+                dismissLabel = context.getString(R.string.cancel),
+                confirmLabel = context.getString(R.string.select_folder),
+                onDismiss = onDismiss,
+                onConfirm = { clearFocus(); onConfirm(currentPath) }
+            )
+        }
+    ) {
+        ClearFocusOnClickOutside(
+            modifier = Modifier.fillMaxSize()
         ) {
-            ClearFocusOnClickOutside(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Column(
+            Column(modifier = Modifier.fillMaxSize()) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                val pathScrollState = rememberScrollState()
+                Row(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp)
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                        .horizontalScroll(pathScrollState),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    val pathScrollState = rememberScrollState()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp)
-                            .horizontalScroll(pathScrollState),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = currentPath,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = JetBrainsMono,
-                                fontSize = 12.sp
-                            ),
-                            color = MaterialTheme.colorScheme.secondary,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = {
-                            Text(
-                                context.getString(R.string.filter_absolute_path_hint),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        },
-                        singleLine = true,
-                        keyboardOptions = FocusUtils.searchKeyboardOptions,
-                        keyboardActions = FocusUtils.clearFocusKeyboardActions(),
-                        textStyle = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = JetBrainsMono
+                        text = currentPath,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = JetBrainsMono,
+                            fontSize = 12.sp
                         ),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = DsTextFieldDefaults.surfaceColors()
+                        color = MaterialTheme.colorScheme.secondary,
+                        maxLines = 1,
+                        softWrap = false
                     )
+                }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                    val listState = rememberLazyListState()
-                    val scrollbarColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text(
+                            context.getString(R.string.filter_absolute_path_hint),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    singleLine = true,
+                    keyboardOptions = FocusUtils.searchKeyboardOptions,
+                    keyboardActions = FocusUtils.clearFocusKeyboardActions(),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = JetBrainsMono
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = DsTextFieldDefaults.surfaceColors()
+                )
 
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .lazyListVerticalScrollbar(listState, scrollbarColor)
-                    ) {
-                        if (isLoading) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LoadingIndicator(size = LoadingSize.Medium)
-                            }
-                        } else {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                if (currentPath != "/") {
-                                    item {
-                                        FileItemRow(
-                                            name = "..",
-                                            isDirectory = true,
-                                            icon = {
-                                                Icon(
-                                                    Icons.Default.ArrowUpward,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(24.dp),
-                                                    tint = MaterialTheme.colorScheme.tertiary
-                                                )
-                                            }
-                                        ) {
-                                            clearFocus()
-                                            searchQuery = ""
-                                            val parent = File(currentPath).parent ?: "/"
-                                            currentPath = parent
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val listState = rememberLazyListState()
+                val scrollbarColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .lazyListVerticalScrollbar(listState, scrollbarColor)
+                ) {
+                    if (isLoading) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LoadingIndicator(size = LoadingSize.Medium)
+                        }
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            if (currentPath != "/") {
+                                item {
+                                    FileItemRow(
+                                        name = "..",
+                                        isDirectory = true,
+                                        icon = {
+                                            Icon(
+                                                Icons.Default.ArrowUpward,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(24.dp),
+                                                tint = MaterialTheme.colorScheme.tertiary
+                                            )
                                         }
-                                    }
-                                }
-
-                                items(filteredItems) { item ->
-                                    FileItemRow(name = item.name, isDirectory = item.isDirectory) {
+                                    ) {
                                         clearFocus()
                                         searchQuery = ""
-                                        if (item.isDirectory) {
-                                            currentPath = if (currentPath == "/") "/${item.name}" else "$currentPath/${item.name}"
-                                        } else {
-                                            onConfirm(if (currentPath == "/") "/${item.name}" else "$currentPath/${item.name}")
-                                        }
+                                        val parent = File(currentPath).parent ?: "/"
+                                        currentPath = parent
                                     }
                                 }
+                            }
 
-                                if (filteredItems.isEmpty() && !isLoading) {
-                                    item {
-                                        Text(
-                                            text = if (searchQuery.isNotEmpty()) context.getString(R.string.no_matches) else context.getString(R.string.empty_directory),
-                                            modifier = Modifier.padding(16.dp),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.outline
-                                        )
+                            items(filteredItems) { item ->
+                                FileItemRow(name = item.name, isDirectory = item.isDirectory) {
+                                    clearFocus()
+                                    searchQuery = ""
+                                    if (item.isDirectory) {
+                                        currentPath = if (currentPath == "/") "/${item.name}" else "$currentPath/${item.name}"
+                                    } else {
+                                        onConfirm(if (currentPath == "/") "/${item.name}" else "$currentPath/${item.name}")
                                     }
+                                }
+                            }
+
+                            if (filteredItems.isEmpty() && !isLoading) {
+                                item {
+                                    Text(
+                                        text = if (searchQuery.isNotEmpty()) context.getString(R.string.no_matches) else context.getString(R.string.empty_directory),
+                                        modifier = Modifier.padding(16.dp),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
                                 }
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    DialogFooterRow(
-                        dismissLabel = context.getString(R.string.cancel),
-                        confirmLabel = context.getString(R.string.select_folder),
-                        onDismiss = onDismiss,
-                        onConfirm = { clearFocus(); onConfirm(currentPath) },
-                        textFontWeight = FontWeight.Bold
-                    )
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
-}
+    }
+
 
 data class FileItem(val name: String, val isDirectory: Boolean)
 

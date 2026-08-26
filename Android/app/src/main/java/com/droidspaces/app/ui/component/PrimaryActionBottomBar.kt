@@ -1,5 +1,9 @@
 package com.droidspaces.app.ui.component
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,9 +59,52 @@ fun PrimaryActionBottomBar(
     labelFontSize: TextUnit = TextUnit.Unspecified,
     secondaryAction: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
-    val btnShape = RoundedCornerShape(20.dp)
-    val bg = if (enabled) containerColor else disabledContainerColor
     val fg = if (enabled) contentColor else disabledContentColor
+    PrimaryActionBottomBar(
+        onClick = onClick,
+        containerColor = if (enabled) containerColor else disabledContainerColor,
+        modifier = modifier,
+        enabled = enabled,
+        barColor = barColor,
+        dividerAlpha = dividerAlpha,
+        horizontalPadding = horizontalPadding,
+        secondaryAction = secondaryAction
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = fg)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = labelFontSize,
+            color = fg
+        )
+    }
+}
+
+/**
+ * The same bar with the button's content supplied by the caller, for the save
+ * bars that swap between an icon, a spinner and a check mark. [containerColor]
+ * is animated, so a caller that changes it on a state change gets the fade for
+ * free and does not have to run its own animateColorAsState.
+ */
+@Composable
+fun PrimaryActionBottomBar(
+    onClick: () -> Unit,
+    containerColor: Color,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    barColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    dividerAlpha: Float = 0.25f,
+    horizontalPadding: Dp = 24.dp,
+    secondaryAction: (@Composable ColumnScope.() -> Unit)? = null,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val btnShape = RoundedCornerShape(20.dp)
+    val bg by animateColorAsState(
+        targetValue = containerColor,
+        animationSpec = tween(durationMillis = 250),
+        label = "bottom_bar_button"
+    )
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = barColor,
@@ -84,20 +131,15 @@ fun PrimaryActionBottomBar(
                     color = bg,
                     tonalElevation = 0.dp
                 ) {
-                    Box(modifier = Modifier.padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier.padding(vertical = 16.dp).fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = fg)
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = labelFontSize,
-                                color = fg
-                            )
-                        }
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            content = content
+                        )
                     }
                 }
                 secondaryAction?.invoke(this)

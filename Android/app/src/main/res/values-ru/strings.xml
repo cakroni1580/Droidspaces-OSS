@@ -86,7 +86,6 @@
     <string name="uninstall_container_menu">Удалить контейнер</string>
     <!-- Container Card -->
     <string name="status_running">ЗАПУЩЕН</string>
-    <string name="status_restarting">ПЕРЕЗАПУСК</string>
     <string name="status_stopped">ОСТАНОВЛЕН</string>
     <string name="pid_label">PID: %1$d</string>
     <string name="hostname_label">Имя хоста: %1$s</string>

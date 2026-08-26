@@ -365,6 +365,525 @@ static void enforce_nat_safety(struct ds_config *cfg, int argc, char **argv) {
   }
 }
 
+static struct option long_options[] = {
+    {"rootfs", required_argument, 0, 'r'},
+    {"rootfs-img", required_argument, 0, 'i'},
+    {"name", required_argument, 0, 'n'},
+    {"hostname", required_argument, 0, 'h'},
+    {"dns", required_argument, 0, 'd'},
+    {"foreground", no_argument, 0, 'f'},
+    {"hw-access", no_argument, 0, 'H'},
+    {"termux-x11", no_argument, 0, 'X'},
+    {"tx11-flags", required_argument, 0, 271},
+    {"disable-ipv6", no_argument, 0, 'I'},
+    {"enable-android-storage", no_argument, 0, 'S'},
+    {"selinux-permissive", no_argument, 0, 'P'},
+    {"allow-userns", no_argument, 0, 279},
+    {"volatile", no_argument, 0, 'V'},
+    {"bind-mount", required_argument, 0, 'B'},
+    {"bind", required_argument, 0, 'B'},
+    {"conf", required_argument, 0, 'C'},
+    {"config", required_argument, 0, 'C'},
+    {"env", required_argument, 0, 'E'},
+    {"user", required_argument, 0, 'u'},
+    {"net", required_argument, 0, 257},
+    {"port", required_argument, 0, 258},
+    {"upstream", required_argument, 0, 259},
+    {"force-cgroupv1", no_argument, 0, 260},
+    {"block-nested-namespaces", no_argument, 0, 261},
+    {"privileged", required_argument, 0, 264},
+    {"nat-ip", required_argument, 0, 262},
+    {"gpu", no_argument, 0, 263},
+    {"virgl", no_argument, 0, 270},
+    {"virgl-flags", required_argument, 0, 272},
+    {"pulse-audio", no_argument, 0, 273},
+    {"wayland", no_argument, 0, 280},
+    {"gateway", required_argument, 0, 274},
+    {"gateway-container", required_argument, 0, 274},
+    {"gateway-net", required_argument, 0, 275},
+    {"gateway-iface", required_argument, 0, 276},
+    {"gateway-bridge", required_argument, 0, 277},
+    {"reset", no_argument, 0, 256},
+    {"format", no_argument, 0, 265},
+    {"memory", required_argument, 0, 266},
+    {"cpus", required_argument, 0, 267},
+    {"pids-limit", required_argument, 0, 268},
+    {"init", required_argument, 0, 269},
+    {"help", no_argument, 0, 'v'},
+    {0, 0, 0, 0}};
+
+/* The CLI override pass: apply every flag in argv on top of whatever cfg
+ * already holds (defaults or a disk load). main runs it as pass 3 of its
+ * three-pass scheme, and restart runs it a SECOND time over the same argv
+ * after its post-stop workspace config reload, so every case here must stay
+ * idempotent and must never write into argv. Returns 0 on success, -1 on a
+ * bad flag value, 1 when help was printed. */
+int ds_apply_cli_overrides(int argc, char **argv, struct ds_config *cfg,
+                           int strict) {
+  int opt;
+  enum ds_net_mode cli_net_mode = DS_NET_HOST;
+
+  /* Strict mode for 'run' prevents stealing arguments from the sub-command. */
+  const char *optstring =
+      strict ? "+r:i:n:h:d:fHXPvVB:C:E:u:" : "r:i:n:h:d:fHXPvVB:C:E:u:";
+
+  /* --reset must wipe the config BEFORE the other flags land on top, but
+   * getopt hands us options in argv order. Scan for it first so
+   * reset-then-override holds no matter where --reset sits, on start and on
+   * restart's second pass alike. */
+  optind = 0;
+  while ((opt = getopt_long(argc, argv, optstring, long_options, NULL)) != -1) {
+    if (opt == 256) {
+      apply_reset_config(cfg, 0, DS_NET_HOST);
+      break;
+    }
+  }
+
+  optind = 0;
+  while ((opt = getopt_long(argc, argv, optstring, long_options, NULL)) != -1) {
+    switch (opt) {
+    case 'r':
+      safe_strncpy(cfg->rootfs_path, optarg, sizeof(cfg->rootfs_path));
+      cfg->rootfs_img_path[0] = '\0';
+      cfg->is_img_mount = 0;
+      break;
+    case 'i':
+      safe_strncpy(cfg->rootfs_img_path, optarg, sizeof(cfg->rootfs_img_path));
+      cfg->rootfs_path[0] = '\0';
+      cfg->is_img_mount = 1;
+      break;
+    case 'n': {
+      /* Names were already captured by main's discovery pass; re-validate for
+       * identical error behavior and keep only the cfg copy. */
+      char scratch[4096];
+      if (parse_and_validate_names(optarg, scratch, sizeof(scratch)) < 0)
+        return -1;
+      safe_strncpy(cfg->container_name, optarg, sizeof(cfg->container_name));
+      break;
+    }
+    case 'h':
+      safe_strncpy(cfg->hostname, optarg, sizeof(cfg->hostname));
+      break;
+    case 'E':
+      safe_strncpy(cfg->env_file, optarg, sizeof(cfg->env_file));
+      break;
+    case 'u':
+      /* Captured by main's discovery pass; nothing to re-apply here. */
+      break;
+    case 'd':
+      safe_strncpy(cfg->dns_servers, optarg, sizeof(cfg->dns_servers));
+      break;
+    case 'f':
+      cfg->foreground = 1;
+      break;
+    case 'H':
+      cfg->hw_access = 1;
+      break;
+    case 'X':
+      cfg->termux_x11 = 1;
+      break;
+    case 271:
+      free(cfg->tx11_extra_flags);
+      cfg->tx11_extra_flags = optarg[0] ? strdup(optarg) : NULL;
+      break;
+    case 270:
+      cfg->virgl = 1;
+      break;
+    case 272:
+      free(cfg->virgl_extra_flags);
+      cfg->virgl_extra_flags = optarg[0] ? strdup(optarg) : NULL;
+      break;
+    case 273:
+      cfg->pulseaudio = 1;
+      break;
+    case 274:
+      safe_strncpy(cfg->gateway_container, optarg,
+                   sizeof(cfg->gateway_container));
+      break;
+    case 275:
+      safe_strncpy(cfg->gateway_net, optarg, sizeof(cfg->gateway_net));
+      break;
+    case 276:
+      safe_strncpy(cfg->gateway_lan_ifname, optarg,
+                   sizeof(cfg->gateway_lan_ifname));
+      break;
+    case 277:
+      safe_strncpy(cfg->gateway_bridge, optarg, sizeof(cfg->gateway_bridge));
+      break;
+    case 280:
+      cfg.wayland = 1;
+      break;
+    case 'I':
+      cfg->disable_ipv6 = 1;
+      break;
+    case 'S':
+      cfg->android_storage = 1;
+      break;
+    case 'P':
+      cfg->selinux_permissive = 1;
+      break;
+    case 279:
+      cfg->userns_allowed = 1;
+      break;
+    case 'V':
+      cfg->volatile_mode = 1;
+      break;
+    case 'B': {
+      /* Tokenize a copy: strtok_r on optarg writes NULs into argv, which
+       * would corrupt the second pass restart runs over the same argv. */
+      char *dup = strdup(optarg);
+      if (!dup)
+        return -1;
+      char *saveptr;
+      char *token = strtok_r(dup, ",", &saveptr);
+      while (token) {
+        char *sep = strchr(token, ':');
+        if (!sep) {
+          ds_error("Invalid bind mount format: %s (expected SRC:DEST[:ro])",
+                   token);
+          free(dup);
+          return -1;
+        }
+        *sep = '\0';
+        const char *src = token;
+        char *rest = sep + 1;
+
+        /* Parse optional :ro flag after dest */
+        int ro = 0;
+        char *flag_sep = strchr(rest, ':');
+        if (flag_sep) {
+          *flag_sep = '\0';
+          ro = (strcmp(flag_sep + 1, "ro") == 0) ? 1 : 0;
+        }
+        const char *dest = rest;
+
+        if (dest[0] != '/') {
+          ds_error("Bind destination must be an absolute path: %s", dest);
+          free(dup);
+          return -1;
+        }
+        if (!validate_bind_destination(dest)) {
+          ds_error("Unsafe bind destination '%s': path traversal or control "
+                   "characters not allowed.",
+                   dest);
+          free(dup);
+          return -1;
+        }
+        if (ds_config_add_bind(cfg, src, dest, ro) < 0) {
+          free(dup);
+          return -1;
+        }
+        token = strtok_r(NULL, ",", &saveptr);
+      }
+      free(dup);
+      break;
+    }
+    case 'v':
+      print_usage();
+      return 1;
+    case 257:
+      if (strcmp(optarg, "nat") == 0)
+        cli_net_mode = DS_NET_NAT;
+      else if (strcmp(optarg, "none") == 0)
+        cli_net_mode = DS_NET_NONE;
+      else if (strcmp(optarg, "host") == 0)
+        cli_net_mode = DS_NET_HOST;
+      else if (strcmp(optarg, "gateway") == 0 ||
+               strcmp(optarg, "delegated-gateway") == 0)
+        cli_net_mode = DS_NET_GATEWAY;
+      else {
+        ds_error("Unknown network mode: '%s'. Valid options: host, nat, none, "
+                 "gateway",
+                 optarg);
+        return -1;
+      }
+      cfg->net_mode = cli_net_mode;
+      break;
+    case 264:
+      parse_privileged(optarg, cfg);
+      break;
+
+    case 258: {
+      /* --port HOST:CONTAINER[/proto]  (comma-separated list allowed), supports
+       * ranges */
+      char tmp[1024];
+      safe_strncpy(tmp, optarg, sizeof(tmp));
+      char *saveptr;
+      char *tok = strtok_r(tmp, ",", &saveptr);
+      while (tok) {
+        if (cfg->port_forward_count >= DS_MAX_PORT_FORWARDS) {
+          ds_error("Too many --port mappings (max %d)", DS_MAX_PORT_FORWARDS);
+          return -1;
+        }
+
+        while (*tok == ' ' || *tok == '\t')
+          tok++;
+
+        struct ds_port_forward *pf =
+            &cfg->port_forwards[cfg->port_forward_count];
+        memset(pf, 0, sizeof(*pf));
+        strncpy(pf->proto, "tcp", sizeof(pf->proto));
+
+        /* Strip optional /proto suffix */
+        char *slash = strchr(tok, '/');
+        if (slash) {
+          *slash = '\0';
+          strncpy(pf->proto, slash + 1, sizeof(pf->proto) - 1);
+          pf->proto[sizeof(pf->proto) - 1] = '\0';
+          if (strcmp(pf->proto, "tcp") != 0 && strcmp(pf->proto, "udp") != 0) {
+            ds_error("Invalid protocol '%s' in --port (use tcp or udp)",
+                     pf->proto);
+            return -1;
+          }
+        }
+
+        /* Split HOST:CONTAINER or symmetric PORT */
+        char *host_side = tok;
+        char *cont_side = tok;
+        char *colon = strchr(tok, ':');
+        if (colon) {
+          *colon = '\0';
+          cont_side = colon + 1;
+        }
+
+        int valid = 1;
+        /* Host side parsing */
+        {
+          char *dash = strchr(host_side, '-');
+          if (dash) {
+            int a = atoi(host_side), b = atoi(dash + 1);
+            if (a <= 0 || a > 65535 || b < a || b > 65535) {
+              ds_error("Invalid host port range '%s' in --port", host_side);
+              valid = 0;
+            } else {
+              pf->host_port = (uint16_t)a;
+              pf->host_port_end = (uint16_t)b;
+            }
+          } else {
+            int p = atoi(host_side);
+            if (p <= 0 || p > 65535) {
+              ds_error("Invalid host port '%s' in --port", host_side);
+              valid = 0;
+            } else {
+              pf->host_port = (uint16_t)p;
+              pf->host_port_end = 0;
+            }
+          }
+        }
+
+        /* Container side parsing */
+        if (valid) {
+          char *dash = strchr(cont_side, '-');
+          if (dash) {
+            int a = atoi(cont_side), b = atoi(dash + 1);
+            if (a <= 0 || a > 65535 || b < a || b > 65535) {
+              ds_error("Invalid container port range '%s' in --port",
+                       cont_side);
+              valid = 0;
+            } else {
+              pf->container_port = (uint16_t)a;
+              pf->container_port_end = (uint16_t)b;
+            }
+          } else {
+            int p = atoi(cont_side);
+            if (p <= 0 || p > 65535) {
+              ds_error("Invalid container port '%s' in --port", cont_side);
+              valid = 0;
+            } else {
+              pf->container_port = (uint16_t)p;
+              pf->container_port_end = 0;
+            }
+          }
+        }
+
+        if (!valid) {
+          return -1;
+        }
+
+        /* Width mismatch check */
+        int hw = pf->host_port_end ? (pf->host_port_end - pf->host_port) : 0;
+        int cw = pf->container_port_end
+                     ? (pf->container_port_end - pf->container_port)
+                     : 0;
+        if (hw != cw) {
+          ds_error(
+              "Port range width mismatch in --port: host %d vs container %d",
+              hw + 1, cw + 1);
+          return -1;
+        }
+
+        /* Conflict/Intersection check - Venn diagram logic:
+         * Reject if host OR container ranges overlap with any existing rule
+         * of the same protocol.  Two ranges [s1,e1] and [s2,e2] overlap
+         * iff s1 <= e2 && s2 <= e1. */
+        for (int i = 0; i < cfg->port_forward_count; i++) {
+          struct ds_port_forward *ex = &cfg->port_forwards[i];
+          if (strcmp(ex->proto, pf->proto) != 0)
+            continue;
+
+          /* Exact duplicate - silently skip */
+          if (pf->host_port == ex->host_port &&
+              pf->host_port_end == ex->host_port_end &&
+              pf->container_port == ex->container_port &&
+              pf->container_port_end == ex->container_port_end) {
+            goto skip_tok;
+          }
+
+          /* Host-side overlap */
+          uint16_t hs1 = pf->host_port,
+                   he1 = pf->host_port_end ? pf->host_port_end : pf->host_port;
+          uint16_t hs2 = ex->host_port,
+                   he2 = ex->host_port_end ? ex->host_port_end : ex->host_port;
+          int host_overlap = (hs1 <= he2 && hs2 <= he1);
+
+          /* Container-side overlap */
+          uint16_t cs1 = pf->container_port, ce1 = pf->container_port_end
+                                                       ? pf->container_port_end
+                                                       : pf->container_port;
+          uint16_t cs2 = ex->container_port, ce2 = ex->container_port_end
+                                                       ? ex->container_port_end
+                                                       : ex->container_port;
+          int cont_overlap = (cs1 <= ce2 && cs2 <= ce1);
+
+          if (host_overlap || cont_overlap) {
+            char pf_str[32], ex_str[32];
+            const char *side = host_overlap ? "Host" : "Container";
+
+            if (host_overlap) {
+              snprintf(pf_str, sizeof(pf_str), "%u%s%u", pf->host_port,
+                       pf->host_port_end ? "-" : "", pf->host_port_end);
+              snprintf(ex_str, sizeof(ex_str), "%u%s%u", ex->host_port,
+                       ex->host_port_end ? "-" : "", ex->host_port_end);
+            } else {
+              snprintf(pf_str, sizeof(pf_str), "%u%s%u", pf->container_port,
+                       pf->container_port_end ? "-" : "",
+                       pf->container_port_end);
+              snprintf(ex_str, sizeof(ex_str), "%u%s%u", ex->container_port,
+                       ex->container_port_end ? "-" : "",
+                       ex->container_port_end);
+            }
+
+            ds_warn("%s port conflict: %s/%s overlaps with existing "
+                    "mapping %s/%s - skipping",
+                    side, pf_str, pf->proto, ex_str, ex->proto);
+            goto skip_tok;
+          }
+        }
+
+        cfg->port_forward_count++;
+
+      skip_tok:
+        tok = strtok_r(NULL, ",", &saveptr);
+      }
+      break;
+    }
+
+    case 259: {
+      /* --upstream wlan0,rmnet*  (comma-separated, wildcards allowed).  Pins
+       * NAT WAN to this list in priority order and disables auto-detection. */
+      if (ds_parse_iface_csv(optarg, cfg->upstream_ifaces,
+                             &cfg->upstream_iface_count,
+                             DS_MAX_UPSTREAM_IFACES) > 0) {
+        ds_error("Too many --upstream interfaces (max %d)",
+                 DS_MAX_UPSTREAM_IFACES);
+        return -1;
+      }
+      break;
+    }
+
+    case 260:
+      /* --force-cgroupv1: escape hatch to legacy hierarchy */
+      cfg->force_cgroupv1 = 1;
+      break;
+    case 261:
+      /* --block-nested-namespaces: fix VFS deadlock manually */
+      cfg->block_nested_ns = 1;
+      break;
+
+    case 262: {
+      /* --nat-ip: static container IP inside the NAT subnet.
+       * Only a basic format check here - subnet + uniqueness validation
+       * happens in ds_net_resolve_static_ip() inside start_rootfs(). */
+      char _errbuf[128];
+      if (ds_net_validate_static_ip(optarg, _errbuf, sizeof(_errbuf)) != 0) {
+        ds_error("--nat-ip '%s' is invalid: %s", optarg, _errbuf);
+        return -1;
+      }
+      safe_strncpy(cfg->static_nat_ip, optarg, sizeof(cfg->static_nat_ip));
+      break;
+    }
+
+    case 263:
+      /* --gpu: enable GPU acceleration in isolated tmpfs mode.
+       * Scans the host /dev for known GPU nodes and mknods them into the
+       * container's isolated /dev.  Safe to combine with --hw-access (which
+       * already does full GPU wiring). */
+      cfg->gpu_mode = 1;
+      break;
+    case 265:
+      /* --format: machine-parseable output */
+      cfg->format_output = 1;
+      break;
+
+    case 266: {
+      long long v = ds_parse_size(optarg);
+      if (v < 4 * 1024 * 1024) {
+        ds_error("--memory: invalid or too small (min 4M): %s", optarg);
+        return -1;
+      }
+      cfg->memory_limit = v;
+      break;
+    }
+    case 267: {
+      char *end;
+      errno = 0;
+      double cpus = strtod(optarg, &end);
+      if (errno || end == optarg || *end != '\0' || cpus < 0.01) {
+        ds_error("--cpus: invalid value: %s", optarg);
+        return -1;
+      }
+      cfg->cpu_period = 100000;
+      cfg->cpu_quota = (long long)(cpus * cfg->cpu_period);
+      /* Enforce a strict minimum floor of 1000us (1ms) for the quota.
+       * Most kernels reject values smaller than this with EINVAL to prevent
+       * excessive scheduling overhead. */
+      if (cfg->cpu_quota < 1000) {
+        ds_error("--cpus: quota too small (min 0.01 cores / 1000us): %s",
+                 optarg);
+        return -1;
+      }
+      break;
+    }
+    case 268: {
+      char *end;
+      errno = 0;
+      long long p = strtoll(optarg, &end, 10);
+      /* Add a sane upper bound (4194304 = 2^22) matching the Linux kernel's
+       * default pid_max ceiling. Values above this are almost certainly
+       * user errors and would be rejected by the kernel with EINVAL. */
+      if (errno || end == optarg || *end != '\0' || p <= 0 || p > 4194304LL) {
+        ds_error("--pids-limit: invalid value (must be 1..4194304): %s",
+                 optarg);
+        return -1;
+      }
+      cfg->pids_limit = p;
+      break;
+    }
+    case 269:
+      if (strchr(optarg, ' ')) {
+        ds_error("--init: path cannot contain spaces: %s", optarg);
+        return -1;
+      }
+      safe_strncpy(cfg->custom_init, optarg, sizeof(cfg->custom_init));
+      break;
+    default:
+      break;
+    }
+  }
+
+  return 0;
+}
+
 int main(int argc, char **argv) {
   int ret = 0;
   struct ds_config cfg;
@@ -377,53 +896,6 @@ int main(int argc, char **argv) {
   cfg.net_done_pipe[0] = cfg.net_done_pipe[1] = -1;
 
   safe_strncpy(cfg.prog_name, argv[0], sizeof(cfg.prog_name));
-
-  static struct option long_options[] = {
-      {"rootfs", required_argument, 0, 'r'},
-      {"rootfs-img", required_argument, 0, 'i'},
-      {"name", required_argument, 0, 'n'},
-      {"hostname", required_argument, 0, 'h'},
-      {"dns", required_argument, 0, 'd'},
-      {"foreground", no_argument, 0, 'f'},
-      {"hw-access", no_argument, 0, 'H'},
-      {"termux-x11", no_argument, 0, 'X'},
-      {"tx11-flags", required_argument, 0, 271},
-      {"disable-ipv6", no_argument, 0, 'I'},
-      {"enable-android-storage", no_argument, 0, 'S'},
-      {"selinux-permissive", no_argument, 0, 'P'},
-      {"allow-userns", no_argument, 0, 279},
-      {"volatile", no_argument, 0, 'V'},
-      {"bind-mount", required_argument, 0, 'B'},
-      {"bind", required_argument, 0, 'B'},
-      {"conf", required_argument, 0, 'C'},
-      {"config", required_argument, 0, 'C'},
-      {"env", required_argument, 0, 'E'},
-      {"user", required_argument, 0, 'u'},
-      {"net", required_argument, 0, 257},
-      {"port", required_argument, 0, 258},
-      {"upstream", required_argument, 0, 259},
-      {"force-cgroupv1", no_argument, 0, 260},
-      {"block-nested-namespaces", no_argument, 0, 261},
-      {"privileged", required_argument, 0, 264},
-      {"nat-ip", required_argument, 0, 262},
-      {"gpu", no_argument, 0, 263},
-      {"virgl", no_argument, 0, 270},
-      {"virgl-flags", required_argument, 0, 272},
-      {"pulse-audio", no_argument, 0, 273},
-      {"gateway", required_argument, 0, 274},
-      {"gateway-container", required_argument, 0, 274},
-      {"gateway-net", required_argument, 0, 275},
-      {"gateway-iface", required_argument, 0, 276},
-      {"gateway-bridge", required_argument, 0, 277},
-      {"wayland", no_argument, 0, 280},
-      {"reset", no_argument, 0, 256},
-      {"format", no_argument, 0, 265},
-      {"memory", required_argument, 0, 266},
-      {"cpus", required_argument, 0, 267},
-      {"pids-limit", required_argument, 0, 268},
-      {"init", required_argument, 0, 269},
-      {"help", no_argument, 0, 'v'},
-      {0, 0, 0, 0}};
 
   extern int opterr;
   opterr = 0;
@@ -445,9 +917,6 @@ int main(int argc, char **argv) {
   const char *discovered_cmd = NULL;
   char temp_r[PATH_MAX] = {0}, temp_i[PATH_MAX] = {0};
   char run_user[256] = {0};
-  int reset_config = 0;
-  int cli_net_mode_set = 0;
-  enum ds_net_mode cli_net_mode = DS_NET_HOST;
   int opt;
 
   /* 1. Discovery Pass: Capture identity and command without permuting argv.
@@ -477,8 +946,6 @@ int main(int argc, char **argv) {
       safe_strncpy(temp_i, optarg, sizeof(temp_i));
     } else if (opt == 'u') {
       safe_strncpy(run_user, optarg, sizeof(run_user));
-    } else if (opt == 256) {
-      reset_config = 1;
     }
     /* Discover --net early so kernel probe can run before config load */
     if (opt == 257) {
@@ -609,464 +1076,14 @@ int main(int argc, char **argv) {
     }
   }
 
-  /* Apply configuration reset immediately AFTER disk load, BEFORE CLI overrides
-   */
-  if (reset_config) {
-    apply_reset_config(&cfg, cli_net_mode_set, cli_net_mode);
-  }
-
-  /* 2. Override Pass: Apply CLI flags on top of config.
-   * Strict mode for 'run' prevents stealing arguments from the sub-command. */
+  /* 2. Override Pass: Apply CLI flags on top of config. It also handles
+   * --reset internally, wiping the loaded config before the flags land. */
   int strict = (discovered_cmd && (strcmp(discovered_cmd, "run") == 0));
-  const char *optstring =
-      strict ? "+r:i:n:h:d:fHXPvVB:C:E:u:" : "r:i:n:h:d:fHXPvVB:C:E:u:";
-
-  while ((opt = getopt_long(argc, argv, optstring, long_options, NULL)) != -1) {
-    switch (opt) {
-    case 'r':
-      safe_strncpy(cfg.rootfs_path, optarg, sizeof(cfg.rootfs_path));
-      cfg.rootfs_img_path[0] = '\0';
-      cfg.is_img_mount = 0;
-      break;
-    case 'i':
-      safe_strncpy(cfg.rootfs_img_path, optarg, sizeof(cfg.rootfs_img_path));
-      cfg.rootfs_path[0] = '\0';
-      cfg.is_img_mount = 1;
-      break;
-    case 'n':
-      if (parse_and_validate_names(optarg, raw_names, sizeof(raw_names)) < 0) {
-        ret = 1;
-        goto cleanup;
-      }
-      safe_strncpy(cfg.container_name, optarg, sizeof(cfg.container_name));
-      break;
-    case 'h':
-      safe_strncpy(cfg.hostname, optarg, sizeof(cfg.hostname));
-      break;
-    case 'E':
-      safe_strncpy(cfg.env_file, optarg, sizeof(cfg.env_file));
-      break;
-    case 'u':
-      safe_strncpy(run_user, optarg, sizeof(run_user));
-      break;
-    case 'd':
-      safe_strncpy(cfg.dns_servers, optarg, sizeof(cfg.dns_servers));
-      break;
-    case 'f':
-      cfg.foreground = 1;
-      break;
-    case 'H':
-      cfg.hw_access = 1;
-      break;
-    case 'X':
-      cfg.termux_x11 = 1;
-      break;
-    case 271:
-      free(cfg.tx11_extra_flags);
-      cfg.tx11_extra_flags = optarg[0] ? strdup(optarg) : NULL;
-      break;
-    case 270:
-      cfg.virgl = 1;
-      break;
-    case 272:
-      free(cfg.virgl_extra_flags);
-      cfg.virgl_extra_flags = optarg[0] ? strdup(optarg) : NULL;
-      break;
-    case 273:
-      cfg.pulseaudio = 1;
-      break;
-    case 274:
-      safe_strncpy(cfg.gateway_container, optarg,
-                   sizeof(cfg.gateway_container));
-      break;
-    case 275:
-      safe_strncpy(cfg.gateway_net, optarg, sizeof(cfg.gateway_net));
-      break;
-    case 276:
-      safe_strncpy(cfg.gateway_lan_ifname, optarg,
-                   sizeof(cfg.gateway_lan_ifname));
-      break;
-    case 277:
-      safe_strncpy(cfg.gateway_bridge, optarg, sizeof(cfg.gateway_bridge));
-      break;
-    case 280:
-      cfg.wayland = 1;
-      break;
-    case 'I':
-      cfg.disable_ipv6 = 1;
-      break;
-    case 'S':
-      cfg.android_storage = 1;
-      break;
-    case 'P':
-      cfg.selinux_permissive = 1;
-      break;
-    case 279:
-      cfg.userns_allowed = 1;
-      break;
-    case 'V':
-      cfg.volatile_mode = 1;
-      break;
-    case 'B': {
-      char *saveptr;
-      char *token = strtok_r(optarg, ",", &saveptr);
-      while (token) {
-        char *sep = strchr(token, ':');
-        if (!sep) {
-          ds_error("Invalid bind mount format: %s (expected SRC:DEST[:ro])",
-                   token);
-          ret = 1;
-          goto cleanup;
-        }
-        *sep = '\0';
-        const char *src = token;
-        char *rest = sep + 1;
-
-        /* Parse optional :ro flag after dest */
-        int ro = 0;
-        char *flag_sep = strchr(rest, ':');
-        if (flag_sep) {
-          *flag_sep = '\0';
-          ro = (strcmp(flag_sep + 1, "ro") == 0) ? 1 : 0;
-        }
-        const char *dest = rest;
-
-        if (dest[0] != '/') {
-          ds_error("Bind destination must be an absolute path: %s", dest);
-          ret = 1;
-          goto cleanup;
-        }
-        if (!validate_bind_destination(dest)) {
-          ds_error("Unsafe bind destination '%s': path traversal or control "
-                   "characters not allowed.",
-                   dest);
-          ret = 1;
-          goto cleanup;
-        }
-        if (ds_config_add_bind(&cfg, src, dest, ro) < 0) {
-          ret = 1;
-          goto cleanup;
-        }
-        token = strtok_r(NULL, ",", &saveptr);
-      }
-      break;
-    }
-    case 'v':
-      print_usage();
-      ret = 0;
-      goto cleanup;
-    case 257:
-      if (strcmp(optarg, "nat") == 0)
-        cli_net_mode = DS_NET_NAT;
-      else if (strcmp(optarg, "none") == 0)
-        cli_net_mode = DS_NET_NONE;
-      else if (strcmp(optarg, "host") == 0)
-        cli_net_mode = DS_NET_HOST;
-      else if (strcmp(optarg, "gateway") == 0 ||
-               strcmp(optarg, "delegated-gateway") == 0)
-        cli_net_mode = DS_NET_GATEWAY;
-      else {
-        ds_error("Unknown network mode: '%s'. Valid options: host, nat, none, "
-                 "gateway",
-                 optarg);
-        ret = 1;
-        goto cleanup;
-      }
-      cfg.net_mode = cli_net_mode;
-      cli_net_mode_set = 1;
-      break;
-    case 264:
-      parse_privileged(optarg, &cfg);
-      break;
-
-    case 258: {
-      /* --port HOST:CONTAINER[/proto]  (comma-separated list allowed), supports
-       * ranges */
-      char tmp[1024];
-      safe_strncpy(tmp, optarg, sizeof(tmp));
-      char *saveptr;
-      char *tok = strtok_r(tmp, ",", &saveptr);
-      while (tok) {
-        if (cfg.port_forward_count >= DS_MAX_PORT_FORWARDS) {
-          ds_error("Too many --port mappings (max %d)", DS_MAX_PORT_FORWARDS);
-          ret = 1;
-          goto cleanup;
-        }
-
-        while (*tok == ' ' || *tok == '\t')
-          tok++;
-
-        struct ds_port_forward *pf = &cfg.port_forwards[cfg.port_forward_count];
-        memset(pf, 0, sizeof(*pf));
-        strncpy(pf->proto, "tcp", sizeof(pf->proto));
-
-        /* Strip optional /proto suffix */
-        char *slash = strchr(tok, '/');
-        if (slash) {
-          *slash = '\0';
-          strncpy(pf->proto, slash + 1, sizeof(pf->proto) - 1);
-          pf->proto[sizeof(pf->proto) - 1] = '\0';
-          if (strcmp(pf->proto, "tcp") != 0 && strcmp(pf->proto, "udp") != 0) {
-            ds_error("Invalid protocol '%s' in --port (use tcp or udp)",
-                     pf->proto);
-            ret = 1;
-            goto cleanup;
-          }
-        }
-
-        /* Split HOST:CONTAINER or symmetric PORT */
-        char *host_side = tok;
-        char *cont_side = tok;
-        char *colon = strchr(tok, ':');
-        if (colon) {
-          *colon = '\0';
-          cont_side = colon + 1;
-        }
-
-        int valid = 1;
-        /* Host side parsing */
-        {
-          char *dash = strchr(host_side, '-');
-          if (dash) {
-            int a = atoi(host_side), b = atoi(dash + 1);
-            if (a <= 0 || a > 65535 || b < a || b > 65535) {
-              ds_error("Invalid host port range '%s' in --port", host_side);
-              valid = 0;
-            } else {
-              pf->host_port = (uint16_t)a;
-              pf->host_port_end = (uint16_t)b;
-            }
-          } else {
-            int p = atoi(host_side);
-            if (p <= 0 || p > 65535) {
-              ds_error("Invalid host port '%s' in --port", host_side);
-              valid = 0;
-            } else {
-              pf->host_port = (uint16_t)p;
-              pf->host_port_end = 0;
-            }
-          }
-        }
-
-        /* Container side parsing */
-        if (valid) {
-          char *dash = strchr(cont_side, '-');
-          if (dash) {
-            int a = atoi(cont_side), b = atoi(dash + 1);
-            if (a <= 0 || a > 65535 || b < a || b > 65535) {
-              ds_error("Invalid container port range '%s' in --port",
-                       cont_side);
-              valid = 0;
-            } else {
-              pf->container_port = (uint16_t)a;
-              pf->container_port_end = (uint16_t)b;
-            }
-          } else {
-            int p = atoi(cont_side);
-            if (p <= 0 || p > 65535) {
-              ds_error("Invalid container port '%s' in --port", cont_side);
-              valid = 0;
-            } else {
-              pf->container_port = (uint16_t)p;
-              pf->container_port_end = 0;
-            }
-          }
-        }
-
-        if (!valid) {
-          ret = 1;
-          goto cleanup;
-        }
-
-        /* Width mismatch check */
-        int hw = pf->host_port_end ? (pf->host_port_end - pf->host_port) : 0;
-        int cw = pf->container_port_end
-                     ? (pf->container_port_end - pf->container_port)
-                     : 0;
-        if (hw != cw) {
-          ds_error(
-              "Port range width mismatch in --port: host %d vs container %d",
-              hw + 1, cw + 1);
-          ret = 1;
-          goto cleanup;
-        }
-
-        /* Conflict/Intersection check - Venn diagram logic:
-         * Reject if host OR container ranges overlap with any existing rule
-         * of the same protocol.  Two ranges [s1,e1] and [s2,e2] overlap
-         * iff s1 <= e2 && s2 <= e1. */
-        for (int i = 0; i < cfg.port_forward_count; i++) {
-          struct ds_port_forward *ex = &cfg.port_forwards[i];
-          if (strcmp(ex->proto, pf->proto) != 0)
-            continue;
-
-          /* Exact duplicate - silently skip */
-          if (pf->host_port == ex->host_port &&
-              pf->host_port_end == ex->host_port_end &&
-              pf->container_port == ex->container_port &&
-              pf->container_port_end == ex->container_port_end) {
-            goto skip_tok;
-          }
-
-          /* Host-side overlap */
-          uint16_t hs1 = pf->host_port,
-                   he1 = pf->host_port_end ? pf->host_port_end : pf->host_port;
-          uint16_t hs2 = ex->host_port,
-                   he2 = ex->host_port_end ? ex->host_port_end : ex->host_port;
-          int host_overlap = (hs1 <= he2 && hs2 <= he1);
-
-          /* Container-side overlap */
-          uint16_t cs1 = pf->container_port, ce1 = pf->container_port_end
-                                                       ? pf->container_port_end
-                                                       : pf->container_port;
-          uint16_t cs2 = ex->container_port, ce2 = ex->container_port_end
-                                                       ? ex->container_port_end
-                                                       : ex->container_port;
-          int cont_overlap = (cs1 <= ce2 && cs2 <= ce1);
-
-          if (host_overlap || cont_overlap) {
-            char pf_str[32], ex_str[32];
-            const char *side = host_overlap ? "Host" : "Container";
-
-            if (host_overlap) {
-              snprintf(pf_str, sizeof(pf_str), "%u%s%u", pf->host_port,
-                       pf->host_port_end ? "-" : "", pf->host_port_end);
-              snprintf(ex_str, sizeof(ex_str), "%u%s%u", ex->host_port,
-                       ex->host_port_end ? "-" : "", ex->host_port_end);
-            } else {
-              snprintf(pf_str, sizeof(pf_str), "%u%s%u", pf->container_port,
-                       pf->container_port_end ? "-" : "",
-                       pf->container_port_end);
-              snprintf(ex_str, sizeof(ex_str), "%u%s%u", ex->container_port,
-                       ex->container_port_end ? "-" : "",
-                       ex->container_port_end);
-            }
-
-            ds_warn("%s port conflict: %s/%s overlaps with existing "
-                    "mapping %s/%s - skipping",
-                    side, pf_str, pf->proto, ex_str, ex->proto);
-            goto skip_tok;
-          }
-        }
-
-        cfg.port_forward_count++;
-
-      skip_tok:
-        tok = strtok_r(NULL, ",", &saveptr);
-      }
-      break;
-    }
-
-    case 259: {
-      /* --upstream wlan0,rmnet*  (comma-separated, wildcards allowed).  Pins
-       * NAT WAN to this list in priority order and disables auto-detection. */
-      if (ds_parse_iface_csv(optarg, cfg.upstream_ifaces,
-                             &cfg.upstream_iface_count,
-                             DS_MAX_UPSTREAM_IFACES) > 0) {
-        ds_error("Too many --upstream interfaces (max %d)",
-                 DS_MAX_UPSTREAM_IFACES);
-        ret = 1;
-        goto cleanup;
-      }
-      break;
-    }
-
-    case 260:
-      /* --force-cgroupv1: escape hatch to legacy hierarchy */
-      cfg.force_cgroupv1 = 1;
-      break;
-    case 261:
-      /* --block-nested-namespaces: fix VFS deadlock manually */
-      cfg.block_nested_ns = 1;
-      break;
-
-    case 262: {
-      /* --nat-ip: static container IP inside the NAT subnet.
-       * Only a basic format check here - subnet + uniqueness validation
-       * happens in ds_net_resolve_static_ip() inside start_rootfs(). */
-      char _errbuf[128];
-      if (ds_net_validate_static_ip(optarg, _errbuf, sizeof(_errbuf)) != 0) {
-        ds_error("--nat-ip '%s' is invalid: %s", optarg, _errbuf);
-        ret = 1;
-        goto cleanup;
-      }
-      safe_strncpy(cfg.static_nat_ip, optarg, sizeof(cfg.static_nat_ip));
-      break;
-    }
-
-    case 263:
-      /* --gpu: enable GPU acceleration in isolated tmpfs mode.
-       * Scans the host /dev for known GPU nodes and mknods them into the
-       * container's isolated /dev.  Safe to combine with --hw-access (which
-       * already does full GPU wiring). */
-      cfg.gpu_mode = 1;
-      break;
-    case 265:
-      /* --format: machine-parseable output */
-      cfg.format_output = 1;
-      break;
-
-    case 266: {
-      long long v = ds_parse_size(optarg);
-      if (v < 4 * 1024 * 1024) {
-        ds_error("--memory: invalid or too small (min 4M): %s", optarg);
-        ret = 1;
-        goto cleanup;
-      }
-      cfg.memory_limit = v;
-      break;
-    }
-    case 267: {
-      char *end;
-      errno = 0;
-      double cpus = strtod(optarg, &end);
-      if (errno || end == optarg || *end != '\0' || cpus < 0.01) {
-        ds_error("--cpus: invalid value: %s", optarg);
-        ret = 1;
-        goto cleanup;
-      }
-      cfg.cpu_period = 100000;
-      cfg.cpu_quota = (long long)(cpus * cfg.cpu_period);
-      /* Enforce a strict minimum floor of 1000us (1ms) for the quota.
-       * Most kernels reject values smaller than this with EINVAL to prevent
-       * excessive scheduling overhead. */
-      if (cfg.cpu_quota < 1000) {
-        ds_error("--cpus: quota too small (min 0.01 cores / 1000us): %s",
-                 optarg);
-        ret = 1;
-        goto cleanup;
-      }
-      break;
-    }
-    case 268: {
-      char *end;
-      errno = 0;
-      long long p = strtoll(optarg, &end, 10);
-      /* Add a sane upper bound (4194304 = 2^22) matching the Linux kernel's
-       * default pid_max ceiling. Values above this are almost certainly
-       * user errors and would be rejected by the kernel with EINVAL. */
-      if (errno || end == optarg || *end != '\0' || p <= 0 || p > 4194304LL) {
-        ds_error("--pids-limit: invalid value (must be 1..4194304): %s",
-                 optarg);
-        ret = 1;
-        goto cleanup;
-      }
-      cfg.pids_limit = p;
-      break;
-    }
-    case 269:
-      if (strchr(optarg, ' ')) {
-        ds_error("--init: path cannot contain spaces: %s", optarg);
-        ret = 1;
-        goto cleanup;
-      }
-      safe_strncpy(cfg.custom_init, optarg, sizeof(cfg.custom_init));
-      break;
-    default:
-      break;
-    }
+  int orc = ds_apply_cli_overrides(argc, argv, &cfg, strict);
+  if (orc != 0) {
+    ret = (orc < 0) ? 1 : 0;
+    goto cleanup;
   }
-
   if (optind >= argc) {
     ds_error(C_BOLD "Missing command" C_RESET);
     ds_log("Run '" C_BOLD "%s help" C_RESET "' for usage information.",
@@ -1178,7 +1195,7 @@ int main(int argc, char **argv) {
       ds_warn("--privileged=noseccomp is active: --block-nested-namespaces "
               "is now a NO-OP.");
     ds_cgroup_host_bootstrap(cfg.force_cgroupv1);
-    ret = restart_rootfs(&cfg);
+    ret = restart_rootfs(&cfg, argc, argv);
     goto cleanup;
   }
 

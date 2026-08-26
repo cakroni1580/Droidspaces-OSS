@@ -19,8 +19,9 @@ NPROC := $(shell nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || ech
 V ?= 0
 
 # Optional private control bridge used by API-capable WebUI daemons.
-# Enabled by default for WebUI-ready builds; set to 0 for minimal CLI-only builds.
-ENABLE_SOCKETD_BACKEND ?= 1
+# Off by default so the stock static binary stays unchanged; set to 1 for
+# WebUI-ready builds.
+ENABLE_SOCKETD_BACKEND ?= 0
 
 ifeq ($(V),1)
   Q       =
@@ -123,8 +124,8 @@ help:
 	@echo ""
 	@echo "Options:"
 	@echo "  V=1            - Show full compiler commands"
-	@echo "  ENABLE_SOCKETD_BACKEND=0"
-	@echo "                 - Disable the private API backend bridge for minimal builds"
+	@echo "  ENABLE_SOCKETD_BACKEND=1"
+	@echo "                 - Compile the private droidspaces-socketd backend bridge"
 	@echo ""
 	@echo "Other:"
 	@echo "  make clean     - Remove build artifacts"

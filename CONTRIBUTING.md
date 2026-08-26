@@ -1,3 +1,5 @@
+English | [简体中文](./Documentation/zh-CN/CONTRIBUTING.md)
+
 # Contributing to Droidspaces
 
 ## Philosophy
@@ -205,8 +207,9 @@ change in the wrong place is a second bug.
 
 - State lives in a ViewModel, not in a stateful composable and not in a `util` singleton.
 - Lists render with `LazyColumn` and stable keys.
-- Colors come from `MaterialTheme.colorScheme`, type from `MaterialTheme.typography`, corner
-  radii from `ShapeUtils`, animation timings from `AnimationUtils`. Do not hardcode them.
+- Colors come from `MaterialTheme.colorScheme`, type from `MaterialTheme.typography`, animation
+  timings from `AnimationUtils`. Do not hardcode them. Corner radii, spacing and every other
+  visual value come from [DESIGN.md](./DESIGN.md).
 - Any value that reaches a root shell goes through `ContainerCommandBuilder.quote()` or an
   allow-list validator. No exceptions.
 
@@ -234,6 +237,9 @@ Grep this list before you write anything new. If something close already exists,
 rather than adding a sibling. Android paths are relative to
 `Android/app/src/main/java/com/droidspaces/app/`, C paths to the repository root.
 
+This list answers "what do I call". [DESIGN.md](./DESIGN.md) answers "what should it look like",
+for the case where nothing here fits and you have to build something new.
+
 ### Android: forms and reusable screens
 
 | Symbol | Path | Use it when |
@@ -247,6 +253,7 @@ rather than adding a sibling. Android paths are relative to
 | `PortForwardingList(portForwards, onPortForwardsChange)` | `ui/component/PortForwardingList.kt` | Editable port forward list, add dialog included |
 | `UpstreamInterfaceList(upstreamInterfaces, onInterfacesChange)` | `ui/component/UpstreamInterfaceList.kt` | Editable upstream interface chips |
 | `DsDropdown(label, selected, options, displayName, onSelect, ...)` | `ui/component/DsDropdown.kt` | Any select field. Never hand-roll `ExposedDropdownMenuBox` |
+| `DsMenuTheme { }` + `Modifier.dsMenuBorder()` | `ui/component/DsMenuTheme.kt` | Any `DropdownMenu` that needs the opaque menu surface. `DsDropdown` already applies it |
 | `DsTextFieldDefaults.colors()` / `.surfaceColors()` | `ui/component/DsTextFieldDefaults.kt` | Every `OutlinedTextField`. `colors()` on screens, `surfaceColors()` inside dialogs |
 | `FocusUtils`, `rememberClearFocus()`, `ClearFocusOnClickOutside` | `ui/util/FocusUtils.kt` | IME actions and dismissing the keyboard on outside taps |
 
@@ -254,7 +261,10 @@ rather than adding a sibling. Android paths are relative to
 
 | Symbol | Path | Use it when |
 | --- | --- | --- |
-| `DialogFooterRow(dismissLabel, confirmLabel, onDismiss, onConfirm, ...)` | `ui/component/DialogFooterRow.kt` | Every dialog's cancel and confirm row. Ten call sites already |
+| `DsDialog(onDismiss, modifier, borderColor, scrollableContent, footer) { }` | `ui/component/DsDialog.kt` | Every dialog. Actions go in `footer`, never in the content, or they get squeezed off a short screen. Never set a width, padding or scroll |
+| `DialogDismissButton(label, onDismiss)` | `ui/component/DialogFooterRow.kt` | The `footer` of a dialog whose only action is close |
+| `DialogCloseButton(onClick, enabled)` | `ui/component/DialogCloseButton.kt` | The 36.dp close square in a dialog's header row, for info pages that close from the top (terminal log viewer, About) |
+| `DialogFooterRow(dismissLabel, confirmLabel, onDismiss, onConfirm, confirmEnabled, destructive)` | `ui/component/DialogFooterRow.kt` | Every dialog's cancel and confirm row, thirteen call sites. Pass `destructive = true` for a delete or a wipe, never a colour |
 | `FilePickerDialog(onDismiss, onConfirm, title, showFiles)` | `ui/component/FilePickerDialog.kt` | Picking a host path or file |
 | `EnvironmentVariablesDialog(initialContent, onConfirm, onDismiss, ...)` | `ui/component/EnvironmentVariablesDialog.kt` | Key and value environment editor |
 | `PrivilegedModeDialog`, `HardwareAccessDialog` | `ui/component/` | Opt-in flows that need a typed confirmation phrase |
@@ -272,7 +282,8 @@ the language and about dialogs in `ui/screen/SettingsScreen.kt`). Do not import 
 
 | Symbol | Path | Use it when |
 | --- | --- | --- |
-| `PrimaryActionBottomBar(label, icon, onClick, ...)` | `ui/component/PrimaryActionBottomBar.kt` | Any wizard or full screen "Next", "Install", "Continue" bar. Six screens use it |
+| `PrimaryActionBottomBar(label, icon, onClick, ...)` | `ui/component/PrimaryActionBottomBar.kt` | Any wizard or full screen "Next", "Install", "Continue" bar. Seven screens use it. The overload taking a `content` slot is for buttons that swap their contents |
+| `SaveActionBottomBar(isSaved, isSaving, canSave, onSave, ...)` | `ui/component/SaveActionBottomBar.kt` | A save bar with the save, saving and saved states |
 | `PullToRefreshWrapper(onRefresh) { ... }` | `ui/component/PullToRefreshWrapper.kt` | Any pull to refresh list or tab body |
 | `showSuccess/showError/showInfo(snackbarHostState, message)` | `ui/util/SnackbarUtils.kt` | All snackbars. Never call `showSnackbar` directly |
 
@@ -294,6 +305,8 @@ the language and about dialogs in `ui/screen/SettingsScreen.kt`). Do not import 
 | Symbol | Path | Use it when |
 | --- | --- | --- |
 | `StatusPill(label, color)` | `ui/component/StatusPill.kt` | Any small status chip or badge |
+| `SectionHeader(text)` | `ui/component/SectionHeader.kt` | Any heading above a group of cards. Spacing goes on the modifier |
+| `CardContentPadding`, `CardHeaderHeight` | `ui/component/CardMetrics.kt` | Any card with a title-and-pill header. Keeps the dividers aligned across tabs, do not retype the values |
 | `LoadingIndicator(size, color)` + `LoadingSize` | `ui/util/LoadingIndicator.kt` | Inline spinners. Pick a `LoadingSize`, never a raw `.size(n.dp)` |
 | `FullScreenLoading(message)` | `ui/util/LoadingIndicator.kt` | Whole screen loading state |
 | `ContainedLoadingIndicator`, `LoadingIndicatorDefaults`, `MaterialShapes` | `ui/util/LoadingIndicator.kt` | Determinate and morphing indicators, and their tokens |
@@ -308,9 +321,9 @@ the language and about dialogs in `ui/screen/SettingsScreen.kt`). Do not import 
 | `DroidspacesTheme(darkTheme, dynamicColor, amoledMode, themePalette)` | `ui/theme/Theme.kt` | The single theme root, applied in `MainActivity` |
 | `rememberThemeState()` + `ThemeState` | `ui/theme/ThemeStateHolder.kt` | Reading live theme preferences |
 | `ThemePalette` | `ui/theme/Color.kt` | Adding an accent palette. Here and nowhere else |
-| `MaterialTheme.colorScheme.*` | | All colors. The bare `PRIMARY`, `GREEN`, `RED` values in `ui/theme/Color.kt` are legacy, do not use them in new code |
+| `MaterialTheme.colorScheme.*` | | All colors. `ui/theme/Color.kt` holds only `AMOLED_BLACK` and the palettes now |
 | `MaterialTheme.typography.*`, `JetBrainsMono` | `ui/theme/Type.kt` | All text styles, and the mono font for terminal, log, and code text |
-| `ShapeUtils` | `ui/util/DialogUtils.kt` | Corner radii. `DIALOG_SHAPE`, `CARD_SHAPE`, `BUTTON_SHAPE` and friends |
+| Corner radii, spacing, type roles | [DESIGN.md](./DESIGN.md) | Every visual value. There is no shape token object, the numbers live in DESIGN.md |
 | `AnimationUtils` | `util/AnimationUtils.kt` | Durations, easing, and tween specs. Never a literal `tween(300)` |
 | `AccentColorPicker`, `ColorPaletteSwatch` | `ui/component/` | The palette picker in settings |
 
@@ -603,18 +616,15 @@ to prove something at a trust boundary means deny.
 These exist today. They are on the cleanup list. Extend the shared version, do not add
 another.
 
-- `JetBrainsMono` is declared four times: the canonical one in `ui/theme/Type.kt`, plus
-  private copies in `InitServiceScreen.kt`, `UnitDetailScreen.kt`, and `OverrideEditorScreen.kt`.
-  Import the theme one.
-- There is no shared `DsDialog`. The same `Dialog { Surface { ... } }` scaffold is hand-rolled
-  in roughly sixteen places. If you need a dialog, copy the shape from an existing one and
-  say so in the PR, or better, extract the shared component.
-- Four local `RoundedCornerShape` dialog constants should be `ShapeUtils.DIALOG_SHAPE`.
 - `ToggleCard` and `SwitchItem` are two shapes of the same switch row.
 - `ContainersScreen` has an inline copy of the typed-confirmation gate that
-  `ConfirmPhraseField` already provides.
+  `ConfirmPhraseField` already provides. It also inlines error-tinted field colors, because
+  `DsTextFieldDefaults` has no error variant. Add the variant rather than a third copy.
 - `SummaryItem` exists as three private overloads in `InstallationSummaryScreen.kt`. Promote
   it to `ui/component/` before a second screen wants it.
+- `labelFontSize` on `PrimaryActionBottomBar` has one caller, `RootCheckScreen`, pushing its
+  call to action to 16sp. Either the type scale covers it or the parameter should go. Do not
+  add a second caller.
 - Several installer and checker classes still interpolate paths into shell strings with
   literal quotes or no quotes at all (`BinaryInstaller`, `ContainerInstaller`,
   `SparseImageInstaller`, `ModuleInstaller`, `SymlinkInstaller`). They are on the list. Do
@@ -652,6 +662,10 @@ Every feature PR must include:
 
 4. **No regressions.** Run the existing behavior through your change. If something that
    worked before no longer works, fix it before opening a PR.
+
+5. **For UI changes, the DESIGN.md rules you followed.** If you deviated from one, say which and
+   why. A radius or a colour that disagrees with [DESIGN.md](./DESIGN.md) without a reason gets
+   sent back.
 
 ## Code Ownership
 

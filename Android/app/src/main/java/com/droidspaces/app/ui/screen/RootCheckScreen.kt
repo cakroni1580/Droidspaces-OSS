@@ -86,6 +86,9 @@ fun RootCheckScreen(
                     else checkRoot()
                 },
                 enabled = !isChecking && currentRootStatus != RootStatus.Checking,
+                // Disabled keeps the enabled colours on purpose. The button is only
+                // disabled for the moment a root check is in flight, and greying it out
+                // for that beat reads as a flicker rather than as feedback.
                 disabledContainerColor = MaterialTheme.colorScheme.primary,
                 disabledContentColor = MaterialTheme.colorScheme.onPrimary,
                 horizontalPadding = 20.dp,

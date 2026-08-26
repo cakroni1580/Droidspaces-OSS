@@ -9,8 +9,7 @@ import java.io.File
 
 enum class ContainerStatus {
     RUNNING,
-    STOPPED,
-    RESTARTING
+    STOPPED
 }
 
 data class BindMount(

@@ -61,8 +61,6 @@
     <string name="open">開く</string>
     <string name="open_terminal">ターミナルを開く</string>
     <string name="notification_permission_title">通知権限</string>
-    <string name="grant_permission">権限を付与</string>
-    <string name="i_understand">理解しました</string>
     <string name="minimum_size_4gb">最低容量は 4 GB です</string>
     <string name="maximum_size_512gb">最高容量は 512 GB です</string>
     <string name="size_gb">容量 (GB)</string>
@@ -85,7 +83,6 @@
     <string name="edit_container_configuration">コンテナの構成を編集</string>
     <string name="uninstall_container_menu">コンテナをアンインストール</string>
     <string name="status_running">実行中</string>
-    <string name="status_restarting">再起動中</string>
     <string name="status_stopped">停止中</string>
     <string name="pid_label">プロセス番号(PID): %1$d</string>
     <string name="hostname_label">ホスト名: %1$s</string>

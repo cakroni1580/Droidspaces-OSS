@@ -1,5 +1,6 @@
 package com.droidspaces.app.ui.screen
 
+import com.droidspaces.app.ui.component.SectionHeader
 import com.droidspaces.app.ui.component.DsTextFieldDefaults
 import com.droidspaces.app.ui.component.FilePickerDialog
 import com.droidspaces.app.ui.component.SettingsCard
@@ -86,7 +87,7 @@ fun SparseImageConfigScreen(
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text(context.getString(R.string.storage_title)) },
+                title = { Text(context.getString(R.string.storage_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = context.getString(R.string.back))
@@ -139,7 +140,7 @@ fun SparseImageConfigScreen(
                 fontWeight = FontWeight.Bold
             )
 
-            SectionLabel(context.getString(R.string.storage_location))
+            SectionHeader(context.getString(R.string.storage_location))
 
             // Storage location. Built from SettingsCard so the two options line up with
             // each other and with every other option card in the app; a bare RadioButton
@@ -235,7 +236,7 @@ fun SparseImageConfigScreen(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-            SectionLabel(context.getString(R.string.sparse_image_section))
+            SectionHeader(context.getString(R.string.sparse_image_section))
 
             // Info card
             Surface(
@@ -256,7 +257,7 @@ fun SparseImageConfigScreen(
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Text(
@@ -364,7 +365,7 @@ fun SparseImageConfigScreen(
                             Icon(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = null,
-                                modifier = Modifier.size(22.dp),
+                                modifier = Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Text(
@@ -468,16 +469,3 @@ private fun StorageNoticeCard(
     }
 }
 
-/**
- * Groups the cards under it, so the two halves of this screen read as separate choices.
- * Styled to match the "NAT settings" heading in ContainerConfigForm, which is the same
- * kind of divider one step earlier in the wizard.
- */
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary
-    )
-}

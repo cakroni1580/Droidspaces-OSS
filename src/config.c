@@ -991,8 +991,12 @@ int ds_config_save_by_name(const char *name, struct ds_config *cfg) {
   return ds_config_save(config_path, cfg);
 }
 
-void apply_reset_config(struct ds_config *cfg, int cli_net_mode_set,
-                        enum ds_net_mode cli_net_mode) {
+/* Wipe cfg back to defaults while preserving container identity. Shared by
+ * --reset and by restart's post-stop reload, which must start from the same
+ * clean slate a fresh start gets: ds_config_load only overlays the keys
+ * present in the file, so loading into a lived-in cfg would leave stale
+ * snapshot values behind for every conditionally-written key. */
+void ds_config_reset_defaults(struct ds_config *cfg) {
   char save_name[256], save_rootfs[PATH_MAX], save_img[PATH_MAX];
   char save_config[PATH_MAX], save_prog[64], save_uuid[64];
   int save_is_img = cfg->is_img_mount;
@@ -1032,6 +1036,11 @@ void apply_reset_config(struct ds_config *cfg, int cli_net_mode_set,
   cfg->unknown_head = save_head;
   cfg->unknown_tail = save_tail;
   cfg->block_nested_ns = save_block_nested_ns;
+}
+
+void apply_reset_config(struct ds_config *cfg, int cli_net_mode_set,
+                        enum ds_net_mode cli_net_mode) {
+  ds_config_reset_defaults(cfg);
 
   if (cli_net_mode_set)
     cfg->net_mode = cli_net_mode;

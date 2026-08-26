@@ -99,11 +99,11 @@ fun ContainerCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .animateContentSize(animationSpec = AnimationUtils.mediumSpec())
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(CardContentPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().height(32.dp),
+                modifier = Modifier.fillMaxWidth().height(CardHeaderHeight),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -135,18 +135,23 @@ fun ContainerCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    IconButton(onClick = onShowLogs, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = onShowLogs) {
                         Icon(Icons.Default.Terminal, context.getString(R.string.view_logs), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     }
 
-                    // Premium Pill Status
                     val (statusText, statusColor) = when (container.status) {
                         ContainerStatus.RUNNING -> context.getString(R.string.status_running) to MaterialTheme.colorScheme.primary
-                        ContainerStatus.RESTARTING -> context.getString(R.string.status_restarting) to MaterialTheme.colorScheme.tertiary
                         ContainerStatus.STOPPED -> context.getString(R.string.status_stopped) to MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     }
 
-                    StatusPill(label = statusText.uppercase(), color = statusColor)
+                    // The label keeps reporting the state; the dot spins while an operation
+                    // runs. Changing the label would change the pill's width and shove the
+                    // logs button around every time a container starts or stops.
+                    StatusPill(
+                        label = statusText.uppercase(),
+                        color = statusColor,
+                        busy = isOperationRunning
+                    )
                 }
             }
             
@@ -204,7 +209,9 @@ fun ContainerCard(
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh, // Depth for secondary actions
-                shape = RoundedCornerShape(20.dp),
+                // The wrapper sits tighter than the 16.dp buttons inside it on purpose.
+                // Matching the two radii flattens the nested look, do not "fix" it.
+                shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -236,7 +243,7 @@ fun ContainerCard(
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 if (container.isRunning) context.getString(R.string.stop) else context.getString(R.string.start),
-                                style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
                                 color = if (container.isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                             )
                         }
@@ -261,7 +268,7 @@ fun ContainerCard(
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     context.getString(R.string.restart),
-                                    style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                             }
@@ -341,7 +348,7 @@ private fun ActionItem(
     isBold: Boolean = false,
     onClick: () -> Unit
 ) = ActionItemLayout(label, tint, isBold, onClick) {
-    Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
+    Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
 }
 
 @Composable
@@ -352,7 +359,7 @@ private fun ActionItem(
     isBold: Boolean = false,
     onClick: () -> Unit
 ) = ActionItemLayout(label, tint, isBold, onClick) {
-    Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
+    Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
 }
 
 @Composable

@@ -15,11 +15,12 @@ import androidx.core.app.NotificationCompat
 import com.droidspaces.app.MainActivity
 import com.droidspaces.app.R
 import com.droidspaces.app.ui.terminal.DroidspacesTerminalSession
+import com.droidspaces.app.util.PreferencesManager
 import com.droidspaces.app.ui.terminal.NoOpTerminalSessionClient
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 
-data class SessionInfo(val containerName: String, val user: String, val fontSizePx: Int = 30)
+data class SessionInfo(val containerName: String, val user: String, val fontSizePx: Int)
 
 class TerminalSessionService : Service() {
 
@@ -43,7 +44,11 @@ class TerminalSessionService : Service() {
                 containerUser = user,
             ).also {
                 sessions[sessionId] = it
-                val info = SessionInfo(containerName, user)
+                val info = SessionInfo(
+                    containerName,
+                    user,
+                    PreferencesManager.getInstance(this@TerminalSessionService).terminalFontSizePx
+                )
                 sessionList[sessionId] = info
                 globalSessionList[sessionId] = info
                 if (sessions.size == 1) {

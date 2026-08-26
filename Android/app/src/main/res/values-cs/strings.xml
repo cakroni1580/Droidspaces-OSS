@@ -111,7 +111,6 @@
     <string name="edit_container_configuration">Upravit konfiguraci kontejneru</string>
     <string name="uninstall_container_menu">Odinstalovat kontejner</string>
     <string name="status_running">SPUŠTĚNO</string>
-    <string name="status_restarting">RESTARTUJE SE</string>
     <string name="status_stopped">ZASTAVENO</string>
     <string name="pid_label">PID: %1$d</string>
     <string name="hostname_label">Název hostitele: %1$s</string>
@@ -428,8 +427,6 @@
     <string name="select_user_to_enter">Vyberte uživatele, pod kterým chcete vstoupit do kontejneru:</string>
     <string name="notification_permission_title">Oprávnění k oznámením</string>
     <string name="notification_permission_rationale">Droidspaces musí zobrazovat trvalé oznámení, aby relace terminálu zůstaly spuštěné na pozadí. Bez něj může Android (zejména na zařízeních Samsung) službu terminálu neočekávaně ukončit.</string>
-    <string name="grant_permission">Udělit oprávnění</string>
-    <string name="i_understand">Rozumím</string>
     <string name="notification_title">Terminál Droidspaces</string>
     <string name="notification_action_exit">UKONČIT</string>
     <string name="notification_wakelock_on">Zámek probuzení: ZAPNUT</string>

@@ -99,7 +99,6 @@
     <string name="uninstall_container_title">是否卸载容器？</string>
     <string name="uninstall_container_message">这将永久删除容器“%1$s”及其所有数据。此操作不可撤销。\n\n如果容器正在运行，将先将其停止。</string>
     <string name="status_running">正在运行</string>
-    <string name="status_restarting">正在重启</string>
     <string name="status_stopped">已停止</string>
     <string name="pid_label">PID: %1$d</string>
     <string name="distribution">发行版</string>
@@ -178,7 +177,6 @@
     <string name="sparse_images_recommended">建议在加密存储、F2FS /data 分区或其他可能与直接目录挂载存在兼容性问题的文件系统上运行容器时，使用稀疏镜像。</string>
     <string name="requirements_check_completed_successfully">成功完成运行要求检查</string>
     <string name="starting_migration">开始执行迁移操作...</string>
-    <string name="grant_permission">授予权限</string>
     <string name="container_name_placeholder" translatable="false">my-container</string>
     <string name="reboot_recommended">建议重启以应用 SELinux 策略并在开机时启动守护进程。</string>
     <string name="check_requirements">检查要求</string>
@@ -186,7 +184,6 @@
     <string name="invalid_number">无效的数字</string>
     <string name="maximum_size_512gb">最大容量为 512 GB</string>
     <string name="error_hostname_invalid">主机名只能包含字母、数字和连字符（-）</string>
-    <string name="i_understand">明白了</string>
     <string name="migrate_to_sparse_image">迁移至稀疏镜像</string>
     <string name="resize_dialog_title">调整稀疏镜像容量</string>
     <string name="gb_size">%1$dGB</string>
@@ -538,4 +535,21 @@
     <string name="applying_override">正在应用覆盖配置…</string>
     <string name="fetching_distros">正在从 rootfs 仓库中获取发行版……</string>
     <string name="resize_same_as_current">当前已为 %1$d GB，请输入其他容量大小。</string>
+    <string name="storage_location">存储位置</string>
+    <string name="storage_location_default">内部存储（默认）</string>
+    <string name="storage_location_custom">自定义存储目录</string>
+    <string name="storage_location_pick">选择存储文件夹</string>
+    <string name="storage_location_change_hint">单击重新选择文件夹</string>
+    <string name="sparse_image_section">稀疏镜像</string>
+    <string name="storage_location_needs_space">这里至少需要 %1$d GB 的可用空间。</string>
+    <string name="storage_location_fs_only">%1$s</string>
+    <string name="allow">允许</string>
+    <string name="not_now">不是现在</string>
+    <string name="storage_location_image_forced">此处需要稀疏镜像</string>
+    <string name="storage_location_custom_description">将rootfs放在SD卡、U盘或其它目录中</string>
+    <string name="storage_title">存储</string>
+    <string name="next_summary">下一步：安装概览</string>
+    <string name="storage_location_default_description">将rootfs保存在 %1$s</string>
+    <string name="storage_location_checking">检查存储位置……</string>
+    <string name="storage_location_free">%1$s, %2$d GB 空闲</string>
 </resources>

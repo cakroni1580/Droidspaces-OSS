@@ -60,14 +60,13 @@ fun SystemdScreen(
     val context = LocalContext.current
     LaunchedEffect(Unit) { ContainerSystemdManager.initialize(context) }
 
-    val maskedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
     val filters = listOf(
-        InitServiceFilterChip("RUNNING", R.string.running, Color(0xFF4CAF50), R.string.no_running_services) { it.isRunning && it.isEnabled && !it.isMasked },
-        InitServiceFilterChip("ENABLED", R.string.enabled_legend, Color(0xFFFFCA28), R.string.no_enabled_services) { it.isEnabled && !it.isRunning && !it.isMasked },
-        InitServiceFilterChip("DISABLED", R.string.disabled_legend, Color(0xFFEF5350), R.string.no_disabled_services) { !it.isEnabled && !it.isRunning && !it.isMasked && !it.isStatic },
-        InitServiceFilterChip("ABNORMAL", R.string.abnormal_legend, Color(0xFFFF7043), R.string.no_abnormal_services) { it.isRunning && !it.isEnabled && !it.isStatic && !it.isMasked },
-        InitServiceFilterChip("STATIC", R.string.static_legend, Color(0xFF607D8B), R.string.no_static_services) { it.isStatic },
-        InitServiceFilterChip("MASKED", R.string.masked_legend, maskedColor, R.string.no_masked_services) { it.isMasked },
+        InitServiceFilterChip("RUNNING", R.string.running, statusColorFor(InitServiceUiStatus.ENABLED_RUNNING), R.string.no_running_services) { it.isRunning && it.isEnabled && !it.isMasked },
+        InitServiceFilterChip("ENABLED", R.string.enabled_legend, statusColorFor(InitServiceUiStatus.ENABLED_STOPPED), R.string.no_enabled_services) { it.isEnabled && !it.isRunning && !it.isMasked },
+        InitServiceFilterChip("DISABLED", R.string.disabled_legend, statusColorFor(InitServiceUiStatus.DISABLED_STOPPED), R.string.no_disabled_services) { !it.isEnabled && !it.isRunning && !it.isMasked && !it.isStatic },
+        InitServiceFilterChip("ABNORMAL", R.string.abnormal_legend, statusColorFor(InitServiceUiStatus.ABNORMAL), R.string.no_abnormal_services) { it.isRunning && !it.isEnabled && !it.isStatic && !it.isMasked },
+        InitServiceFilterChip("STATIC", R.string.static_legend, statusColorFor(InitServiceUiStatus.STATIC), R.string.no_static_services) { it.isStatic },
+        InitServiceFilterChip("MASKED", R.string.masked_legend, statusColorFor(InitServiceUiStatus.MASKED), R.string.no_masked_services) { it.isMasked },
         InitServiceFilterChip("ALL", R.string.all_legend, null, R.string.no_services_found) { true },
     )
 

@@ -2001,7 +2001,8 @@ int show_info(struct ds_config *cfg, int trust_cfg_pid) {
   return 0;
 }
 
-int restart_rootfs_with_timeout(struct ds_config *cfg, int timeout_seconds) {
+int restart_rootfs_with_timeout(struct ds_config *cfg, int timeout_seconds,
+                                int argc, char **argv) {
   pid_t pid = 0;
   if (!is_container_running(cfg, &pid) || pid <= 0) {
     ds_error("Container '%s' is not running or invalid.", cfg->container_name);
@@ -2014,16 +2015,27 @@ int restart_rootfs_with_timeout(struct ds_config *cfg, int timeout_seconds) {
   /* The stop above tore down using the booted snapshot (loaded while the
    * container was alive). It is gone now, so reloading by name returns the
    * workspace copy - reload it so host-side container.config edits made while
-   * it ran take effect on this restart. start_rootfs re-derives the preserved
-   * mount from the on-disk .mount sidecar, so losing the snapshot paths is
-   * fine. */
-  free_config_binds(cfg);
-  ds_config_load_by_name(cfg->container_name, cfg);
+   * it ran take effect on this restart, then re-apply the CLI overrides
+   * (--reset included) so every flag behaves exactly as it would on a fresh
+   * start. An explicit --conf never read the booted snapshot in the first
+   * place: cfg already holds that file plus the overrides, so skip the
+   * reload entirely. start_rootfs re-derives the preserved mount from the
+   * on-disk .mount sidecar, so losing the snapshot paths is fine. */
+  if (!cfg->config_file_specified) {
+    /* Clean slate first: the load only overlays keys present in the file, so
+     * without the reset every conditionally-written key would keep its value
+     * from the booted snapshot, and port/upstream lists would union across
+     * the two loads instead of being replaced. */
+    ds_config_reset_defaults(cfg);
+    ds_config_load_by_name(cfg->container_name, cfg);
+    if (argv && ds_apply_cli_overrides(argc, argv, cfg, 0) != 0)
+      return -1;
+  }
   putchar('\n');
   print_ds_banner();
   return start_rootfs(cfg);
 }
 
-int restart_rootfs(struct ds_config *cfg) {
-  return restart_rootfs_with_timeout(cfg, DS_STOP_TIMEOUT);
+int restart_rootfs(struct ds_config *cfg, int argc, char **argv) {
+  return restart_rootfs_with_timeout(cfg, DS_STOP_TIMEOUT, argc, argv);
 }

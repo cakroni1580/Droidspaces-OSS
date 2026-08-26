@@ -35,13 +35,8 @@ fun <T> DsDropdown(
     var expanded by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
-    val fieldShape = RoundedCornerShape(20.dp)
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-        focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    )
+    val fieldShape = RoundedCornerShape(16.dp)
+    val fieldColors = DsTextFieldDefaults.colors()
 
     ExposedDropdownMenuBox(
         expanded = expanded && enabled,
@@ -68,31 +63,14 @@ fun <T> DsDropdown(
                 .menuAnchor()
                 .fillMaxWidth()
         )
-        val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-        val dropdownColor = if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer
-        
-        MaterialTheme(
-            colorScheme = MaterialTheme.colorScheme.copy(
-                surface = dropdownColor,
-                surfaceContainer = dropdownColor,
-                surfaceTint = Color.Transparent
-            ),
-            shapes = MaterialTheme.shapes.copy(
-                extraSmall = RoundedCornerShape(20.dp)
-            )
-        ) {
+        DsMenuTheme {
             ExposedDropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { 
                     expanded = false
                     focusManager.clearFocus()
                 },
-                modifier = Modifier
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                        shape = RoundedCornerShape(20.dp)
-                    )
+                modifier = Modifier.dsMenuBorder()
             ) {
                 options.forEach { option ->
                     DropdownMenuItem(

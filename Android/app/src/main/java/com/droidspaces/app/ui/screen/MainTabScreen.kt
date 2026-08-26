@@ -662,7 +662,7 @@ private fun MainBottomBar(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = contentColor,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = if (isSelected) 11.sp else 10.sp
+                                    fontSize = 11.sp
                                 )
                             }
                         }

@@ -46,10 +46,10 @@ fun OpenRCScreen(
     LaunchedEffect(Unit) { ContainerOpenRCManager.initialize(context) }
 
     val filters = listOf(
-        InitServiceFilterChip("RUNNING", R.string.running, Color(0xFF4CAF50), R.string.no_running_services) { it.isRunning && it.isEnabled },
-        InitServiceFilterChip("ENABLED", R.string.enabled_legend, Color(0xFFFFCA28), R.string.no_enabled_services) { it.isEnabled && !it.isRunning },
-        InitServiceFilterChip("DISABLED", R.string.disabled_legend, Color(0xFFEF5350), R.string.no_disabled_services) { !it.isEnabled && !it.isRunning },
-        InitServiceFilterChip("ABNORMAL", R.string.abnormal_legend, Color(0xFFFF7043), R.string.no_abnormal_services) { it.isRunning && !it.isEnabled },
+        InitServiceFilterChip("RUNNING", R.string.running, statusColorFor(InitServiceUiStatus.ENABLED_RUNNING), R.string.no_running_services) { it.isRunning && it.isEnabled },
+        InitServiceFilterChip("ENABLED", R.string.enabled_legend, statusColorFor(InitServiceUiStatus.ENABLED_STOPPED), R.string.no_enabled_services) { it.isEnabled && !it.isRunning },
+        InitServiceFilterChip("DISABLED", R.string.disabled_legend, statusColorFor(InitServiceUiStatus.DISABLED_STOPPED), R.string.no_disabled_services) { !it.isEnabled && !it.isRunning },
+        InitServiceFilterChip("ABNORMAL", R.string.abnormal_legend, statusColorFor(InitServiceUiStatus.ABNORMAL), R.string.no_abnormal_services) { it.isRunning && !it.isEnabled },
         InitServiceFilterChip("ALL", R.string.all_legend, null, R.string.no_services_found) { true },
     )
 

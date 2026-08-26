@@ -86,7 +86,6 @@
     <string name="uninstall_container_menu">Desinstalar Container</string>
     <!-- Container Card -->
     <string name="status_running">EM EXECUÇÃO</string>
-    <string name="status_restarting">REINICIANDO</string>
     <string name="status_stopped">PARADO</string>
     <string name="pid_label">PID: %1$d</string>
     <string name="hostname_label">Hostname: %1$s</string>

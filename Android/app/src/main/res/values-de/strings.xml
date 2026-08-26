@@ -88,7 +88,6 @@
     <string name="uninstall_container_menu">Container deinstallieren</string>
     <!-- Container Card -->
     <string name="status_running">LÄUFT</string>
-    <string name="status_restarting">WIRD NEU GESTARTET</string>
     <string name="status_stopped">GESTOPPT</string>
     <string name="pid_label">PID: %1$d</string>
     <string name="hostname_label">Hostname: %1$s</string>
@@ -403,8 +402,6 @@
     <string name="select_user_to_enter">Benutzer auswählen, mit welcher der Container aufgerufen werden soll:</string>
     <string name="notification_permission_title">Benachrichtigungsberechtigung</string>
     <string name="notification_permission_rationale">Droidspaces muss eine permanente Benachrichtigung anzeigen, damit die Terminalsitzungen im Hintergrund weiterlaufen können. Ohne diese Benachrichtigung könnte Android (insbesondere auf Samsung-Geräten) den Terminaldienst unerwartet beenden.</string>
-    <string name="grant_permission">Berechtigung erteilen</string>
-    <string name="i_understand">Verstanden</string>
     <string name="notification_title">Droidspaces Terminal</string>
     <string name="notification_action_exit">BEENDEN</string>
     <string name="notification_wakelock_on">Wake Lock: EIN</string>

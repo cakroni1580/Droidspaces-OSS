@@ -74,6 +74,43 @@ install_policy_rules(cfg);
 **Ten lines that work beat a hundred that do the same thing.** Delete before you add. A
 smaller diff in the right place is the goal, not a smaller diff anywhere.
 
+## UI changes
+
+Anything visual in `Android/` follows [DESIGN.md](./DESIGN.md). Colours, type, spacing, radii and
+the action pill pattern are all specified there, and they were read out of the existing app rather
+than invented, so following them is also the smallest diff.
+
+If a rule genuinely does not fit your case, deviate, but leave a comment at the site saying what
+the deviation buys and say it in the PR. An undocumented deviation is drift and the next
+contributor will "fix" it. DESIGN.md's "Decided exceptions" section lists the deviations that
+are decisions, do not "fix" those.
+
+## Before you write it at all
+
+Work down this list and stop at the first answer that holds.
+
+1. Does this need to exist? A flag nobody asked for, a knob for a value that never changes,
+   an interface with one implementation: skip it and say so in one line.
+2. Does it already exist here? See "Reuse before you write" below. Grep first.
+3. Does the platform already do it? musl and the syscalls on the backend, the Kotlin
+   and Java stdlib and the Android framework on the app side. Mind the kernel 3.10
+   floor and `minSdk = 26`.
+4. Does an installed dependency cover it? libsu, Compose, navigation, lifecycle, the Termux
+   terminal on the app side. Never add a new one for what a few lines can do.
+5. Can it be one line? Then it is one line.
+6. Only then write the smallest thing that works.
+
+Two answers work? Take the higher one and move on.
+
+The list shortens the solution, never the reading. Trace the flow the change touches before
+you pick a rung. A small diff in the wrong place is a second bug, not a lazy fix. Same for
+bug reports: a report names a symptom, so grep every caller before you edit. One guard in
+the shared function is smaller than a guard in each caller, and it fixes the siblings the
+report did not mention.
+
+Never simplify away input validation at a trust boundary, a fail-closed check, error
+handling that loses state, or anything the requester asked for by name.
+
 ## Reuse before you write
 
 The largest cleanup this project ever needed was caused by writing new code beside existing

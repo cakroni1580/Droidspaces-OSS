@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.ripple.rememberRipple
@@ -42,8 +41,8 @@ fun TerminalDialog(
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
-    val dialogShape = RoundedCornerShape(28.dp)
-    val buttonShape = RoundedCornerShape(14.dp)
+    val dialogShape = RoundedCornerShape(24.dp)
+    val buttonShape = RoundedCornerShape(16.dp)
 
     Dialog(
         onDismissRequest = if (isBlocking) { {} } else { onDismiss },
@@ -87,32 +86,7 @@ fun TerminalDialog(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    Surface(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable(
-                                enabled = !isBlocking,
-                                onClick = onDismiss,
-                                indication = rememberRipple(bounded = true),
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                            ),
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (!isBlocking) 0.08f else 0.04f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = if (!isBlocking) 0.3f else 0.15f)),
-                        tonalElevation = 0.dp
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = context.getString(R.string.close),
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                    alpha = if (!isBlocking) 1f else 0.38f
-                                )
-                            )
-                        }
-                    }
+                    DialogCloseButton(onClick = onDismiss, enabled = !isBlocking)
                 }
 
                 // Action buttons row

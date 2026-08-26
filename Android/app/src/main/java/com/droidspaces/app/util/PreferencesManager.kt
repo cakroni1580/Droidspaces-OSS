@@ -144,6 +144,30 @@ class PreferencesManager private constructor(context: Context) {
             prefs.edit().putBoolean(KEY_TERMINAL_DARK_THEME, value).apply()
         }
 
+    // Terminal text size in px, the unit Termux's TerminalView uses. Read once when
+    // a session is created; pinch-to-zoom then adjusts that session in memory only.
+    var terminalFontSizePx: Int
+        get() = prefs.getInt(KEY_TERMINAL_FONT_SIZE, 30)
+        set(value) {
+            prefs.edit().putInt(KEY_TERMINAL_FONT_SIZE, value).apply()
+        }
+
+    // Filename inside filesDir/fonts/; "" = the bundled JetBrains Mono. Like the
+    // size above, sessions read it once at creation.
+    var terminalFontFile: String
+        get() = prefs.getString(KEY_TERMINAL_FONT_FILE, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_TERMINAL_FONT_FILE, value).apply()
+        }
+
+    // Opt-in guard for the X on a terminal tab; off by default because it
+    // turns a one-tap close into two.
+    var terminalConfirmClose: Boolean
+        get() = prefs.getBoolean(KEY_TERMINAL_CONFIRM_CLOSE, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_TERMINAL_CONFIRM_CLOSE, value).apply()
+        }
+
     var isDaemonModeEnabled: Boolean
         get() = prefs.getBoolean(KEY_DAEMON_MODE_ENABLED, false)
         set(value) {
@@ -392,6 +416,9 @@ class PreferencesManager private constructor(context: Context) {
         private const val KEY_AMOLED_MODE = Constants.KEY_AMOLED_MODE
         private const val KEY_USE_DYNAMIC_COLOR = Constants.KEY_USE_DYNAMIC_COLOR
         private const val KEY_TERMINAL_DARK_THEME = Constants.KEY_TERMINAL_DARK_THEME
+        private const val KEY_TERMINAL_FONT_SIZE = Constants.KEY_TERMINAL_FONT_SIZE
+        private const val KEY_TERMINAL_FONT_FILE = Constants.KEY_TERMINAL_FONT_FILE
+        private const val KEY_TERMINAL_CONFIRM_CLOSE = Constants.KEY_TERMINAL_CONFIRM_CLOSE
         const val KEY_THEME_PALETTE = Constants.KEY_THEME_PALETTE
         const val KEY_DAEMON_MODE_ENABLED = Constants.KEY_DAEMON_MODE_ENABLED
         const val KEY_SYMLINK_ENABLED = Constants.KEY_SYMLINK_ENABLED

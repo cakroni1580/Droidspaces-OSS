@@ -28,7 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import com.droidspaces.app.ui.component.DsDialog
 import com.droidspaces.app.R
 import com.droidspaces.app.util.ContainerManager
 import kotlinx.coroutines.delay
@@ -164,97 +164,84 @@ private fun AddUpstreamDialog(
         label = "refresh_rotation"
     )
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    DsDialog(
+        onDismiss = onDismiss,
+        modifier = Modifier.heightIn(max = 420.dp),
+        footer = {
+            DialogFooterRow(
+                dismissLabel = context.getString(R.string.cancel),
+                confirmLabel = context.getString(R.string.add),
+                onDismiss = onDismiss,
+                onConfirm = { onAdd(customIface.trim()) },
+                confirmEnabled = customIface.isNotBlank() && selectedInterfaces.size < 8,
+            )
+        }
     ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(0.92f).wrapContentHeight(),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-            tonalElevation = 0.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = context.getString(R.string.add_upstream_interface),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    IconButton(
-                        onClick = {
-                            if (!isRefreshing) {
-                                isRefreshing = true
-                                scope.launch {
-                                    val startTime = System.currentTimeMillis()
-                                    onRefresh()
-                                    val elapsed = System.currentTimeMillis() - startTime
-                                    if (elapsed < 600L) delay(600L - elapsed)
-                                    isRefreshing = false
-                                }
+                Text(
+                    text = context.getString(R.string.add_upstream_interface),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(
+                    onClick = {
+                        if (!isRefreshing) {
+                            isRefreshing = true
+                            scope.launch {
+                                val startTime = System.currentTimeMillis()
+                                onRefresh()
+                                val elapsed = System.currentTimeMillis() - startTime
+                                if (elapsed < 600L) delay(600L - elapsed)
+                                isRefreshing = false
                             }
-                        },
-                        enabled = !isRefreshing
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = rotation }
-                        )
-                    }
+                        }
+                    },
+                    enabled = !isRefreshing
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = rotation }
+                    )
                 }
+            }
 
-                if (availableUpstreams.isNotEmpty()) {
-                    Text(context.getString(R.string.available_system_interfaces), style = MaterialTheme.typography.labelMedium)
-                    Box(modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp)) {
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            availableUpstreams.forEach { iface ->
-                                OutlinedButton(
-                                    onClick = { onAdd(iface) },
-                                    enabled = !selectedInterfaces.contains(iface),
-                                    shape = RoundedCornerShape(12.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                                ) {
-                                    Text(iface)
-                                }
+            if (availableUpstreams.isNotEmpty()) {
+                Text(context.getString(R.string.available_system_interfaces), style = MaterialTheme.typography.labelMedium)
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        availableUpstreams.forEach { iface ->
+                            OutlinedButton(
+                                onClick = { onAdd(iface) },
+                                enabled = !selectedInterfaces.contains(iface),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(iface)
                             }
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(context.getString(R.string.enter_manually), style = MaterialTheme.typography.labelMedium)
-                OutlinedTextField(
-                    value = customIface,
-                    onValueChange = { customIface = it },
-                    label = { Text(context.getString(R.string.interface_name_hint)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = DsTextFieldDefaults.colors()
-                )
-
-                DialogFooterRow(
-                    dismissLabel = context.getString(R.string.cancel),
-                    confirmLabel = context.getString(R.string.add),
-                    onDismiss = onDismiss,
-                    onConfirm = { onAdd(customIface.trim()) },
-                    confirmEnabled = customIface.isNotBlank() && selectedInterfaces.size < 8,
-                    cancelBorderAlpha = 0.35f
-                )
             }
-        }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(context.getString(R.string.enter_manually), style = MaterialTheme.typography.labelMedium)
+            OutlinedTextField(
+                value = customIface,
+                onValueChange = { customIface = it },
+                label = { Text(context.getString(R.string.interface_name_hint)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = DsTextFieldDefaults.colors()
+            )
     }
 }
